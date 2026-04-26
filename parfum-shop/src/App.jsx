@@ -183,24 +183,25 @@ function useLang() { return useContext(LangContext); }
 
 // ─── DESIGN SYSTEM ─────────────────────────────────────────────────────────────
 const T = {
-  bg: "#F4F7F5",
-  white: "#FFFFFF",
-  accent: "#2D8E6F",
-  accentDark: "#1F6B52",
-  accentLight: "rgba(45,142,111,0.10)",
-  accentPale: "rgba(45,142,111,0.06)",
-  text: "#1A2E22",
-  textSecond: "#5A7A6A",
-  textMuted: "#9BB5A8",
-  border: "#E2EDE8",
-  card: "#FFFFFF",
-  shadow: "0 2px 16px rgba(45,142,111,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+  bg: "#FDF6EE",
+  bgSecond: "#FAF0E4",
+  white: "#FFFCF8",
+  accent: "#C47F5A",
+  accentDark: "#A0623E",
+  accentLight: "rgba(196,127,90,0.10)",
+  accentPale: "rgba(196,127,90,0.06)",
+  text: "#3D2B1F",
+  textSecond: "#8B6650",
+  textMuted: "#B09080",
+  border: "#EAD8C8",
+  card: "#FFFCF8",
+  shadow: "0 2px 16px rgba(196,127,90,0.08), 0 1px 4px rgba(0,0,0,0.04)",
   shadowSm: "0 1px 6px rgba(0,0,0,0.06)",
-  shadowLg: "0 8px 32px rgba(45,142,111,0.15)",
-  danger: "#E5534B",
-  success: "#2D8E6F",
-  bonus: "#F0A500",
-  referral: "#7C5CBF",
+  shadowLg: "0 8px 32px rgba(196,127,90,0.15)",
+  danger: "#C0392B",
+  success: "#5A8A6A",
+  bonus: "#C47F5A",
+  referral: "#9B7A6A",
   navH: 64,
 };
 
@@ -294,18 +295,18 @@ const IC = {
 const PAYMENT_METHODS = [
   { id: "mbank", label: "M Bank", color: "#E4002B" },
   { id: "obank", label: "O!Bank", color: "#7B2D8B" },
-  { id: "cash", label: "Наличные / Нак. акча", color: "#2D8E6F" },
+  { id: "cash", label: "Наличные / Нак. акча", color: "#C47F5A" },
 ];
 
 const BG_PRESETS = [
-  "linear-gradient(135deg,#2D8E6F,#1F6B52)",
+  "linear-gradient(135deg,#C47F5A,#A0623E)",
   "linear-gradient(135deg,#3B82F6,#1D4ED8)",
   "linear-gradient(135deg,#F59E0B,#D97706)",
   "linear-gradient(135deg,#EF4444,#B91C1C)",
   "linear-gradient(135deg,#8B5CF6,#6D28D9)",
   "linear-gradient(135deg,#EC4899,#BE185D)",
   "linear-gradient(135deg,#06B6D4,#0E7490)",
-  "linear-gradient(135deg,#1A2E22,#2D8E6F)",
+  "linear-gradient(135deg,#3D2B1F,#C47F5A)",
 ];
 
 const DEFAULT_SETTINGS = {
@@ -325,7 +326,7 @@ const INITIAL_PRODUCTS = [
 ];
 
 const DEFAULT_BANNERS = [
-  { id: 1, active: true, bg: "linear-gradient(135deg,#2D8E6F,#1F6B52)", img: null, title: "Скидка 20%", subtitle: "На все ароматы Tom Ford", accent: "#fff" },
+  { id: 1, active: true, bg: "linear-gradient(135deg,#C47F5A,#A0623E)", img: null, title: "Скидка 20%", subtitle: "На все ароматы Tom Ford", accent: "#fff" },
   { id: 2, active: true, bg: "linear-gradient(135deg,#F59E0B,#D97706)", img: null, title: "Бонусы 5%", subtitle: "С каждого заказа", accent: "#fff" },
   { id: 3, active: true, bg: "linear-gradient(135deg,#8B5CF6,#6D28D9)", img: null, title: "Приведи друга", subtitle: "Получи 100 сом бонус", accent: "#fff" },
 ];
@@ -343,7 +344,7 @@ function Toast({ toast }) {
 }
 
 function StatusChip({ status }) {
-  const map = { new: { bg: "#E8F5E9", color: "#2D8E6F", label: "Новый" }, confirmed: { bg: "#E3F2FD", color: "#1565C0", label: "Подтверждён" }, preparing: { bg: "#FFF8E1", color: "#F57F17", label: "Готовится" }, delivering: { bg: "#F3E5F5", color: "#6A1B9A", label: "Доставляется" }, delivered: { bg: "#E8F5E9", color: "#1B5E20", label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: "#C62828", label: "Отменён" } };
+  const map = { new: { bg: "rgba(196,127,90,0.12)", color: T.accent, label: "Новый" }, confirmed: { bg: "rgba(90,138,106,0.12)", color: T.success, label: "Подтверждён" }, preparing: { bg: "#FFF8E1", color: "#C8850A", label: "Готовится" }, delivering: { bg: "rgba(155,122,106,0.12)", color: T.referral, label: "Доставляется" }, delivered: { bg: "rgba(90,138,106,0.15)", color: T.success, label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: T.danger, label: "Отменён" } };
   const s = map[status] || { bg: "#F5F5F5", color: "#757575", label: status };
   return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>{s.label}</span>;
 }
@@ -572,7 +573,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             {err && <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 12, border: "1px solid #FFE0E0" }}>{err}</div>}
             <button onClick={doLogin} style={btnGreen()}>{lang === "kg" ? "Кирүү" : "Войти"}</button>
             <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", marginTop: 14, padding: "10px", background: T.card, borderRadius: 12 }}>{t.demoHint}</div>
-            {onGuest && <button onClick={onGuest} style={{ marginTop: 12, background: 'none', border: 'none', color: '#9BB5A8', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>Смотреть без регистрации</button>}
+            {onGuest && <button onClick={onGuest} style={{ marginTop: 12, background: 'none', border: 'none', color: T.textMuted, fontSize: 13, cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>Смотреть без регистрации</button>}
           </>
         ) : (
           <>
@@ -677,16 +678,16 @@ function CatalogScreen({ products, addToCart, banners, showToast }) {
       {/* Header */}
       <div style={{ padding: "16px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <div style={{ fontSize: 12, color: "#9BB5A8", fontWeight: 500 }}>Бишкек · Парфюм</div>
-          <div style={{ fontSize: 16, fontWeight: 500, color: "#1A2E22" }}>Kemal Usman</div>
+          <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 500 }}>Бишкек · Парфюм</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: T.text, fontFamily: "'Georgia','Times New Roman',serif" }}>Kemal Usman</div>
         </div>
         <LangToggle />
       </div>
       {/* Search */}
       <div style={{ position: "relative", margin: "0 16px 12px" }}>
-        <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#9BB5A8" }}>{IC.search}</div>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ width: "100%", boxSizing: "border-box", background: "#FFFFFF", border: "1.5px solid #E2EDE8", borderRadius: 14, padding: "13px 50px 13px 42px", fontSize: 15, color: "#1A2E22", outline: "none", fontFamily: "inherit" }} />
-        <div onClick={() => document.querySelector('input[type="text"],input[placeholder]')?.focus()} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 36, height: 36, borderRadius: 10, background: "#2D7D6F", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>{IC.filter}</div>
+        <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.search}</div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ width: "100%", boxSizing: "border-box", background: T.white, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: "13px 50px 13px 42px", fontSize: 15, color: T.text, outline: "none", fontFamily: "inherit" }} />
+        <div onClick={() => document.querySelector('input[type="text"],input[placeholder]')?.focus()} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 36, height: 36, borderRadius: 10, background: "#C47F5A", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>{IC.filter}</div>
       </div>
       {/* Banner */}
       {banners.length > 0 && <div style={{ marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
@@ -703,9 +704,9 @@ function CatalogScreen({ products, addToCart, banners, showToast }) {
       {/* Products grid */}
       <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         {filteredProducts.length === 0 && (
-          <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: '#9BB5A8' }}>
+          <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: T.textMuted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: '#5A7A6A', marginBottom: 6 }}>Ничего не найдено</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: T.textSecond, marginBottom: 6 }}>Ничего не найдено</div>
             <div style={{ fontSize: 13 }}>Попробуйте изменить запрос</div>
           </div>
         )}
@@ -732,13 +733,13 @@ function CatalogScreen({ products, addToCart, banners, showToast }) {
                         <span key={v.id} style={{ fontSize: 10, padding: "2px 8px", background: T.accentPale, color: T.accent, borderRadius: 20, fontWeight: 600 }}>{v.label}</span>
                       ))}
                       {extra > 0 && (
-                        <span style={{ fontSize: 11, color: "#9BB5A8", padding: "2px 8px", border: "1px solid #E2EDE8", borderRadius: 20 }}>+{extra}</span>
+                        <span style={{ fontSize: 11, color: T.textMuted, padding: "2px 8px", border: `1px solid ${T.border}`, borderRadius: 20 }}>+{extra}</span>
                       )}
                     </>;
                   })()}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ color: "#1A2E22", fontWeight: 800, fontSize: 13 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: '#EF4444', fontSize: 11 }}>Нет в наличии</span>}</div>
+                  <div style={{ color: T.text, fontWeight: 800, fontSize: 13 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: T.danger, fontSize: 11 }}>Нет в наличии</span>}</div>
                   <div style={{ width: 32, height: 32, borderRadius: "50%", background: stk ? T.accent : T.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
                     {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
                   </div>
@@ -1127,7 +1128,7 @@ function AdminProductsScreen({ products, setProducts }) {
             <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} placeholder={t.description} value={editProd.desc} onChange={e => upd(editProd.id, "desc", e.target.value)} />
           </div>
           <div style={{ marginBottom: 16, marginTop: 14 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, color: '#1A2E22', marginBottom: 8 }}>🎤 Аудио аромата</div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: T.text, marginBottom: 8 }}>🎤 Аудио аромата</div>
             <ProductAudioRecorder productId={editProd.id} />
           </div>
           <div style={{ marginTop: 0 }}>
@@ -1375,24 +1376,24 @@ function MBankPayment({ total, orderId, onConfirm, onCancel }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 24, padding: 28, maxWidth: 340, width: '100%', textAlign: 'center' }}>
         {step === 'qr' && <>
-          <div style={{ fontSize: 20, fontWeight: 700, color: '#1A2E22', marginBottom: 4 }}>Оплата через M-Bank</div>
-          <div style={{ fontSize: 13, color: '#5A7A6A', marginBottom: 20 }}>Сумма: <b style={{ color: '#2D7D6F' }}>{total.toLocaleString()} сом</b></div>
-          <div style={{ background: '#F8F9FA', borderRadius: 16, padding: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: '#9BB5A8', marginBottom: 12 }}>Отсканируйте QR или нажмите кнопку</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: T.text, marginBottom: 4 }}>Оплата через M-Bank</div>
+          <div style={{ fontSize: 13, color: T.textSecond, marginBottom: 20 }}>Сумма: <b style={{ color: T.accent }}>{total.toLocaleString()} сом</b></div>
+          <div style={{ background: T.bgSecond, borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>Отсканируйте QR или нажмите кнопку</div>
             <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`} alt="M-Bank QR" style={{ width: 180, height: 180, borderRadius: 12 }} />
           </div>
           <a href={`tel:+996${phone.replace(/^0/, '')}`} style={{ display: 'block', textDecoration: 'none' }}>
             <div style={{ background: '#0066CC', color: '#fff', borderRadius: 14, padding: '12px', fontSize: 14, fontWeight: 600, marginBottom: 10, cursor: 'pointer' }}>📱 Открыть M-Bank</div>
           </a>
-          <div style={{ fontSize: 12, color: '#9BB5A8', marginBottom: 16 }}>Номер получателя: <b>{phone}</b></div>
-          <button onClick={() => setStep('waiting')} style={{ width: '100%', padding: '12px', borderRadius: 14, background: '#2D7D6F', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 8 }}>✅ Я оплатил</button>
-          <button onClick={onCancel} style={{ width: '100%', padding: '12px', borderRadius: 14, background: 'none', color: '#9BB5A8', border: 'none', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
+          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>Номер получателя: <b>{phone}</b></div>
+          <button onClick={() => setStep('waiting')} style={{ width: '100%', padding: '12px', borderRadius: 14, background: T.accent, color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 8 }}>✅ Я оплатил</button>
+          <button onClick={onCancel} style={{ width: '100%', padding: '12px', borderRadius: 14, background: 'none', color: T.textMuted, border: 'none', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
         </>}
         {step === 'waiting' && <>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#1A2E22', marginBottom: 8 }}>Ожидаем подтверждение</div>
-          <div style={{ fontSize: 13, color: '#5A7A6A', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
-          <button onClick={() => { setStep('done'); onConfirm('mbank_pending'); }} style={{ width: '100%', padding: '12px', borderRadius: 14, background: '#2D7D6F', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Готово</button>
+          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 8 }}>Ожидаем подтверждение</div>
+          <div style={{ fontSize: 13, color: T.textSecond, marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
+          <button onClick={() => { setStep('done'); onConfirm('mbank_pending'); }} style={{ width: '100%', padding: '12px', borderRadius: 14, background: T.accent, color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Готово</button>
         </>}
       </div>
     </div>
@@ -1507,12 +1508,12 @@ function ProductAudioRecorder({ productId }) {
   );
 
   if (status === 'done') return (
-    <div style={{ background: '#F0FAF7', borderRadius: 16, padding: '12px 16px', border: '1px solid #C6E8DF' }}>
-      <div style={{ fontSize: 13, color: '#2D7D6F', fontWeight: 600, marginBottom: 10 }}>✅ Аудио готово</div>
+    <div style={{ background: T.accentPale, borderRadius: 16, padding: '12px 16px', border: `1px solid ${T.border}` }}>
+      <div style={{ fontSize: 13, color: T.accent, fontWeight: 600, marginBottom: 10 }}>✅ Аудио готово</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {!playing && !paused && <Btn label="▶ Играть" onClick={handlePlay} color="#2D7D6F" />}
-        {playing && <Btn label="⏸ Пауза" onClick={handlePause} color="#F59E0B" />}
-        {paused && <Btn label="▶ Продолжить" onClick={handleResume} color="#2D7D6F" />}
+        {!playing && !paused && <Btn label="▶ Играть" onClick={handlePlay} color={T.accent} />}
+        {playing && <Btn label="⏸ Пауза" onClick={handlePause} color="#C8850A" />}
+        {paused && <Btn label="▶ Продолжить" onClick={handleResume} color={T.accent} />}
         <Btn label="🔄 Перезаписать" onClick={handleRecord} color="#6B7280" />
         <Btn label="🗑 Удалить" onClick={handleDelete} color="#EF4444" />
       </div>
@@ -1522,8 +1523,8 @@ function ProductAudioRecorder({ productId }) {
   return (
     <button onClick={handleRecord} style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-      width: '100%', padding: '14px', borderRadius: 16, border: '2px dashed #9BB5A8',
-      background: 'none', cursor: 'pointer', fontSize: 14, color: '#5A7A6A'
+      width: '100%', padding: '14px', borderRadius: 16, border: `2px dashed ${T.border}`,
+      background: 'none', cursor: 'pointer', fontSize: 14, color: T.textSecond
     }}>
       🎤 Записать описание аромата (10 сек)
     </button>
@@ -1584,7 +1585,7 @@ function AudioRecordBtn({ productId }) {
   if (status === 'done') return (
     <div style={{ display: 'flex', gap: 6 }}>
       <button onClick={() => { const a = new Audio(localStorage.getItem('parfum_audio_' + productId)); a.play(); }}
-        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #2D7D6F', background: 'none', fontSize: 12, color: '#2D7D6F', cursor: 'pointer' }}>
+        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #C47F5A', background: 'none', fontSize: 12, color: '#C47F5A', cursor: 'pointer' }}>
         ▶ Прослушать
       </button>
       <button onClick={handleRecord}
@@ -1641,7 +1642,7 @@ function ClientAudioBtn({ productId }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
       {!playing && !paused && (
-        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #2D7D6F', background: 'none', fontSize: 12, color: '#2D7D6F', cursor: 'pointer' }}>
+        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #C47F5A', background: 'none', fontSize: 12, color: '#C47F5A', cursor: 'pointer' }}>
           🎧 Послушайте аромат
         </button>
       )}
@@ -1651,7 +1652,7 @@ function ClientAudioBtn({ productId }) {
         </button>
       )}
       {paused && (
-        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #2D7D6F', background: 'none', fontSize: 12, color: '#2D7D6F', cursor: 'pointer' }}>
+        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #C47F5A', background: 'none', fontSize: 12, color: '#C47F5A', cursor: 'pointer' }}>
           ▶ Продолжить
         </button>
       )}
