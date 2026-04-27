@@ -1,13 +1,9 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
-import PocketBase from "pocketbase";
-
-const PB_URL = "http://145.223.100.16:8090";
-const pb = new PocketBase(PB_URL);
 
 // ─── TRANSLATIONS ──────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
   ru: {
-    appName: "Kemal Usman", appSubtitle: "Бишкек · Парфюм на разлив",
+    appName: "Parfum Shop", appSubtitle: "Бишкек · Парфюм на разлив",
     login: "Войти", logout: "Выйти", loginLabel: "Логин", passwordLabel: "Пароль",
     loginPlaceholder: "user или admin", passwordPlaceholder: "Пароль",
     loginError: "Неверный логин или пароль!", demoHint: "Демо: admin / admin123",
@@ -63,13 +59,9 @@ const TRANSLATIONS = {
     status_delivered: "Доставлен", status_cancelled: "Отменён",
     orderCount: "заказов", totalSpent: "потрачено",
     variantsCount: "вариантов", chooseSize: "Выберите размер",
-    visits: "Посещений", registeredCount: "Зарегистрировано",
-    todayOrders: "Заказов сегодня", todayRevenue: "Доход сегодня",
-    last7days: "Последние 7 дней", recentUsers: "Новые клиенты",
-    deleteOrder: "Удалить заказ", confirmDeleteOrder: "Удалить этот заказ?",
   },
   kg: {
-    appName: "Kemal Usman", appSubtitle: "Бишкек · Атир куюп жана упаковка",
+    appName: "Parfum Shop", appSubtitle: "Бишкек · Атир куюп жана упаковка",
     login: "Кирүү", logout: "Чыгуу", loginLabel: "Логин", passwordLabel: "Сыр сөз",
     loginPlaceholder: "user же admin", passwordPlaceholder: "Сыр сөз",
     loginError: "Логин же сыр сөз туура эмес!", demoHint: "Демо: admin / admin123",
@@ -125,10 +117,64 @@ const TRANSLATIONS = {
     status_delivered: "Жеткирилди", status_cancelled: "Жокко чыгарылды",
     orderCount: "заказ", totalSpent: "жумшалды",
     variantsCount: "вариант", chooseSize: "Көлөм тандаңыз",
-    visits: "Келүүлөр", registeredCount: "Катталгандар",
-    todayOrders: "Бүгүнкү заказдар", todayRevenue: "Бүгүнкү киреше",
-    last7days: "Акыркы 7 күн", recentUsers: "Жаңы кардарлар",
-    deleteOrder: "Заказды өчүрүү", confirmDeleteOrder: "Бул заказды өчүрүлсүнбү?",
+  },
+  uz: {
+    appName: "Parfum Shop", appSubtitle: "Bishkek · Atir do'koni",
+    login: "Kirish", logout: "Chiqish", loginLabel: "Login", passwordLabel: "Parol",
+    loginPlaceholder: "user yoki admin", passwordPlaceholder: "Parol",
+    loginError: "Login yoki parol noto'g'ri!", demoHint: "Demo: admin / admin123",
+    register: "Ro'yxatdan o'tish", getStarted: "Boshlash",
+    catalog: "Katalog", cart: "Savat", myOrders: "Buyurtmalar", profile: "Profil",
+    orders: "Buyurtmalar", products: "Mahsulotlar", stats: "Statistika", settings: "Sozlamalar",
+    banners: "Bannerlar", bonus: "Bonus", adminPanel: "Administrator",
+    search: "Atir qidirish...", allCategories: "Barchasi",
+    fromPrice: "dan", variants: "var.", selectVariant: "Hajmni tanlang",
+    addToCart: "Savatga", addedToCart: "Qo'shildi!", outOfStock: "Mavjud emas",
+    inStock: "Mavjud", available: "Bor",
+    cartEmpty: "Savat bo'sh", cartEmptyHint: "Katalogdan mahsulot qo'shing",
+    subtotal: "Summa", delivery: "Yetkazib berish", total: "Jami", free: "Bepul",
+    placeOrder: "Buyurtma berish", deliveryType: "Yetkazish turi", pickup: "O'zi olish",
+    address: "Yetkazish manzili", comment: "Izoh",
+    paymentMethod: "To'lov usuli", useBonus: "Bonusdan foydalanish",
+    maxDiscount: "Maks. chegirma", bonusDiscount: "Bonus chegirmasi",
+    orderPlaced: "Buyurtma berildi!", enterAddress: "Manzilni kiriting",
+    name: "Ism", phone: "Telefon",
+    bonusBalance: "Bonus balansi", bonusHistory: "Tarix",
+    bonusEarned: "Hisoblandi", bonusSpent: "Sarflandi",
+    earned: "Yig'ildi", spent: "Sarflandi",
+    noBonusHistory: "Tarix bo'sh", noOrders: "Buyurtmalar yo'q",
+    myOrders: "Mening buyurtmalarim", accountInfo: "Hisob",
+    referralCode: "Ref. kod", referralHint: "Ulashing va bonus oling:",
+    copy: "Nusxalash", copied: "Nusxalandi!",
+    registrationDate: "Ro'yxatdan o'tgan sana", guest: "Mehmon",
+    totalRevenue: "Daromad", totalOrders: "Buyurtmalar", newOrders: "Yangilar",
+    avgOrder: "O'rtacha chek", ordersByStatus: "Holat bo'yicha", topProducts: "Top mahsulotlar",
+    pcs: "dona", allOrders: "Barchasi",
+    changeStatus: "Holat o'zgartirish", sendWhatsApp: "WhatsApp yozish",
+    client: "Mijoz", date: "Sana",
+    add: "Qo'shish", save: "Saqlash", delete: "O'chirish", confirmDelete: "Mahsulot o'chirilsinmi?",
+    newProduct: "Yangi mahsulot", productName: "Nomi", brand: "Brend",
+    description: "Tavsif", addVariant: "Variant qo'shish",
+    variantLabel: "Hajm / nomi", price: "Narx", outOfStock2: "Yo'q",
+    editBanner: "Bannerni tahrirlash", bannerTitle: "Sarlavha",
+    bannerSubtitle: "Kichik sarlavha", background: "Fon", active: "Faol",
+    noTitle: "Nomsiz",
+    bonusSettings: "Bonus sozlamalari", bonusPercent: "% hisoblash",
+    useBonusPercent: "% sarflash", welcomeBonus: "Xush kelibsiz bonusi",
+    referralBonus: "Refererga bonus", referralFriendBonus: "Do'stga bonus",
+    deliveryCost: "Yetkazish narxi", minOrderForFreeDelivery: "Min. buyurtma (bepul)",
+    welcomeBonusEnabled: "Xush kelibsiz bonusini yoqish",
+    welcomeBonusOnlyFirst: "Faqat birinchi buyurtma",
+    saveSettings: "Saqlash", shopName: "Do'kon nomi",
+    adminPassword: "Administrator paroli", whatsappPhone: "WhatsApp raqami",
+    bonusAccrued: "bonus hisoblandi", welcomeAdmin: "Xush kelibsiz!",
+    wrongPassword: "Parol noto'g'ri", fillAll: "Barcha maydonlarni to'ldiring",
+    sum: "so'm", newStatus: "Yangi",
+    status_new: "Yangi", status_confirmed: "Tasdiqlandi",
+    status_preparing: "Tayyorlanmoqda", status_delivering: "Yetkazilmoqda",
+    status_delivered: "Yetkazildi", status_cancelled: "Bekor qilindi",
+    orderCount: "buyurtma", totalSpent: "sarflandi",
+    variantsCount: "variant", chooseSize: "Hajm tanlang",
   },
 };
 
@@ -137,24 +183,23 @@ function useLang() { return useContext(LangContext); }
 
 // ─── DESIGN SYSTEM ─────────────────────────────────────────────────────────────
 const T = {
-  bg: "#F5F5F5",
-  bgSecond: "#EEEEEE",
+  bg: "#F4F7F5",
   white: "#FFFFFF",
-  accent: "#111111",
-  accentDark: "#000000",
-  accentLight: "rgba(0,0,0,0.06)",
-  accentPale: "rgba(0,0,0,0.04)",
-  text: "#111111",
-  textSecond: "#666666",
-  textMuted: "#AAAAAA",
-  border: "#EEEEEE",
+  accent: "#2D8E6F",
+  accentDark: "#1F6B52",
+  accentLight: "rgba(45,142,111,0.10)",
+  accentPale: "rgba(45,142,111,0.06)",
+  text: "#1A2E22",
+  textSecond: "#5A7A6A",
+  textMuted: "#9BB5A8",
+  border: "#E2EDE8",
   card: "#FFFFFF",
-  shadow: "0 2px 8px rgba(0,0,0,0.06)",
-  shadowSm: "0 2px 8px rgba(0,0,0,0.06)",
-  shadowLg: "0 2px 8px rgba(0,0,0,0.06)",
-  danger: "#E53935",
-  success: "#43A047",
-  bonus: "#FF6B00",
+  shadow: "0 2px 16px rgba(45,142,111,0.08), 0 1px 4px rgba(0,0,0,0.04)",
+  shadowSm: "0 1px 6px rgba(0,0,0,0.06)",
+  shadowLg: "0 8px 32px rgba(45,142,111,0.15)",
+  danger: "#E5534B",
+  success: "#2D8E6F",
+  bonus: "#F0A500",
   referral: "#7C5CBF",
   navH: 64,
 };
@@ -162,18 +207,18 @@ const T = {
 // Card helper
 const card = (extra = {}) => ({
   background: T.card,
-  borderRadius: 16,
-  boxShadow: T.shadow,
-  border: "none",
+  borderRadius: 20,
+  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
+  border: `1px solid ${T.border}`,
   ...extra,
 });
 
 const inputStyle = {
-  background: "#F5F5F5",
-  border: "none",
-  borderRadius: 12,
+  background: T.bg,
+  border: `1.5px solid ${T.border}`,
+  borderRadius: 14,
   color: T.text,
-  fontSize: 16,
+  fontSize: 15,
   padding: "13px 16px",
   width: "100%",
   boxSizing: "border-box",
@@ -182,17 +227,17 @@ const inputStyle = {
 };
 
 const btnGreen = (extra = {}) => ({
-  background: "#111111",
+  background: T.accent,
   color: "#fff",
   border: "none",
-  borderRadius: 14,
+  borderRadius: 16,
   padding: "15px 20px",
   fontSize: 15,
-  fontWeight: 600,
+  fontWeight: 700,
   cursor: "pointer",
   width: "100%",
   boxSizing: "border-box",
-  boxShadow: "none",
+  boxShadow: T.shadowLg,
   fontFamily: "inherit",
   transition: "all 0.15s ease",
   ...extra,
@@ -202,7 +247,7 @@ const btnOutline = (extra = {}) => ({
   background: "transparent",
   color: T.accent,
   border: `1.5px solid ${T.accent}`,
-  borderRadius: 14,
+  borderRadius: 16,
   padding: "13px 20px",
   fontSize: 15,
   fontWeight: 600,
@@ -249,68 +294,40 @@ const IC = {
 const PAYMENT_METHODS = [
   { id: "mbank", label: "M Bank", color: "#E4002B" },
   { id: "obank", label: "O!Bank", color: "#7B2D8B" },
-  { id: "cash", label: "Наличные / Нак. акча", color: "#111111" },
+  { id: "cash", label: "Наличные / Нак. акча", color: "#2D8E6F" },
 ];
 
 const BG_PRESETS = [
-  "linear-gradient(135deg,#111111,#000000)",
+  "linear-gradient(135deg,#2D8E6F,#1F6B52)",
   "linear-gradient(135deg,#3B82F6,#1D4ED8)",
   "linear-gradient(135deg,#F59E0B,#D97706)",
   "linear-gradient(135deg,#EF4444,#B91C1C)",
   "linear-gradient(135deg,#8B5CF6,#6D28D9)",
   "linear-gradient(135deg,#EC4899,#BE185D)",
   "linear-gradient(135deg,#06B6D4,#0E7490)",
-  "linear-gradient(135deg,#111111,#111111)",
+  "linear-gradient(135deg,#1A2E22,#2D8E6F)",
 ];
 
-// ─── POCKETBASE API ────────────────────────────────────────────────────────────
-const api = {
-  // Products
-  getProducts: () => pb.collection("products").getFullList({ sort: "created", requestKey: null }),
-  createProduct: (data) => pb.collection("products").create(data, { requestKey: null }),
-  updateProduct: (id, data) => pb.collection("products").update(id, data, { requestKey: null }),
-  deleteProduct: (id) => pb.collection("products").delete(id, { requestKey: null }),
-  getImageUrl: (record, filename) => pb.files.getURL(record, filename),
-
-  // Orders
-  getOrders: () => pb.collection("orders").getFullList({ sort: "-created", requestKey: null }),
-  createOrder: (data) => pb.collection("orders").create(data, { requestKey: null }),
-  updateOrder: (id, data) => pb.collection("orders").update(id, data, { requestKey: null }),
-  deleteOrder: (id) => pb.collection("orders").delete(id, { requestKey: null }),
-
-  // Clients
-  getClients: () => pb.collection("clients").getFullList({ sort: "-created", requestKey: null }),
-  createClient: (data) => pb.collection("clients").create(data, { requestKey: null }),
-  updateClient: (id, data) => pb.collection("clients").update(id, data, { requestKey: null }),
-  findClientByPhone: async (phone) => {
-    try {
-      const res = await pb.collection("clients").getFirstListItem(`phone="${phone}"`, { requestKey: null });
-      return res;
-    } catch { return null; }
-  },
-};
-
 const DEFAULT_SETTINGS = {
-  shopName: "Kemal Usman", whatsappPhone: "996557100505",
+  shopName: "Parfum Shop", whatsappPhone: "996557100505",
   adminPassword: "admin123", bonusPercent: 5, useBonusPercent: 30,
   welcomeBonus: 150, welcomeBonusEnabled: true,
   referralBonus: 100, referralFriendBonus: 50,
   deliveryCost: 0, minOrderForFreeDelivery: 0,
-  loginBg: null,
 };
 
 const INITIAL_PRODUCTS = [
-  { id: 1, name: "Chanel No. 5", brand: "Chanel", category: "Женские", img: null, images: [], desc: "Классический цветочный аромат.", variants: [{ id: "v1", label: "5 мл", price: 120, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 220, type: "ml", inStock: true }, { id: "v3", label: "20 мл", price: 400, type: "ml", inStock: true }, { id: "v4", label: "Упаковка 50 мл", price: 850, type: "package", inStock: true }] },
-  { id: 2, name: "Sauvage", brand: "Dior", category: "Мужские", img: null, images: [], desc: "Свежий и сильный аромат.", variants: [{ id: "v1", label: "5 мл", price: 130, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 240, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 100 мл", price: 920, type: "package", inStock: true }] },
-  { id: 3, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс", img: null, images: [], desc: "Редкий и таинственный аромат.", variants: [{ id: "v1", label: "3 мл", price: 90, type: "ml", inStock: true }, { id: "v2", label: "5 мл", price: 140, type: "ml", inStock: true }, { id: "v3", label: "10 мл", price: 260, type: "ml", inStock: true }] },
-  { id: 4, name: "Oud Wood", brand: "Tom Ford", category: "Премиум", img: null, images: [], desc: "Восточный аромат уда.", variants: [{ id: "v1", label: "5 мл", price: 200, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 380, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 50 мл", price: 1850, type: "package", inStock: true }] },
-  { id: 5, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские", img: null, images: [], desc: "Радостный и сладкий аромат.", variants: [{ id: "v1", label: "5 мл", price: 110, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 200, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 75 мл", price: 780, type: "package", inStock: true }] },
+  { id: 1, name: "Chanel No. 5", brand: "Chanel", category: "Женские", img: null, desc: "Классический цветочный аромат.", variants: [{ id: "v1", label: "5 мл", price: 120, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 220, type: "ml", inStock: true }, { id: "v3", label: "20 мл", price: 400, type: "ml", inStock: true }, { id: "v4", label: "Упаковка 50 мл", price: 850, type: "package", inStock: true }] },
+  { id: 2, name: "Sauvage", brand: "Dior", category: "Мужские", img: null, desc: "Свежий и сильный аромат.", variants: [{ id: "v1", label: "5 мл", price: 130, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 240, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 100 мл", price: 920, type: "package", inStock: true }] },
+  { id: 3, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс", img: null, desc: "Редкий и таинственный аромат.", variants: [{ id: "v1", label: "3 мл", price: 90, type: "ml", inStock: true }, { id: "v2", label: "5 мл", price: 140, type: "ml", inStock: true }, { id: "v3", label: "10 мл", price: 260, type: "ml", inStock: true }] },
+  { id: 4, name: "Oud Wood", brand: "Tom Ford", category: "Премиум", img: null, desc: "Восточный аромат уда.", variants: [{ id: "v1", label: "5 мл", price: 200, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 380, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 50 мл", price: 1850, type: "package", inStock: true }] },
+  { id: 5, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские", img: null, desc: "Радостный и сладкий аромат.", variants: [{ id: "v1", label: "5 мл", price: 110, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 200, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 75 мл", price: 780, type: "package", inStock: true }] },
 ];
 
 const DEFAULT_BANNERS = [
-  { id: 1, active: true, bg: "linear-gradient(135deg, #111111 0%, #000000 100%)", img: "/banner1.jpeg", title: "Kemal Usman", subtitle: "Бишкек · Парфюм на разлив", accent: "#fff" },
-  { id: 2, active: true, bg: "linear-gradient(135deg, #111111 0%, #000000 100%)", img: "/banner2.jpeg", title: "Kemal Usman", subtitle: "Бишкек · Парфюм на разлив", accent: "#fff" },
-  { id: 3, active: true, bg: "linear-gradient(135deg, #111111 0%, #000000 100%)", img: "/banner3.jpeg", title: "Kemal Usman", subtitle: "Бишкек · Парфюм на разлив", accent: "#fff" },
+  { id: 1, active: true, bg: "linear-gradient(135deg,#2D8E6F,#1F6B52)", img: null, title: "Скидка 20%", subtitle: "На все ароматы Tom Ford", accent: "#fff" },
+  { id: 2, active: true, bg: "linear-gradient(135deg,#F59E0B,#D97706)", img: null, title: "Бонусы 5%", subtitle: "С каждого заказа", accent: "#fff" },
+  { id: 3, active: true, bg: "linear-gradient(135deg,#8B5CF6,#6D28D9)", img: null, title: "Приведи друга", subtitle: "Получи 100 сом бонус", accent: "#fff" },
 ];
 
 function formatSum(n) { return Number(n).toLocaleString() + " сом"; }
@@ -319,15 +336,15 @@ function generateReferralCode(name) { return (name.slice(0, 4).toUpperCase() + M
 function Toast({ toast }) {
   if (!toast) return null;
   return (
-    <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "#111111", color: "#F5F5F5", padding: "12px 24px", borderRadius: 30, fontSize: 14, fontWeight: 700, boxShadow: T.shadowLg, whiteSpace: "nowrap" }}>
+    <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: toast.type === "error" ? T.danger : T.accent, color: "#fff", padding: "12px 24px", borderRadius: 30, fontSize: 14, fontWeight: 700, boxShadow: T.shadowLg, whiteSpace: "nowrap" }}>
       {toast.msg}
     </div>
   );
 }
 
 function StatusChip({ status }) {
-  const map = { new: { bg: "#FFF3E0", color: "#FF6B00", label: "Новый" }, confirmed: { bg: "#E3F2FD", color: "#1976D2", label: "Подтверждён" }, preparing: { bg: "#E8F5E9", color: "#388E3C", label: "Готовится" }, delivering: { bg: "#EDE7F6", color: "#7C5CBF", label: "Доставляется" }, delivered: { bg: "#E8F5E9", color: "#388E3C", label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: "#E53935", label: "Отменён" } };
-  const s = map[status] || { bg: "rgba(0,0,0,0.08)", color: T.textSecond, label: status };
+  const map = { new: { bg: "#E8F5E9", color: "#2D8E6F", label: "Новый" }, confirmed: { bg: "#E3F2FD", color: "#1565C0", label: "Подтверждён" }, preparing: { bg: "#FFF8E1", color: "#F57F17", label: "Готовится" }, delivering: { bg: "#F3E5F5", color: "#6A1B9A", label: "Доставляется" }, delivered: { bg: "#E8F5E9", color: "#1B5E20", label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: "#C62828", label: "Отменён" } };
+  const s = map[status] || { bg: "#F5F5F5", color: "#757575", label: status };
   return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>{s.label}</span>;
 }
 
@@ -347,17 +364,17 @@ function LangToggle() {
 
 function NavBar({ items, active, onSelect }) {
   return (
-    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "#FFFFFF", borderTop: "0.5px solid #EEEEEE", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
+    <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-around", height: T.navH, zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,0.06)" }}>
       {items.map((item, i) => {
         const isActive = item.id === active;
         const isCenter = item.center;
         if (isCenter) return (
-          <button key={item.id} onClick={() => onSelect(item.id)} style={{ width: 52, height: 52, borderRadius: "50%", background: "#111111", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transform: "translateY(-12px)" }}>
+          <button key={item.id} onClick={() => onSelect(item.id)} style={{ width: 52, height: 52, borderRadius: "50%", background: T.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: T.shadowLg, transform: "translateY(-12px)" }}>
             {React.cloneElement(item.icon, { style: { width: 24, height: 24 } })}
           </button>
         );
         return (
-          <button key={item.id} onClick={() => onSelect(item.id)} style={{ flex: 1, minHeight: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? "#111111" : T.textMuted, position: "relative", paddingBottom: 4, fontSize: 11 }}>
+          <button key={item.id} onClick={() => onSelect(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? T.accent : T.textMuted, position: "relative", paddingBottom: 4 }}>
             <div style={{ position: "relative" }}>
               {React.cloneElement(item.icon, { style: { width: 22, height: 22 } })}
               {item.badge > 0 && <div style={{ position: "absolute", top: -4, right: -6, background: T.danger, color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{item.badge}</div>}
@@ -373,85 +390,55 @@ function NavBar({ items, active, onSelect }) {
 
 // ─── IMAGE UPLOAD + CROP ───────────────────────────────────────────────────────
 function CropModal({ src, onDone, onCancel }) {
-  const [pos, setPos] = React.useState({ x: 0, y: 0 });
-  const [scale, setScale] = React.useState(1);
-  const [dragging, setDragging] = React.useState(false);
-  const [start, setStart] = React.useState({ x: 0, y: 0 });
-  const canvasRef = React.useRef(null);
-  const imgRef = React.useRef(new Image());
-  const SIZE = 300;
+  const canvasRef = useRef(null);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [scale, setScale] = useState(1);
+  const [dragging, setDragging] = useState(false);
+  const [start, setStart] = useState({ x: 0, y: 0 });
+  const SIZE = 280;
+  const imgRef = useRef(new window.Image());
 
-  React.useEffect(() => {
-    imgRef.current.onload = () => draw();
+  useEffect(() => {
+    imgRef.current.onload = () => { setOffset({ x: 0, y: 0 }); setScale(1); draw(0, 0, 1); };
     imgRef.current.src = src;
   }, [src]);
 
-  React.useEffect(() => { draw(); }, [pos, scale]);
-
-  const draw = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+  function draw(ox = offset.x, oy = offset.y, sc = scale) {
+    const c = canvasRef.current; if (!c) return;
+    const ctx = c.getContext("2d");
     const img = imgRef.current;
-    if (!img.complete) return;
     ctx.clearRect(0, 0, SIZE, SIZE);
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, SIZE, SIZE);
-    const w = img.width * scale;
-    const h = img.height * scale;
-    ctx.drawImage(img, pos.x, pos.y, w, h);
-  };
+    ctx.fillStyle = T.bg; ctx.fillRect(0, 0, SIZE, SIZE);
+    const iw = img.width * sc, ih = img.height * sc;
+    ctx.drawImage(img, ox + (SIZE - iw) / 2, oy + (SIZE - ih) / 2, iw, ih);
+    ctx.strokeStyle = T.accent; ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, SIZE - 2, SIZE - 2);
+  }
 
-  const onMouseDown = (e) => {
-    setDragging(true);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    setStart({ x: clientX - pos.x, y: clientY - pos.y });
-  };
+  useEffect(() => { draw(); }, [offset, scale]);
 
-  const onMouseMove = (e) => {
-    if (!dragging) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    setPos({ x: clientX - start.x, y: clientY - start.y });
-  };
-
-  const onMouseUp = () => setDragging(false);
+  const onMD = (e) => { setDragging(true); const p = e.touches?.[0] || e; setStart({ x: p.clientX - offset.x, y: p.clientY - offset.y }); };
+  const onMM = (e) => { if (!dragging) return; const p = e.touches?.[0] || e; setOffset({ x: p.clientX - start.x, y: p.clientY - start.y }); };
+  const onMU = () => setDragging(false);
 
   const handleDone = () => {
-    const canvas = canvasRef.current;
-    onDone(canvas.toDataURL('image/jpeg', 0.85));
+    const c = canvasRef.current;
+    const out = document.createElement("canvas"); out.width = 400; out.height = 400;
+    out.getContext("2d").drawImage(c, 0, 0, SIZE, SIZE, 0, 0, 400, 400);
+    onDone(out.toDataURL("image/jpeg", 0.85));
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: '#111', textAlign: 'center', marginBottom: 4 }}>Обрезать фото</div>
-        <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', marginBottom: 16 }}>Перетащите фото на нужное место</div>
-        <div style={{ position: 'relative', margin: '0 auto 16px', width: SIZE, height: SIZE, borderRadius: 14, overflow: 'hidden', cursor: 'grab', border: '2px solid #111', background: '#fff' }}>
-          <canvas
-            ref={canvasRef}
-            width={SIZE}
-            height={SIZE}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseUp={onMouseUp}
-            onTouchStart={onMouseDown}
-            onTouchMove={onMouseMove}
-            onTouchEnd={onMouseUp}
-            style={{ display: 'block', touchAction: 'none', background: '#fff' }}
-          />
-          {[[0, 0], [SIZE - 20, 0], [0, SIZE - 20], [SIZE - 20, SIZE - 20]].map(([x, y], i) => (
-            <div key={i} style={{ position: 'absolute', left: x, top: y, width: 20, height: 20, borderTop: i < 2 ? '3px solid #111' : 'none', borderBottom: i >= 2 ? '3px solid #111' : 'none', borderLeft: i % 2 === 0 ? '3px solid #111' : 'none', borderRight: i % 2 !== 0 ? '3px solid #111' : 'none' }} />
-          ))}
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6, textAlign: 'center' }}>Масштаб</div>
-          <input type="range" min={0.3} max={3} step={0.01} value={scale} onChange={e => setScale(Number(e.target.value))} style={{ width: '100%' }} />
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: 14, borderRadius: 12, border: '1px solid #eee', background: '#f5f5f5', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#666' }}>Отмена</button>
-          <button onClick={handleDone} style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: '#111', fontSize: 14, fontWeight: 700, cursor: 'pointer', color: '#fff' }}>Готово ✓</button>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ background: T.card, borderRadius: 24, padding: 24, width: SIZE + 48 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text, marginBottom: 16, textAlign: "center" }}>Обрезать фото</div>
+        <canvas ref={canvasRef} width={SIZE} height={SIZE} style={{ borderRadius: 16, cursor: "move", display: "block", margin: "0 auto", border: `2px solid ${T.border}` }}
+          onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU}
+          onTouchStart={onMD} onTouchMove={onMM} onTouchEnd={onMU} />
+        <input type="range" min={0.5} max={3} step={0.05} value={scale} onChange={e => setScale(+e.target.value)} style={{ width: "100%", margin: "16px 0", accentColor: T.accent }} />
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onCancel} style={{ ...btnOutline({ flex: 1, padding: "12px 0" }) }}>Отмена</button>
+          <button onClick={handleDone} style={{ ...btnGreen({ flex: 1, padding: "12px 0" }) }}>Готово</button>
         </div>
       </div>
     </div>
@@ -483,137 +470,17 @@ function ImageUpload({ value, onChange }) {
   );
 }
 
-function MultiImageUpload({ images = [], coverImg, onImagesChange, onCoverChange }) {
-  const fileRef0 = useRef(null);
-  const fileRef1 = useRef(null);
-  const fileRef2 = useRef(null);
-  const fileRefs = [fileRef0, fileRef1, fileRef2];
-  const [cropSrc, setCropSrc] = useState(null);
-  const [cropSlot, setCropSlot] = useState(null);
-
-  const handleFile = (e, slotIndex) => {
-    const f = e.target.files[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => { setCropSrc(ev.target.result); setCropSlot(slotIndex); };
-    r.readAsDataURL(f);
-    e.target.value = '';
-  };
-
-  const handleCropDone = (croppedUrl) => {
-    const newImages = [...images];
-    newImages[cropSlot] = croppedUrl;
-    onImagesChange(newImages);
-    if (!coverImg) onCoverChange(croppedUrl);
-    setCropSrc(null); setCropSlot(null);
-  };
-
-  const handleRemove = (slotIndex) => {
-    const newImages = [...images];
-    const removedUrl = newImages[slotIndex];
-    newImages.splice(slotIndex, 1);
-    onImagesChange(newImages);
-    if (coverImg === removedUrl) {
-      onCoverChange(newImages[0] || null);
-    }
-  };
-
-  const slots = [0, 1, 2];
-
-  return (
-    <div>
-      {cropSrc && (
-        <CropModal
-          src={cropSrc}
-          onDone={handleCropDone}
-          onCancel={() => { setCropSrc(null); setCropSlot(null); }}
-        />
-      )}
-      <div style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, marginBottom: 8 }}>
-        Rasmlar (max 3) · Oblojkani tanlash uchun ✓ bosing
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        {slots.map(i => {
-          const imgUrl = images[i] || null;
-          const isCover = !!(coverImg && coverImg === imgUrl);
-          return (
-            <div key={i} style={{ flex: 1, position: "relative" }}>
-              <div
-                onClick={() => { if (!imgUrl) fileRefs[i].current?.click(); }}
-                style={{
-                  width: "100%", height: 90, borderRadius: 14,
-                  border: isCover ? `2.5px solid ${T.accent}` : `2px dashed ${imgUrl ? T.accent : T.border}`,
-                  background: imgUrl ? "#fff" : T.bg,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: imgUrl ? "default" : "pointer",
-                  overflow: "hidden", position: "relative",
-                  boxSizing: "border-box"
-                }}
-              >
-                {imgUrl
-                  ? <img src={imgUrl} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
-                  : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: T.textMuted }}>
-                      {React.cloneElement(IC.camera, { style: { width: 22, height: 22 } })}
-                      <span style={{ fontSize: 11 }}>Rasm {i + 1}</span>
-                    </div>
-                }
-                {isCover && (
-                  <div style={{ position: "absolute", top: 5, left: 5, background: T.accent, color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 6, padding: "2px 6px" }}>
-                    Oblojka
-                  </div>
-                )}
-              </div>
-
-              {imgUrl && (
-                <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
-                  {!isCover && (
-                    <button
-                      onClick={() => onCoverChange(imgUrl)}
-                      style={{ flex: 1, fontSize: 10, padding: "4px 0", borderRadius: 7, border: `1px solid ${T.accent}`, background: T.accentLight, color: T.accent, fontWeight: 700, cursor: "pointer" }}
-                    >
-                      ✓ Oblojka
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleRemove(i)}
-                    style={{ flex: isCover ? 1 : 0, width: isCover ? "auto" : 28, fontSize: 10, padding: "4px 0", borderRadius: 7, border: `1px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    ✕
-                  </button>
-                  <button
-                    onClick={() => fileRefs[i].current?.click()}
-                    style={{ flex: 0, width: 28, fontSize: 10, padding: "4px 0", borderRadius: 7, border: `1px solid ${T.border}`, background: T.bg, color: T.textMuted, cursor: "pointer" }}
-                  >
-                    ↑
-                  </button>
-                </div>
-              )}
-
-              <input
-                ref={fileRefs[i]}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={e => handleFile(e, i)}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ─── BANNER SLIDER ─────────────────────────────────────────────────────────────
 function BannerSlider({ banners }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setIdx(i => (i + 1) % banners.length), 3000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setIdx(i => (i + 1) % banners.length), 4000);
+    return () => clearInterval(t);
   }, [banners.length]);
   if (!banners.length) return null;
   const b = banners[idx];
   return (
-    <div style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", height: 160 }}>
+    <div style={{ margin: "0 16px", borderRadius: 20, overflow: "hidden", boxShadow: T.shadowLg, position: "relative", height: 140 }}>
       <div style={{ width: "100%", height: "100%", background: b.img ? "transparent" : b.bg, position: "relative" }}>
         {b.img && <img src={b.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
         <div style={{ position: "absolute", inset: 0, padding: "20px 22px", display: "flex", flexDirection: "column", justifyContent: "center", background: b.img ? "rgba(0,0,0,0.35)" : "transparent" }}>
@@ -624,7 +491,7 @@ function BannerSlider({ banners }) {
       </div>
       {banners.length > 1 && (
         <div style={{ position: "absolute", bottom: 10, right: 14, display: "flex", gap: 5 }}>
-          {banners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, background: i === idx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s", cursor: "pointer" }} />)}
+          {banners.map((_, i) => <div key={i} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, background: i === idx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s" }} />)}
         </div>
       )}
     </div>
@@ -632,242 +499,115 @@ function BannerSlider({ banners }) {
 }
 
 // ─── LOGIN SCREEN ──────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, expireDays: 0 }, onGuest, loginBg }) {
-  const { lang, setLang, t } = useLang();
-  const [phone, setPhone] = useState("+996");
-  const [name, setName] = useState("");
+function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, expireDays: 0 }, onGuest }) {
+  const { lang, t } = useLang();
+  const [mode, setMode] = useState("splash");
+  const [loginVal, setLoginVal] = useState("");
+  const [pass, setPass] = useState("");
+  const [regName, setRegName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regPass, setRegPass] = useState("");
   const [err, setErr] = useState("");
-  const [loginHeroIdx, setLoginHeroIdx] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setLoginHeroIdx(i => (i + 1) % 3), 3000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatPhone = (v) => {
-    const digits = v.replace(/\D/g, '').slice(0, 12);
-    if (digits.length <= 3) return '+' + digits;
-    if (digits.length <= 6) return '+' + digits.slice(0, 3) + ' ' + digits.slice(3);
-    if (digits.length <= 9) return '+' + digits.slice(0, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6);
-    return '+' + digits.slice(0, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6, 9) + ' ' + digits.slice(9, 12);
-  };
 
   function doLogin() {
-    if (!phone || !name) { setErr(lang === "ru" ? "Заполните все поля" : "Бардык талааларды толтуруңуз"); return; }
-    if (name.toLowerCase() === "admin") { onLogin({ isAdminLogin: true, password: phone }); return; }
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 11) { setErr(lang === "ru" ? "Введите корректный номер" : "Туура номер жазыңыз"); return; }
-    onLogin({ phone, name, isAdminLogin: false });
+    if (!loginVal || !pass) { setErr(t.fillAll); return; }
+    if (loginVal === "admin") { onLogin({ isAdminLogin: true, password: pass }); }
+    else { onLogin({ phone: loginVal, name: loginVal, isAdminLogin: false }); }
   }
-  const setGuestMode = () => onGuest && onGuest();
+  function doRegister() {
+    if (!regName || !regPhone) { setErr(t.fillAll); return; }
+    const isValidPhone = (ph) => /^[0-9]{9,12}$/.test(ph.replace(/[\s\-\+\(\)]/g, ''));
+    if (!isValidPhone(regPhone)) { setErr("Введите корректный номер телефона"); return; }
+    onLogin({ phone: regPhone, name: regName, isAdminLogin: false });
+  }
+
+  // Splash screen
+  if (mode === "splash") return (
+    <div style={{ height: "100vh", background: T.accent, display: "flex", flexDirection: "column", padding: "60px 28px 48px" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+        <div style={{ width: 80, height: 80, borderRadius: 24, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 32 }}>
+          {React.cloneElement(IC.bottle, { style: { color: "#fff" } })}
+        </div>
+        <div style={{ color: "#fff", fontSize: 32, fontWeight: 900, lineHeight: 1.15, marginBottom: 16 }}>Parfum Shop{"\n"}Bishkek</div>
+        <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 15, lineHeight: 1.6, marginBottom: 48 }}>{lang === "kg" ? "Бишкектеги эң жакшы атир дүкөнү. Сапат жана жыт кепилдиги." : "Лучший парфюм Бишкека. Гарантия качества и аромата."}</div>
+        <button onClick={() => setMode("login")} style={{ background: "#fff", color: T.accent, border: "none", borderRadius: 18, padding: "17px 20px", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>{t.getStarted}</button>
+      </div>
+    </div>
+  );
 
   return (
-    <div style={{
-      width: "100%",
-      minHeight: "100svh",
-      background: "#000",
-      display: "flex",
-      flexDirection: "column",
-      position: "relative",
-      overflow: "hidden",
-      boxSizing: "border-box"
-    }}>
-      {/* Full-screen background photo */}
-      <img
-        src={loginBg || "/login-bg.jpeg"}
-        alt=""
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "center top",
-          zIndex: 0
-        }}
-      />
-      {/* Dark gradient overlay */}
-      <div style={{
-        position: "absolute",
-        inset: 0,
-        background: "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.80) 68%, rgba(0,0,0,0.97) 100%)",
-        zIndex: 1
-      }} />
-
-      {/* Lang toggle — top right */}
-      <div style={{
-        position: "absolute", top: 20, right: 16, zIndex: 10,
-        display: "flex",
-        background: "rgba(255,255,255,0.15)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
-        borderRadius: 30, padding: 3,
-        border: "1px solid rgba(255,255,255,0.25)"
-      }}>
-        {["ru", "kg"].map(l => (
-          <button key={l} onClick={() => setLang(l)} style={{
-            padding: "5px 14px", borderRadius: 26, border: "none", cursor: "pointer",
-            fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-            background: lang === l ? "rgba(255,255,255,0.9)" : "transparent",
-            color: lang === l ? "#111" : "rgba(255,255,255,0.7)",
-            transition: "all 0.2s"
-          }}>{l === "ru" ? "РУС" : "КЫР"}</button>
+    <div style={{ minHeight: "100vh", background: T.bg, padding: "0 0 40px" }}>
+      {/* Header */}
+      <div style={{ background: T.accent, padding: "48px 24px 32px", borderRadius: "0 0 32px 32px", marginBottom: 24, position: "relative" }}>
+        <div style={{ position: "absolute", top: 16, right: 16 }}><LangToggle /></div>
+        <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+          {React.cloneElement(IC.bottle, { style: { color: "#fff" } })}
+        </div>
+        <div style={{ color: "#fff", fontSize: 22, fontWeight: 800 }}>Parfum Shop</div>
+        <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, marginTop: 3 }}>{t.appSubtitle}</div>
+      </div>
+      {/* Tabs */}
+      <div style={{ display: "flex", margin: "0 20px 20px", background: T.card, borderRadius: 16, padding: 4, gap: 4, border: `1px solid ${T.border}` }}>
+        {[["login", "ru" === lang ? "Войти" : "Кирүү"], ["register", "ru" === lang ? "Регистрация" : "Катталуу"]].map(([m, label]) => (
+          <button key={m} onClick={() => { setMode(m); setErr(""); }} style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: mode === m ? T.accent : "transparent", color: mode === m ? "#fff" : T.textMuted, fontSize: 14, fontWeight: mode === m ? 700 : 500, cursor: "pointer" }}>{label}</button>
         ))}
       </div>
-
-      {/* Branding */}
-      <div style={{
-        position: "relative", zIndex: 2,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        paddingBottom: 28,
-        paddingTop: 60,
-        width: "100%",
-        boxSizing: "border-box",
-        overflow: "hidden"
-      }}>
-        <div style={{
-          fontFamily: "'Playfair Display', serif",
-          fontStyle: "italic",
-          fontWeight: 400,
-          fontSize: "clamp(28px, 9vw, 38px)",
-          color: "#f5f0e8",
-          letterSpacing: 0.5,
-          textAlign: "center",
-          lineHeight: 1.2,
-          textShadow: "0 2px 24px rgba(0,0,0,0.7)",
-          width: "100%",
-          paddingInline: 16,
-          boxSizing: "border-box"
-        }}>Kemal Usman</div>
-        <div style={{
-          width: 40, height: 1,
-          background: "linear-gradient(90deg, transparent, #c9a96e, transparent)",
-          margin: "10px auto 8px"
-        }} />
-        <div style={{
-          fontSize: 10, color: "#c9a96e",
-          letterSpacing: 4, textTransform: "uppercase"
-        }}>Parfum</div>
+      <div style={{ padding: "0 20px" }}>
+        {mode === "login" ? (
+          <>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.loginLabel}</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.user}</div>
+                <input value={loginVal} onChange={e => { setLoginVal(e.target.value); setErr(""); }} placeholder={t.loginPlaceholder} style={{ ...inputStyle, paddingLeft: 42 }} />
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.passwordLabel}</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.lock}</div>
+                <input value={pass} onChange={e => { setPass(e.target.value); setErr(""); }} type="password" placeholder={t.passwordPlaceholder} style={{ ...inputStyle, paddingLeft: 42 }} />
+              </div>
+            </div>
+            {err && <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 12, border: "1px solid #FFE0E0" }}>{err}</div>}
+            <button onClick={doLogin} style={btnGreen()}>{lang === "kg" ? "Кирүү" : "Войти"}</button>
+            <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", marginTop: 14, padding: "10px", background: T.card, borderRadius: 12 }}>{t.demoHint}</div>
+            {onGuest && <button onClick={onGuest} style={{ marginTop: 12, background: 'none', border: 'none', color: '#9BB5A8', fontSize: 13, cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>Смотреть без регистрации</button>}
+          </>
+        ) : (
+          <>
+            {welcomeConfig.enabled && (
+              <div style={{ background: T.accentLight, borderRadius: 16, padding: "14px 16px", marginBottom: 16, border: `1px solid ${T.accent}30` }}>
+                <div style={{ color: T.accent, fontWeight: 800, fontSize: 16 }}>+{formatSum(welcomeConfig.amount)}</div>
+                <div style={{ color: T.textSecond, fontSize: 13, marginTop: 2 }}>{lang === "kg" ? "Биринчи заказга бонус" : "Бонус на первый заказ"}</div>
+              </div>
+            )}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.name}</div>
+              <input value={regName} onChange={e => { setRegName(e.target.value); setErr(""); }} placeholder="Иванов Иван" style={inputStyle} />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.phone}</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.phone}</div>
+                <input value={regPhone} onChange={e => { setRegPhone(e.target.value); setErr(""); }} type="tel" placeholder="+996 700 000 000" style={{ ...inputStyle, paddingLeft: 42 }} />
+              </div>
+            </div>
+            {err && <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 12 }}>{err}</div>}
+            <button onClick={doRegister} style={btnGreen()}>{welcomeConfig.enabled ? (lang === "kg" ? "Катталуу + бонус алуу" : "Зарегистрироваться + бонус") : (lang === "kg" ? "Катталуу" : "Зарегистрироваться")}</button>
+          </>
+        )}
       </div>
-
-      {/* Glassmorphism form panel */}
-      <div style={{
-        position: "relative", zIndex: 2,
-        width: "100%",
-        background: "rgba(20,20,20,0.72)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        borderTop: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: "24px 24px 0 0",
-        padding: "28px 20px 48px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        boxSizing: "border-box"
-      }}>
-
-      {/* Phone input */}
-      <div style={{ width: "100%", marginBottom: 12 }}>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginBottom: 6, letterSpacing: 1.5 }}>
-          {lang === "ru" ? "НОМЕР ТЕЛЕФОНА" : "ТЕЛЕФОН НОМЕРИ"}
-        </div>
-        <input
-          type="tel" value={phone} onChange={e => { setPhone(formatPhone(e.target.value)); setErr(""); }}
-          placeholder="+996 700 123 456"
-          style={{
-            width: "100%", padding: "13px 16px", fontSize: 16,
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 12, color: "#fff", outline: "none",
-            letterSpacing: 1, boxSizing: "border-box"
-          }}
-        />
-      </div>
-
-      {/* Name input */}
-      <div style={{ width: "100%", marginBottom: 18 }}>
-        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginBottom: 6, letterSpacing: 1.5 }}>
-          {lang === "ru" ? "ВАШЕ ИМЯ" : "АТЫҢЫЗ"}
-        </div>
-        <input
-          type="text" value={name} onChange={e => { setName(e.target.value); setErr(""); }}
-          placeholder={lang === "ru" ? "Введите имя" : "Атыңызды жазыңыз"}
-          style={{
-            width: "100%", padding: "13px 16px", fontSize: 16,
-            background: "rgba(255,255,255,0.08)",
-            border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 12, color: "#fff", outline: "none",
-            boxSizing: "border-box"
-          }}
-        />
-      </div>
-
-      {err && (
-        <div style={{ width: "100%", color: "#ff7b7b", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "rgba(255,80,80,0.15)", borderRadius: 10, border: "1px solid rgba(255,80,80,0.3)", textAlign: "center", boxSizing: "border-box" }}>{err}</div>
-      )}
-
-      {/* Login button */}
-      <button onClick={doLogin} style={{
-        width: "100%", padding: "15px",
-        background: "#111",
-        border: "1px solid rgba(255,255,255,0.1)",
-        borderRadius: 12, fontSize: 14, fontWeight: 700,
-        color: "#fff", cursor: "pointer", letterSpacing: 2,
-        marginBottom: 14, boxSizing: "border-box"
-      }}>
-        {lang === "ru" ? "ВОЙТИ" : "КИРҮҮ"}
-      </button>
-
-      {/* Guest mode */}
-      {onGuest && (
-        <button onClick={setGuestMode} style={{
-          background: "none", border: "none", color: "rgba(255,255,255,0.3)",
-          fontSize: 13, cursor: "pointer", letterSpacing: 0.5, padding: 0
-        }}>
-          {lang === "ru" ? "Войти как гость" : "Мейман катары кирүү"}
-        </button>
-      )}
-
-      </div>{/* end glassmorphism form */}
     </div>
   );
 }
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
-function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }) {
-  const { lang, setLang, t } = useLang();
+function CatalogScreen({ products, addToCart, banners, showToast }) {
+  const { lang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
   const [detail, setDetail] = useState(null);
   const [selVariant, setSelVariant] = useState(null);
-  const [adminTap, setAdminTap] = React.useState(0);
-  const [adminTapTimer, setAdminTapTimer] = React.useState(null);
-  const [scrolled, setScrolled] = useState(false);
-  const [imgIndex, setImgIndex] = useState(0);
-  const [touchStartX, setTouchStartX] = React.useState(null);
-
-  useEffect(() => {
-    const el = document.getElementById("catalog-scroll");
-    if (!el) return;
-    const handler = () => setScrolled(el.scrollTop > 50);
-    el.addEventListener("scroll", handler);
-    return () => el.removeEventListener("scroll", handler);
-  }, []);
-
-  const handleSecretTap = () => {
-    if (adminTapTimer) clearTimeout(adminTapTimer);
-    const newCount = adminTap + 1;
-    setAdminTap(newCount);
-    if (newCount >= 5) {
-      setAdminTap(0);
-      onAdminLogin?.();
-    } else {
-      const timer = setTimeout(() => setAdminTap(0), 2000);
-      setAdminTapTimer(timer);
-    }
-  };
 
   const cats = ["all", ...Array.from(new Set(products.map(p => p.category)))];
   const filteredProducts = products.filter(p => {
@@ -883,63 +623,18 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
   };
   const hasStock = (p) => (p.variants || []).some(v => v.inStock);
 
-  const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); };
+  const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); };
 
   if (detail) {
-    const allImages = (detail.images && detail.images.length > 0) ? detail.images : (detail.img ? [detail.img] : []);
     return (
-      <div style={{ minHeight: "100vh", background: "#fff", paddingBottom: 100 }}>
+      <div style={{ minHeight: "100vh", background: T.bg, paddingBottom: 100 }}>
         {/* Hero */}
-        <div
-          style={{ position: "relative", width: "100%", background: "#fff", overflow: "hidden" }}
-          onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
-          onTouchEnd={(e) => {
-            if (touchStartX === null || allImages.length <= 1) return;
-            const diff = touchStartX - e.changedTouches[0].clientX;
-            if (Math.abs(diff) > 40) {
-              if (diff > 0) setImgIndex(i => (i + 1) % allImages.length);
-              else setImgIndex(i => (i - 1 + allImages.length) % allImages.length);
-            }
-            setTouchStartX(null);
-          }}
-        >
-          {allImages.length > 0 ? (
-            <div style={{ background: "#fff", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
-              <img
-                src={allImages[imgIndex]}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "70vh",
-                  display: "block",
-                  objectFit: "contain",
-                  background: "#fff"
-                }}
-              />
-              {allImages.length > 1 && (
-                <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 6 }}>
-                  {allImages.map((_, i) => (
-                    <div
-                      key={i}
-                      onClick={() => setImgIndex(i)}
-                      style={{
-                        width: i === imgIndex ? 20 : 7,
-                        height: 7,
-                        borderRadius: 4,
-                        background: i === imgIndex ? T.accent : "rgba(180,180,180,0.7)",
-                        transition: "width 0.25s",
-                        cursor: "pointer",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.15)"
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ height: 260, background: detail.img ? "transparent" : `linear-gradient(160deg, ${T.accentLight} 0%, ${T.bg} 100%)`, position: "relative", overflow: "hidden" }}>
+          {detail.img
+            ? <img src={detail.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               {React.cloneElement(IC.bottle, { style: { width: 100, height: 100, color: T.accent, opacity: 0.3 } })}
-            </div>
-          )}
+            </div>}
           <button onClick={() => setDetail(null)} style={{ position: "absolute", top: 16, left: 16, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.9)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, boxShadow: T.shadowSm }}>
             {IC.back}
           </button>
@@ -978,64 +673,56 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
   }
 
   return (
-    <div id="catalog-scroll" style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100, overflowY: "auto", height: "100vh" }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
       {/* Header */}
-      <div style={{ background: "#fff", paddingTop: 44, paddingBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "#aaa", letterSpacing: 0.5 }}>{lang === "ru" ? "Добро пожаловать" : "Кош келиңиз"}</div>
-            <div onClick={handleSecretTap} style={{ fontSize: 24, color: "#111", fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.3, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
-          </div>
-          <div style={{ display: "flex", background: "#f5f5f5", borderRadius: 20, padding: 3 }}>
-            {["ru", "kg"].map(l => (
-              <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 14px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: lang === l ? "#111" : "transparent", color: lang === l ? "#fff" : "#aaa", transition: "all 0.2s" }}>
-                {l === "ru" ? "РУС" : "КЫР"}
-              </button>
-            ))}
-          </div>
+      <div style={{ padding: "16px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <div style={{ fontSize: 12, color: "#9BB5A8", fontWeight: 500 }}>Бишкек · Парфюм</div>
+          <div style={{ fontSize: 16, fontWeight: 500, color: "#1A2E22" }}>Kemal Usman</div>
         </div>
-        <div style={{ padding: "0 16px 12px", overflow: "hidden", maxHeight: scrolled ? "60px" : "0px", opacity: scrolled ? 1 : 0, transition: "max-height 0.3s ease, opacity 0.2s ease" }}>
-          <div style={{ display: "flex", alignItems: "center", background: "#f5f5f5", borderRadius: 10, padding: "10px 14px", gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#aaa" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#aaa" strokeWidth="2" /></svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: "#111", width: "100%", fontFamily: "inherit" }} />
-          </div>
-        </div>
+        <LangToggle />
+      </div>
+      {/* Search */}
+      <div style={{ position: "relative", margin: "0 16px 12px" }}>
+        <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#9BB5A8" }}>{IC.search}</div>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ width: "100%", boxSizing: "border-box", background: "#FFFFFF", border: "1.5px solid #E2EDE8", borderRadius: 14, padding: "13px 50px 13px 42px", fontSize: 15, color: "#1A2E22", outline: "none", fontFamily: "inherit" }} />
+        <div onClick={() => document.querySelector('input[type="text"],input[placeholder]')?.focus()} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 36, height: 36, borderRadius: 10, background: "#2D7D6F", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>{IC.filter}</div>
       </div>
       {/* Banner */}
-      {banners.length > 0 && <div style={{ marginTop: 14, marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
+      {banners.length > 0 && <div style={{ marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
       {/* Categories */}
-      <div className="no-scrollbar" style={{ padding: "8px 16px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ padding: "0 16px 12px" }}>
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
           {cats.map(c => (
-            <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: cat === c ? "none" : "0.5px solid #EEEEEE", background: cat === c ? "#111111" : "transparent", color: cat === c ? "#fff" : T.textSecond, fontSize: 13, fontWeight: cat === c ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+            <button key={c} onClick={() => setCat(c)} style={{ padding: "8px 18px", borderRadius: 20, border: `1.5px solid ${cat === c ? T.accent : T.border}`, background: cat === c ? T.accent : T.card, color: cat === c ? "#fff" : T.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
               {c === "all" ? t.allCategories : c}
             </button>
           ))}
         </div>
       </div>
       {/* Products grid */}
-      <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         {filteredProducts.length === 0 && (
-          <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: T.textMuted }}>
+          <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: '#9BB5A8' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: T.textSecond, marginBottom: 6 }}>Ничего не найдено</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#5A7A6A', marginBottom: 6 }}>Ничего не найдено</div>
             <div style={{ fontSize: 13 }}>Попробуйте изменить запрос</div>
           </div>
         )}
         {filteredProducts.map(p => {
           const stk = hasStock(p);
           return (
-            <div key={p.id} onClick={() => openDetail(p)} style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: "pointer", minHeight: 220 }) }}>
-              <div style={{ width: "100%", height: 140, background: "#EEEEEE", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <div key={p.id} onClick={() => openDetail(p)} style={{ ...card({ borderRadius: 20, overflow: "hidden", cursor: "pointer" }) }}>
+              <div style={{ height: 140, background: `linear-gradient(160deg, ${T.accentPale}, ${T.bg})`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                 {p.img
                   ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   : React.cloneElement(IC.bottle, { style: { width: 60, height: 60, color: T.accent, opacity: 0.5 } })}
-                {!stk && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", color: "#E53935", borderRadius: 8, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{t.outOfStock}</div>}
-                {(p.variants || []).every(v => !v.inStock) && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#E53935", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>Нет в наличии</div>}
+                {!stk && <div style={{ position: "absolute", top: 8, left: 8, background: T.danger, color: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{t.outOfStock}</div>}
+                {(p.variants || []).every(v => !v.inStock) && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>Нет в наличии</div>}
               </div>
-              <div style={{ padding: "10px 12px" }}>
-                <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2, fontWeight: 300 }}>{p.brand}</div>
-                <div style={{ color: T.text, fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 4, letterSpacing: 0.5 }}>{p.name}</div>
+              <div style={{ padding: "12px 12px 14px" }}>
+                <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>{p.brand}</div>
+                <div style={{ color: T.text, fontSize: 13, fontWeight: 700, lineHeight: 1.3, marginBottom: 6 }}>{p.name}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
                   {(() => {
                     const sizes = (p.sizes || p.variants || []).slice(0, 2);
@@ -1045,14 +732,14 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
                         <span key={v.id} style={{ fontSize: 10, padding: "2px 8px", background: T.accentPale, color: T.accent, borderRadius: 20, fontWeight: 600 }}>{v.label}</span>
                       ))}
                       {extra > 0 && (
-                        <span style={{ fontSize: 11, color: T.textMuted, padding: "2px 8px", border: `1px solid ${T.border}`, borderRadius: 20 }}>+{extra}</span>
+                        <span style={{ fontSize: 11, color: "#9BB5A8", padding: "2px 8px", border: "1px solid #E2EDE8", borderRadius: 20 }}>+{extra}</span>
                       )}
                     </>;
                   })()}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ color: "#111111", fontWeight: 700, fontSize: 14 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: T.danger, fontSize: 11 }}>Нет в наличии</span>}</div>
-                  <div style={{ width: 36, height: 36, borderRadius: 18, background: stk ? "#111111" : T.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 20 }}>
+                  <div style={{ color: "#1A2E22", fontWeight: 800, fontSize: 13 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: '#EF4444', fontSize: 11 }}>Нет в наличии</span>}</div>
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: stk ? T.accent : T.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
                     {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
                   </div>
                 </div>
@@ -1075,8 +762,8 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
   const [payMethod, setPayMethod] = useState(PAYMENT_METHODS[0].id);
 
   const items = cart.map(ci => {
-    const prod = products.find(p => String(p.id) === String(ci.productId));
-    const variant = prod?.variants.find(v => String(v.id) === String(ci.variantId));
+    const prod = products.find(p => p.id === ci.productId);
+    const variant = prod?.variants.find(v => v.id === ci.variantId);
     return prod && variant ? { ...ci, prod, variant } : null;
   }).filter(Boolean);
 
@@ -1100,7 +787,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 120 }}>
-      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "#111", background: "#f5f5f5" }}>{t.cart}</div>
+      <div style={{ padding: "20px 16px 12px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.cart}</div>
       {/* Items */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         {items.map((item, i) => (
@@ -1207,7 +894,7 @@ function MyOrdersScreen({ orders }) {
   );
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "52px 16px 14px", fontSize: 26, fontWeight: 800, color: "#111" }}>{t.myOrders}</div>
+      <div style={{ padding: "20px 16px 12px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.myOrders}</div>
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         {orders.slice().reverse().map(order => (
           <div key={order.id} style={{ ...card({ padding: "16px" }) }}>
@@ -1233,110 +920,45 @@ function MyOrdersScreen({ orders }) {
 }
 // ─── PROFILE SCREEN ────────────────────────────────────────────────────────────
 function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin }) {
-  const { t, lang, setLang } = useLang();
+  const { t } = useLang();
   const [tab, setTab] = useState("bonus");
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPass, setAdminPass] = useState("");
   const [adminErr, setAdminErr] = useState("");
-  const [copied, setCopied] = useState(false);
-  const handleCopyReferralLocal = () => {
-    onCopyReferral();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ background: "linear-gradient(160deg, #111111 0%, #000000 100%)", padding: "48px 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
-        {/* Lang toggle row */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.15)", borderRadius: 30, padding: 3, border: "1px solid rgba(255,255,255,0.2)" }}>
-            {["ru", "kg"].map(l => (
-              <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 14px", borderRadius: 26, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, background: lang === l ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", transition: "all 0.2s" }}>
-                {l === "ru" ? "РУС" : "КЫР"}
-              </button>
-            ))}
-          </div>
-        </div>
+      <div style={{ background: T.accent, padding: "48px 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "#fff" } })}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>{user?.name || t.guest}</div>
-            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 300 }}>{user?.phone}</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>{user?.name || t.guest}</div>
+            <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13 }}>{user?.phone}</div>
           </div>
-          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
+          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
         </div>
-        <div style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ marginTop: 20, background: "rgba(255,255,255,0.15)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 300, letterSpacing: 1, textTransform: "uppercase" }}>{t.bonusBalance}</div>
-            <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>{formatSum(bonusBalance)}</div>
+            <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>{t.bonusBalance}</div>
+            <div style={{ color: "#fff", fontSize: 28, fontWeight: 900 }}>{formatSum(bonusBalance)}</div>
           </div>
-          {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
+          {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "rgba(255,255,255,0.7)" } })}
         </div>
       </div>
       {referralCode && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
-          <div style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: T.textMuted,
-            textTransform: "uppercase",
-            letterSpacing: 1.5,
-            textAlign: "center",
-            marginBottom: 14
-          }}>
-            {t.referralCode}
+        <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }), borderLeft: `4px solid ${T.referral}` }}>
+          <div style={{ color: T.referral, fontWeight: 700, fontSize: 14, marginBottom: 8 }}>{t.referralCode}</div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ flex: 1, background: T.bg, borderRadius: 10, padding: "10px 14px", color: T.referral, fontWeight: 800, fontSize: 18, letterSpacing: 2 }}>{referralCode}</div>
+            <button onClick={onCopyReferral} style={{ background: T.referral, border: "none", borderRadius: 12, padding: "10px 16px", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{t.copy}</button>
           </div>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            background: T.bg,
-            borderRadius: 14,
-            padding: "12px 16px",
-            marginBottom: 12
-          }}>
-            <div style={{
-              flex: 1,
-              fontSize: 20,
-              fontWeight: 900,
-              color: T.text,
-              letterSpacing: 3,
-              textAlign: "center",
-              fontFamily: "monospace"
-            }}>
-              {referralCode}
-            </div>
-            <button
-              onClick={handleCopyReferralLocal}
-              style={{
-                background: T.accent,
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                padding: "10px 18px",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                flexShrink: 0
-              }}
-            >
-              {copied ? t.copied : t.copy}
-            </button>
-          </div>
-          <div style={{
-            fontSize: 13,
-            color: T.textMuted,
-            textAlign: "center"
-          }}>
-            {t.referralHint} {settings?.referralBonus || 100} {t.sum || "сом"}
-          </div>
+          <div style={{ color: T.textMuted, fontSize: 12, marginTop: 8 }}>{t.referralHint} {settings?.referralBonus ? formatSum(settings.referralBonus) : ""}</div>
         </div>
       )}
       <div style={{ margin: "0 16px 14px", display: "flex", gap: 8 }}>
         {[{ id: "bonus", label: t.bonusHistory }, { id: "info", label: t.accountInfo }].map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: tab === tb.id ? "none" : `1px solid ${T.border}`, background: tab === tb.id ? "#111111" : "transparent", color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
+          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1.5px solid ${tab === tb.id ? T.accent : T.border}`, background: tab === tb.id ? T.accent : T.card, color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
         ))}
       </div>
       {tab === "bonus" ? (
@@ -1345,7 +967,7 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
             ? <div style={{ color: T.textMuted, textAlign: "center", padding: 40 }}>{t.noBonusHistory}</div>
             : bonusHistory.slice().reverse().map((h, i) => (
               <div key={i} style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "rgba(224,85,85,0.10)" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "#FFF5F5" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {React.cloneElement(h.type === "spent" ? IC.cart : IC.gift, { style: { width: 18, height: 18, color: h.type === "spent" ? T.danger : T.accent } })}
                 </div>
                 <div style={{ flex: 1 }}>
@@ -1368,6 +990,13 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
           ))}
         </div>
       )}
+      {/* Admin access button */}
+      <div style={{ padding: "8px 16px 24px" }}>
+        <button onClick={() => { setShowAdminModal(true); setAdminPass(""); setAdminErr(""); }} style={{ ...btnOutline({ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 0", borderRadius: 16, color: T.accentDark, border: `1.5px solid ${T.accentDark}` }) }}>
+          {React.cloneElement(IC.lock, { style: { width: 16, height: 16, color: T.accentDark } })}
+          {t.adminPanel}
+        </button>
+      </div>
       {showAdminModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: T.card, borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }}>
@@ -1389,7 +1018,7 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
 }
 
 // ─── ADMIN ORDERS ──────────────────────────────────────────────────────────────
-function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp, onConfirmMBankPayment }) {
+function AdminOrdersScreen({ allOrders, onStatusChange, onSendWhatsApp, onConfirmMBankPayment }) {
   const { t } = useLang();
   const [filter, setFilter] = useState("all");
   const [statusMap, setStatusMap] = useState({});
@@ -1400,7 +1029,7 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp
   const handleStatus = (id, st) => { setStatusMap(p => ({ ...p, [id]: st })); onStatusChange?.(id, st); };
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "52px 16px 14px", fontSize: 18, fontWeight: 700, letterSpacing: 1, color: T.text }}>{t.orders}</div>
+      <div style={{ padding: "20px 16px 12px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.orders}</div>
       <div style={{ padding: "0 16px 14px", overflowX: "auto" }}>
         <div style={{ display: "flex", gap: 8, width: "max-content" }}>
           {statuses.map(s => (
@@ -1414,8 +1043,8 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp
         {!filtered.length && <div style={{ color: T.textMuted, textAlign: "center", padding: 40 }}>{t.noOrders}</div>}
         {filtered.slice().reverse().map(order => (
           <div key={order.id} style={{ ...card({ padding: "16px" }) }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setOpen(open === order.id ? null : order.id)}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => setOpen(open === order.id ? null : order.id)}>
+              <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                   <span style={{ color: T.textMuted, fontSize: 11 }}>#{order.id}</span>
                   <StatusChip status={order.status} />
@@ -1423,10 +1052,7 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp
                 <div style={{ color: T.text, fontWeight: 800, fontSize: 16 }}>{formatSum(order.total)}</div>
                 <div style={{ color: T.textSecond, fontSize: 12, marginTop: 2 }}>{order.clientName} · {order.clientPhone}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <button onClick={() => { if (window.confirm(t.confirmDeleteOrder)) onDelete?.(order.id); }} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 20, padding: 4, lineHeight: 1 }}>×</button>
-                <span style={{ color: T.textMuted, fontSize: 18, cursor: "pointer" }} onClick={() => setOpen(open === order.id ? null : order.id)}>{open === order.id ? "▲" : "▼"}</span>
-              </div>
+              <span style={{ color: T.textMuted, fontSize: 18 }}>{open === order.id ? "▲" : "▼"}</span>
             </div>
             {open === order.id && (
               <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
@@ -1466,57 +1092,21 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp
   );
 }
 // ─── ADMIN PRODUCTS ────────────────────────────────────────────────────────────
-function AdminProductsScreen({ products, setProducts, showToast }) {
+function AdminProductsScreen({ products, setProducts }) {
   const { t } = useLang();
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
-  const [saving, setSaving] = useState(false);
   const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.brand.toLowerCase().includes(search.toLowerCase()));
   const editProd = products.find(p => p.id === editing);
   const upd = (id, f, v) => setProducts(prev => prev.map(p => p.id === id ? { ...p, [f]: v } : p));
   const updVar = (pId, vId, f, v) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.map(vr => vr.id === vId ? { ...vr, [f]: v } : vr) } : p));
-  const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
-  const delProd = async (id) => {
-    if (!window.confirm(t.confirmDelete)) return;
-    const prod = products.find(p => p.id === id);
-    setProducts(p => p.filter(x => x.id !== id));
-    if (editing === id) setEditing(null);
-    if (prod?.collectionId) {
-      try { await api.deleteProduct(prod.id); } catch (e) { console.warn("Delete error:", e); }
-    }
-  };
-  const saveProd = async (id) => {
-    const prod = products.find(p => p.id === id);
-    if (!prod) return;
-    setSaving(true);
-    const data = {
-      name: prod.name,
-      brand: prod.brand,
-      category: prod.category,
-      desc: prod.desc,
-      variants: JSON.stringify(prod.variants),
-    };
-    try {
-      if (prod.collectionId) {
-        await api.updateProduct(prod.id, data);
-      } else {
-        const created = await api.createProduct(data);
-        setProducts(prev => prev.map(p => p.id === id ? { ...created, img: null, images: [], variants: prod.variants } : p));
-      }
-      showToast?.(t.save + "!");
-      setEditing(null);
-    } catch (e) {
-      console.error("Save product error:", e);
-      showToast?.("Ошибка: " + (e.message || "сохранение не удалось"), "error");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, desc: "", variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
+  const delProd = (id) => { if (window.confirm(t.confirmDelete)) { setProducts(p => p.filter(x => x.id !== id)); if (editing === id) setEditing(null); } };
   const addVar = (pId) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: [...p.variants, { id: Date.now(), label: "", price: 0, type: "ml", inStock: true }] } : p));
   const delVar = (pId, vId) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.filter(v => v.id !== vId) } : p));
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ padding: "20px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.products}</div>
         <button onClick={addProd} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
       </div>
@@ -1527,12 +1117,7 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
             <div style={{ color: T.text, fontWeight: 800, fontSize: 16 }}>{editProd.name || t.newProduct}</div>
             <button onClick={() => setEditing(null)} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 22 }}>×</button>
           </div>
-          <MultiImageUpload
-            images={editProd.images || []}
-            coverImg={editProd.img}
-            onImagesChange={imgs => upd(editProd.id, "images", imgs)}
-            onCoverChange={url => upd(editProd.id, "img", url)}
-          />
+          <ImageUpload value={editProd.img} onChange={v => upd(editProd.id, "img", v)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
             <input style={inputStyle} placeholder={t.productName} value={editProd.name} onChange={e => upd(editProd.id, "name", e.target.value)} />
             <input style={inputStyle} placeholder={t.brand} value={editProd.brand} onChange={e => upd(editProd.id, "brand", e.target.value)} />
@@ -1542,7 +1127,7 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
             <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} placeholder={t.description} value={editProd.desc} onChange={e => upd(editProd.id, "desc", e.target.value)} />
           </div>
           <div style={{ marginBottom: 16, marginTop: 14 }}>
-            <div style={{ fontWeight: 600, fontSize: 14, color: T.text, marginBottom: 8 }}>Аудио аромата</div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: '#1A2E22', marginBottom: 8 }}>🎤 Аудио аромата</div>
             <ProductAudioRecorder productId={editProd.id} />
           </div>
           <div style={{ marginTop: 0 }}>
@@ -1562,7 +1147,7 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
             ))}
           </div>
           <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button onClick={() => saveProd(editProd.id)} disabled={saving} style={btnGreen({ flex: 1, padding: "13px 0", borderRadius: 14, opacity: saving ? 0.6 : 1 })}>{saving ? "..." : t.save}</button>
+            <button onClick={() => setEditing(null)} style={btnGreen({ flex: 1, padding: "13px 0", borderRadius: 14 })}>{t.save}</button>
             <button onClick={() => delProd(editProd.id)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: `1px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontWeight: 700, fontSize: 14, cursor: "pointer" }}>{t.delete}</button>
           </div>
         </div>
@@ -1570,13 +1155,14 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {filtered.map(p => (
           <div key={p.id} style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }} onClick={() => setEditing(editing === p.id ? null : p.id)}>
-            <div style={{ width: 50, height: 50, borderRadius: 14, background: p.img ? "#fff" : T.accentPale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-              {p.img ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} /> : React.cloneElement(IC.bottle, { style: { width: 24, height: 24, color: T.accent, opacity: 0.5 } })}
+            <div style={{ width: 50, height: 50, borderRadius: 14, background: T.accentPale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+              {p.img ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : React.cloneElement(IC.bottle, { style: { width: 24, height: 24, color: T.accent, opacity: 0.5 } })}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{p.brand}</div>
               <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{p.name || t.newProduct}</div>
               <div style={{ color: T.textSecond, fontSize: 11 }}>{p.variants.length} вар. · {p.variants.filter(v => v.inStock).length} в наличии</div>
+              <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}><AudioRecordBtn productId={p.id} /></div>
             </div>
             <span style={{ color: T.textMuted }}>{editing === p.id ? "▲" : "▼"}</span>
           </div>
@@ -1587,56 +1173,26 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
 }
 
 // ─── ADMIN STATS ───────────────────────────────────────────────────────────────
-function AdminStatsScreen({ orders, products, registeredUsers = [], visitCount = 0 }) {
+function AdminStatsScreen({ orders, products }) {
   const { t } = useLang();
   const delivered = orders.filter(o => o.status === "delivered");
   const totalRevenue = delivered.reduce((s, o) => s + (o.total || 0), 0);
-
-  // Today stats
-  const todayOrdersCount = orders.filter(o => {
-    try { return new Date(o.date).toDateString() === new Date().toDateString(); } catch { return false; }
-  }).length;
-  const todayRevenue = orders.filter(o => {
-    try { return new Date(o.date).toDateString() === new Date().toDateString() && o.status === "delivered"; } catch { return false; }
-  }).reduce((s, o) => s + (o.total || 0), 0);
-
-  // Status counts
+  const avgOrder = delivered.length ? Math.round(totalRevenue / delivered.length) : 0;
+  const newOrders = orders.filter(o => o.status === "new").length;
   const statusCounts = {};
   orders.forEach(o => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
-
-  // Top products
   const topProds = {};
   orders.forEach(o => (o.items || []).forEach(it => { topProds[it.name] = (topProds[it.name] || 0) + it.qty; }));
   const topList = Object.entries(topProds).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-  // Last 7 days chart data
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d;
-  });
-  const dayData = days.map(d => ({
-    label: d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
-    count: orders.filter(o => {
-      try { return new Date(o.date).toDateString() === d.toDateString(); } catch { return false; }
-    }).length,
-  }));
-  const maxCount = Math.max(...dayData.map(d => d.count), 1);
-
   const stats = [
     { label: t.totalRevenue, val: formatSum(totalRevenue), color: T.accent, bg: T.accentLight },
     { label: t.totalOrders, val: orders.length, color: "#3B82F6", bg: "#EFF6FF" },
-    { label: t.registeredCount, val: registeredUsers.length, color: T.referral, bg: "#F5F3FF" },
-    { label: t.visits, val: visitCount, color: T.bonus, bg: "#FFF7ED" },
+    { label: t.newOrders, val: newOrders, color: T.bonus, bg: "#FFFBEB" },
+    { label: t.avgOrder, val: formatSum(avgOrder), color: T.referral, bg: "#F5F3FF" },
   ];
-
-  const recentUsers = registeredUsers.slice(-5).reverse();
-
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
       <div style={{ padding: "20px 16px 16px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.stats}</div>
-
-      {/* Top 4 cards */}
       <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
         {stats.map(s => (
           <div key={s.label} style={{ ...card({ padding: "16px" }) }}>
@@ -1648,64 +1204,25 @@ function AdminStatsScreen({ orders, products, registeredUsers = [], visitCount =
           </div>
         ))}
       </div>
-
-      {/* Today stats */}
       <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-        <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ color: T.textMuted, fontSize: 11 }}>{t.todayOrders}</div>
-            <div style={{ color: T.accent, fontSize: 22, fontWeight: 900 }}>{todayOrdersCount}</div>
-          </div>
-          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ color: T.textMuted, fontSize: 11 }}>{t.todayRevenue}</div>
-            <div style={{ color: T.accent, fontSize: 18, fontWeight: 900 }}>{formatSum(todayRevenue)}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Last 7 days chart */}
-      <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-        <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{t.last7days}</div>
-        <svg width="100%" viewBox="0 0 280 120" style={{ display: "block" }}>
-          {dayData.map((d, i) => {
-            const barH = Math.max((d.count / maxCount) * 80, d.count > 0 ? 4 : 0);
-            const x = i * 40 + 10;
-            return (
-              <g key={i}>
-                <rect x={x} y={100 - barH} width={24} height={barH} rx={4} fill={T.accent} opacity={0.85} />
-                <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill={T.textMuted}>{d.label}</text>
-                {d.count > 0 && <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="9" fontWeight="700" fill={T.text}>{d.count}</text>}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      {/* Status distribution */}
-      {Object.keys(statusCounts).length > 0 && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.ordersByStatus}</div>
-          {Object.entries(statusCounts).map(([s, cnt]) => {
-            const pct = orders.length ? Math.round(cnt / orders.length * 100) : 0;
-            return (
-              <div key={s} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ color: T.textSecond, fontSize: 13 }}>{t["status_" + s] || s}</span>
-                  <span style={{ color: T.text, fontSize: 13, fontWeight: 700 }}>{cnt} ({pct}%)</span>
-                </div>
-                <div style={{ height: 8, borderRadius: 4, background: T.bg }}>
-                  <div style={{ height: "100%", borderRadius: 4, width: `${pct}%`, background: T.accent, transition: "width 0.5s" }} />
-                </div>
+        <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.ordersByStatus}</div>
+        {Object.entries(statusCounts).map(([s, cnt]) => {
+          const pct = orders.length ? Math.round(cnt / orders.length * 100) : 0;
+          return (
+            <div key={s} style={{ marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ color: T.textSecond, fontSize: 13 }}>{t["status_" + s] || s}</span>
+                <span style={{ color: T.text, fontSize: 13, fontWeight: 700 }}>{cnt} ({pct}%)</span>
               </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Top 5 products */}
+              <div style={{ height: 8, borderRadius: 4, background: T.bg }}>
+                <div style={{ height: "100%", borderRadius: 4, width: `${pct}%`, background: T.accent, transition: "width 0.5s" }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
       {topList.length > 0 && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
+        <div style={{ margin: "0 16px", ...card({ padding: "16px" }) }}>
           <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.topProducts}</div>
           {topList.map(([name, qty], i) => (
             <div key={name} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
@@ -1716,51 +1233,22 @@ function AdminStatsScreen({ orders, products, registeredUsers = [], visitCount =
           ))}
         </div>
       )}
-
-      {/* Recent registered users */}
-      {recentUsers.length > 0 && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.recentUsers}</div>
-          {recentUsers.map((u, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, paddingBottom: i < recentUsers.length - 1 ? 10 : 0, borderBottom: i < recentUsers.length - 1 ? `1px solid ${T.border}` : "none" }}>
-              <div style={{ width: 34, height: 34, borderRadius: "50%", background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {React.cloneElement(IC.user, { style: { width: 16, height: 16, color: T.accent } })}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{u.name || u.phone}</div>
-                <div style={{ color: T.textMuted, fontSize: 11 }}>{u.phone} · {u.date}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
 // ─── ADMIN BANNERS ─────────────────────────────────────────────────────────────
 function AdminBannersScreen({ banners, setBanners }) {
-  const { t, lang } = useLang();
+  const { t } = useLang();
   const [editing, setEditing] = useState(null);
-  const bannerFileRef = useRef(null);
-  const [bannerCropSrc, setBannerCropSrc] = useState(null);
   const addBanner = () => { const nb = { id: Date.now(), title: "", subtitle: "", img: null, bg: BG_PRESETS[0], active: true }; setBanners(p => [...p, nb]); setEditing(nb.id); };
   const upd = (id, f, v) => setBanners(prev => prev.map(b => b.id === id ? { ...b, [f]: v } : b));
   const del = (id) => { setBanners(p => p.filter(b => b.id !== id)); if (editing === id) setEditing(null); };
   const editB = banners.find(b => b.id === editing);
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ padding: "20px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.banners}</div>
         <button onClick={addBanner} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
-      </div>
-      <div style={{ margin: "0 16px 16px", background: '#FFFBF0', borderRadius: 12, padding: 14, border: '1px solid #FFE0B2' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#FF6B00', marginBottom: 6 }}>Рекомендации по фото</div>
-        <div style={{ fontSize: 12, color: '#888', lineHeight: 1.8 }}>
-          • Размер: 1200 × 480 px<br/>
-          • Формат: JPG или PNG<br/>
-          • Размер файла: до 2MB<br/>
-          • {lang === "ru" ? "Создайте на Canva.com" : "Canva.com'до жасаңыз"}
-        </div>
       </div>
       {editB && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
@@ -1768,110 +1256,7 @@ function AdminBannersScreen({ banners, setBanners }) {
             <div style={{ color: T.text, fontWeight: 800, fontSize: 16 }}>{t.editBanner}</div>
             <button onClick={() => setEditing(null)} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 22 }}>×</button>
           </div>
-          {/* Banner Preview — haqiqiy banner ko'rinishi */}
-          <div style={{ marginBottom: 14 }}>
-            {/* Preview label */}
-            <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-              {lang === 'kg' ? 'Баннер алдын ала көрүнүшү' : 'Предпросмотр баннера'}
-            </div>
-
-            {/* Banner shablon — haqiqiy o'lchamda */}
-            <div style={{
-              width: "100%",
-              height: 160,
-              borderRadius: 14,
-              overflow: "hidden",
-              position: "relative",
-              background: editB.img ? "transparent" : editB.bg || "#111",
-              border: `2px dashed ${T.border}`,
-              cursor: "pointer"
-            }}
-              onClick={() => bannerFileRef.current?.click()}
-            >
-              {/* Rasm */}
-              {editB.img && (
-                <img
-                  src={editB.img}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "center top"
-                  }}
-                />
-              )}
-
-              {/* Gradient overlay (banner ichida matn ko'rinishi uchun) */}
-              <div style={{
-                position: "absolute",
-                inset: 0,
-                background: editB.img ? "rgba(0,0,0,0.35)" : "transparent",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                padding: "0 22px"
-              }}>
-                {editB.img ? (
-                  <>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: 600, letterSpacing: 1, marginBottom: 4 }}>{lang === 'kg' ? 'АКЦИЯ' : 'АКЦИЯ'}</div>
-                    <div style={{ color: "#fff", fontSize: 18, fontWeight: 800 }}>{editB.title || "Kemal Usman"}</div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 }}>{editB.subtitle || ""}</div>
-                  </>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: "rgba(255,255,255,0.6)" }}>
-                    {React.cloneElement(IC.camera, { style: { width: 28, height: 28 } })}
-                    <span style={{ fontSize: 12 }}>{lang === 'kg' ? 'Сүрөт жүктөө' : 'Загрузить фото'}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Rasm bor bo'lsa — ustiga bosib almashtirish belgisi */}
-              {editB.img && (
-                <div style={{
-                  position: "absolute", top: 8, right: 8,
-                  background: "rgba(0,0,0,0.5)", borderRadius: 8,
-                  padding: "4px 8px", color: "#fff", fontSize: 11, fontWeight: 600,
-                  cursor: "pointer"
-                }}>
-                  {lang === 'kg' ? '↑ Алмаштыруу' : '↑ Заменить'}
-                </div>
-              )}
-            </div>
-
-            {/* Hidden file input */}
-            <input
-              ref={bannerFileRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={e => {
-                const f = e.target.files[0]; if (!f) return;
-                const r = new FileReader();
-                r.onload = ev => setBannerCropSrc(ev.target.result);
-                r.readAsDataURL(f);
-                e.target.value = '';
-              }}
-            />
-
-            {/* Crop modal */}
-            {bannerCropSrc && (
-              <CropModal
-                src={bannerCropSrc}
-                onDone={v => { upd(editB.id, "img", v); setBannerCropSrc(null); }}
-                onCancel={() => setBannerCropSrc(null)}
-              />
-            )}
-
-            {/* O'chirish tugmasi — rasm bor bo'lsa */}
-            {editB.img && (
-              <button
-                onClick={() => upd(editB.id, "img", null)}
-                style={{ marginTop: 6, width: "100%", padding: "8px 0", borderRadius: 10, border: `1px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-              >
-                {lang === 'kg' ? 'Сүрөттү өчүрүү' : 'Удалить фото'}
-              </button>
-            )}
-          </div>
+          <ImageUpload value={editB.img} onChange={v => upd(editB.id, "img", v)} />
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
             <input style={inputStyle} placeholder={t.bannerTitle} value={editB.title} onChange={e => upd(editB.id, "title", e.target.value)} />
             <input style={inputStyle} placeholder={t.bannerSubtitle} value={editB.subtitle} onChange={e => upd(editB.id, "subtitle", e.target.value)} />
@@ -1955,217 +1340,59 @@ function AdminBonusScreen({ settings, setSettings }) {
 }
 
 // ─── ADMIN SETTINGS ────────────────────────────────────────────────────────────
-function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang }) {
+function AdminSettingsScreen({ settings, setSettings, onLogout }) {
   const { t } = useLang();
-  const [mbankPhone, setMbankPhone] = React.useState(localStorage.getItem('mbank_phone') || '');
-  const [greenToken, setGreenToken] = React.useState(localStorage.getItem('green_token') || '');
-  const [greenInstance, setGreenInstance] = React.useState(localStorage.getItem('green_instance') || '');
-  const [welcomeBonus, setWelcomeBonus] = React.useState(Number(localStorage.getItem('bonus_welcome') || settings.welcomeBonus || 50));
-  const [welcomeOn, setWelcomeOn] = React.useState(localStorage.getItem('bonus_welcome_on') !== 'false');
-  const [orderBonus, setOrderBonus] = React.useState(Number(localStorage.getItem('bonus_order_pct') || settings.bonusPercent || 5));
-  const [orderBonusOn, setOrderBonusOn] = React.useState(localStorage.getItem('bonus_order_on') !== 'false');
-  const [referralBonus, setReferralBonus] = React.useState(Number(localStorage.getItem('bonus_referral') || settings.referralBonus || 100));
-  const [referralOn, setReferralOn] = React.useState(localStorage.getItem('bonus_referral_on') !== 'false');
-  const loginBgRef = React.useRef();
-
-  const handleLoginBgUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target.result;
-      setSettings(p => ({ ...p, loginBg: dataUrl }));
-      localStorage.setItem('parfum_login_bg', dataUrl);
-      showToast('Фон сохранён!');
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const save = () => {
-    localStorage.setItem('mbank_phone', mbankPhone);
-    localStorage.setItem('green_token', greenToken);
-    localStorage.setItem('green_instance', greenInstance);
-    localStorage.setItem('bonus_welcome', welcomeBonus);
-    localStorage.setItem('bonus_welcome_on', welcomeOn);
-    localStorage.setItem('bonus_order_pct', orderBonus);
-    localStorage.setItem('bonus_order_on', orderBonusOn);
-    localStorage.setItem('bonus_referral', referralBonus);
-    localStorage.setItem('bonus_referral_on', referralOn);
-    setSettings(p => ({ ...p, welcomeBonus, bonusPercent: orderBonus, referralBonus }));
-    showToast('Сохранено');
-  };
-
-  const Row = ({ label, children }) => (
-    <div style={{ padding: '14px 16px', borderBottom: '0.5px solid #f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ fontSize: 13, color: '#666', flexShrink: 0 }}>{label}</span>
-      {children}
-    </div>
-  );
-
-  const Toggle = ({ value, onChange }) => (
-    <div onClick={() => onChange(!value)} style={{ width: 44, height: 24, borderRadius: 12, background: value ? '#111' : '#ddd', cursor: 'pointer', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
-      <div style={{ width: 20, height: 20, borderRadius: 10, background: '#fff', position: 'absolute', top: 2, left: value ? 22 : 2, transition: 'all 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
-    </div>
-  );
-
-  const NumInput = ({ value, onChange, suffix }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input type="number" value={value} onChange={e => onChange(Number(e.target.value))} style={{ width: 70, padding: '6px 10px', border: '0.5px solid #eee', borderRadius: 8, fontSize: 14, fontWeight: 600, textAlign: 'center', outline: 'none', background: '#f5f5f5' }} />
-      {suffix && <span style={{ fontSize: 12, color: '#aaa' }}>{suffix}</span>}
-    </div>
-  );
-
-  const TextInput = ({ value, onChange, placeholder }) => (
-    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
-  );
-
+  const [local, setLocal] = useState({ ...settings });
+  const upd = (f, v) => setLocal(p => ({ ...p, [f]: v }));
+  const rows = [
+    { f: "shopName", label: t.shopName, type: "text" },
+    { f: "whatsappPhone", label: t.whatsappPhone, type: "tel" },
+    { f: "adminPassword", label: t.adminPassword, type: "password" },
+  ];
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 100 }}>
-      <div style={{ background: '#111', padding: '52px 16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Настройки</span>
-      </div>
-
-      <div style={{ padding: 16 }}>
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>💳 M-BANK</span></div>
-          <Row label="Номер телефона"><TextInput value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" /></Row>
-          <div style={{ padding: '10px 16px', background: '#FFFBF0' }}>
-            <div style={{ fontSize: 11, color: '#FF6B00' }}>* Клиент платит на этот номер через M-Bank</div>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+      <div style={{ padding: "20px 16px 16px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.settings}</div>
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+        {rows.map(row => (
+          <div key={row.f} style={{ ...card({ padding: "14px 16px" }) }}>
+            <div style={{ color: T.textSecond, fontSize: 12, marginBottom: 6 }}>{row.label}</div>
+            <input type={row.type} style={inputStyle} value={local[row.f] || ""} onChange={e => upd(row.f, e.target.value)} />
           </div>
-        </div>
-
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>WHATSAPP (GREEN API)</span></div>
-          <Row label="Instance ID"><TextInput value={greenInstance} onChange={setGreenInstance} placeholder="1234567890" /></Row>
-          <Row label="API Token"><TextInput value={greenToken} onChange={setGreenToken} placeholder="token..." /></Row>
-          <div style={{ padding: '10px 16px', background: '#F0FFF4' }}>
-            <div style={{ fontSize: 11, color: '#388E3C' }}>* Получите на сайте green-api.com</div>
-          </div>
-        </div>
-
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>БОНУСЫ</span></div>
-          <Row label="Приветственный бонус">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <NumInput value={welcomeBonus} onChange={setWelcomeBonus} suffix="сом" />
-              <Toggle value={welcomeOn} onChange={setWelcomeOn} />
-            </div>
-          </Row>
-          <Row label="С каждого заказа">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <NumInput value={orderBonus} onChange={setOrderBonus} suffix="%" />
-              <Toggle value={orderBonusOn} onChange={setOrderBonusOn} />
-            </div>
-          </Row>
-          <Row label="Реферальный бонус">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <NumInput value={referralBonus} onChange={setReferralBonus} suffix="сом" />
-              <Toggle value={referralOn} onChange={setReferralOn} />
-            </div>
-          </Row>
-        </div>
-
-        {/* LOGIN ФОНА */}
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>🖼 ФОТО ЭКРАНА ВХОДА</span>
-          </div>
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Preview */}
-            <div style={{
-              width: '100%', height: 180, borderRadius: 12, overflow: 'hidden',
-              background: '#111', position: 'relative',
-              border: '1px solid #eee'
-            }}>
-              <img
-                src={settings.loginBg || '/login-bg.jpeg'}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
-                onError={e => { e.target.style.display = 'none'; }}
-              />
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
-                padding: 14
-              }}>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontSize: 22, color: '#f5f0e8' }}>Kemal Usman</div>
-                <div style={{ fontSize: 10, color: '#c9a96e', letterSpacing: 3, marginTop: 4 }}>PARFUM</div>
-              </div>
-            </div>
-            {/* Upload button */}
-            <input ref={loginBgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLoginBgUpload} />
-            <button onClick={() => loginBgRef.current?.click()} style={{
-              width: '100%', padding: '12px', background: '#111', color: '#fff',
-              border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer'
-            }}>
-              📷 Заменить фото
-            </button>
-            {settings.loginBg && (
-              <button onClick={() => { setSettings(p => ({ ...p, loginBg: null })); localStorage.removeItem('parfum_login_bg'); showToast('Сброшено'); }} style={{
-                width: '100%', padding: '10px', background: 'none',
-                border: '1px solid #eee', borderRadius: 10, fontSize: 13, color: '#999', cursor: 'pointer'
-              }}>
-                Сбросить к стандартному
-              </button>
-            )}
-            <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center' }}>
-              Рекомендуется: вертикальное фото (портрет). Обрезка происходит автоматически.
-            </div>
-          </div>
-        </div>
-
-        <button onClick={save} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
-          Сохранить
-        </button>
-        <button onClick={onLogout} style={{ width: '100%', padding: 14, background: 'none', border: '1.5px solid #E53935', borderRadius: 14, color: '#E53935', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{t.logout}</button>
+        ))}
+        <button onClick={() => setSettings(local)} style={btnGreen({ padding: "15px 0", borderRadius: 16 })}>{t.saveSettings}</button>
+        <button onClick={onLogout} style={{ padding: "15px 0", borderRadius: 16, border: `1.5px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontWeight: 700, fontSize: 15, cursor: "pointer", width: "100%" }}>{t.logout}</button>
       </div>
     </div>
   );
 }
 // ─── MBANK PAYMENT ────────────────────────────────────────────────────────────
 function MBankPayment({ total, orderId, onConfirm, onCancel }) {
-  const phone = localStorage.getItem('mbank_phone') || '';
-  const cleanPhone = phone.replace(/\D/g, '');
-  const [step, setStep] = React.useState('pay');
-
-  const openMBank = () => {
-    const deepLink = `mbank://transfer?phone=${cleanPhone}&amount=${total}&comment=Kemal_Usman_${orderId}`;
-    window.location.href = deepLink;
-    setTimeout(() => setStep('confirm'), 2000);
-  };
+  const [step, setStep] = React.useState('qr');
+  const phone = '0700000000';
+  const qrData = `mbank://pay?phone=${phone}&amount=${total}&comment=Order_${orderId}`;
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 430 }}>
-        {step === 'pay' && <>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#111', marginBottom: 4 }}>Оплата M-Bank</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#111' }}>{total.toLocaleString()} сом</div>
-            <div style={{ fontSize: 13, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 24, padding: 28, maxWidth: 340, width: '100%', textAlign: 'center' }}>
+        {step === 'qr' && <>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#1A2E22', marginBottom: 4 }}>Оплата через M-Bank</div>
+          <div style={{ fontSize: 13, color: '#5A7A6A', marginBottom: 20 }}>Сумма: <b style={{ color: '#2D7D6F' }}>{total.toLocaleString()} сом</b></div>
+          <div style={{ background: '#F8F9FA', borderRadius: 16, padding: 20, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: '#9BB5A8', marginBottom: 12 }}>Отсканируйте QR или нажмите кнопку</div>
+            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`} alt="M-Bank QR" style={{ width: 180, height: 180, borderRadius: 12 }} />
           </div>
-          <button onClick={openMBank} style={{ width: '100%', padding: 16, background: '#00AEEF', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            Открыть M-Bank · {total.toLocaleString()} сом
-          </button>
-          <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Нет M-Bank? Переведите вручную:</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>{phone || 'Не указан'}</div>
-            <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
-            <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
-          </div>
-          <button onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
-            + Я оплатил
-          </button>
-          <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
+          <a href={`tel:+996${phone.replace(/^0/, '')}`} style={{ display: 'block', textDecoration: 'none' }}>
+            <div style={{ background: '#0066CC', color: '#fff', borderRadius: 14, padding: '12px', fontSize: 14, fontWeight: 600, marginBottom: 10, cursor: 'pointer' }}>📱 Открыть M-Bank</div>
+          </a>
+          <div style={{ fontSize: 12, color: '#9BB5A8', marginBottom: 16 }}>Номер получателя: <b>{phone}</b></div>
+          <button onClick={() => setStep('waiting')} style={{ width: '100%', padding: '12px', borderRadius: 14, background: '#2D7D6F', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 8 }}>✅ Я оплатил</button>
+          <button onClick={onCancel} style={{ width: '100%', padding: '12px', borderRadius: 14, background: 'none', color: '#9BB5A8', border: 'none', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
         </>}
-        {step === 'confirm' && <>
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
-            <button onClick={() => onConfirm('mbank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-              Готово
-            </button>
-          </div>
+        {step === 'waiting' && <>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#1A2E22', marginBottom: 8 }}>Ожидаем подтверждение</div>
+          <div style={{ fontSize: 13, color: '#5A7A6A', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
+          <button onClick={() => { setStep('done'); onConfirm('mbank_pending'); }} style={{ width: '100%', padding: '12px', borderRadius: 14, background: '#2D7D6F', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Готово</button>
         </>}
       </div>
     </div>
@@ -2174,36 +1401,18 @@ function MBankPayment({ total, orderId, onConfirm, onCancel }) {
 
 // ─── AUDIO COMPONENTS ─────────────────────────────────────────────────────────
 function ProductAudioRecorder({ productId }) {
-  const { lang } = useLang();
   const key = 'parfum_audio_' + productId;
-  const [status, setStatus] = React.useState(localStorage.getItem(key) ? 'done' : 'idle');
+  const [status, setStatus] = React.useState(
+    localStorage.getItem(key) ? 'done' : 'idle'
+  );
   const [countdown, setCountdown] = React.useState(10);
   const [playing, setPlaying] = React.useState(false);
   const [paused, setPaused] = React.useState(false);
   const audioRef = React.useRef(null);
   const recorderRef = React.useRef(null);
-  const streamRef = React.useRef(null);
-
-  const stopRecorder = () => {
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      recorderRef.current.stop();
-    }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-  };
 
   const handleRecord = () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setStatus('idle');
-      return;
-    }
-    if (!window.MediaRecorder) {
-      setStatus('idle');
-      return;
-    }
-    stopRecorder();
+    if (recorderRef.current) return;
     setStatus('recording');
     setCountdown(10);
     let c = 10;
@@ -2214,7 +1423,6 @@ function ProductAudioRecorder({ productId }) {
     }, 1000);
 
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      streamRef.current = stream;
       const chunks = [];
       const rec = new MediaRecorder(stream);
       recorderRef.current = rec;
@@ -2233,92 +1441,91 @@ function ProductAudioRecorder({ productId }) {
         reader.readAsDataURL(blob);
       };
       rec.start(100);
-      setTimeout(() => stopRecorder(), 10000);
-    }).catch(() => { setStatus('idle'); clearInterval(iv); });
+      setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, 10000);
+    }).catch(() => {
+      setStatus('idle');
+      clearInterval(iv);
+      recorderRef.current = null;
+    });
+  };
+
+  const handleStop = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    }
   };
 
   const handlePlay = () => {
     const data = localStorage.getItem(key);
     if (!data) return;
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    if (audioRef.current) { audioRef.current.pause(); }
     const audio = new Audio(data);
     audioRef.current = audio;
     audio.onended = () => { setPlaying(false); setPaused(false); };
     audio.play();
-    setPlaying(true); setPaused(false);
+    setPlaying(true);
+    setPaused(false);
   };
 
   const handlePause = () => {
-    if (audioRef.current) audioRef.current.pause();
-    setPlaying(false); setPaused(true);
+    if (audioRef.current) { audioRef.current.pause(); }
+    setPlaying(false);
+    setPaused(true);
   };
 
   const handleResume = () => {
-    if (audioRef.current) audioRef.current.play();
-    setPlaying(true); setPaused(false);
+    if (audioRef.current) { audioRef.current.play(); }
+    setPlaying(true);
+    setPaused(false);
   };
 
   const handleDelete = () => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    stopRecorder();
     localStorage.removeItem(key);
-    setStatus('idle'); setPlaying(false); setPaused(false);
+    setStatus('idle');
+    setPlaying(false);
+    setPaused(false);
   };
 
-  const Btn = ({ label, onClick, color = '#111', bg = 'transparent', border = '1px solid #eee' }) => (
-    <button onClick={onClick} style={{ padding: '7px 14px', borderRadius: 20, border, background: bg, fontSize: 12, color, cursor: 'pointer', fontWeight: 500 }}>{label}</button>
+  const Btn = ({ label, onClick, color }) => (
+    <button onClick={onClick} style={{
+      padding: '8px 16px', borderRadius: 20, border: `1.5px solid ${color}`,
+      background: 'none', fontSize: 13, color, cursor: 'pointer', fontWeight: 600
+    }}>{label}</button>
   );
 
   if (status === 'recording') return (
-    <div style={{ background: '#FEF2F2', borderRadius: 12, padding: '12px 14px', marginTop: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ color: '#E53935', fontWeight: 700, fontSize: 13 }}>
-          {lang === 'ru' ? `Запись... ${countdown}с` : `Жазуу... ${countdown}с`}
-        </span>
-        <button onClick={stopRecorder} style={{ padding: '6px 14px', borderRadius: 20, border: '1px solid #E53935', background: '#fff', color: '#E53935', fontSize: 12, cursor: 'pointer' }}>
-          {lang === 'ru' ? 'Стоп' : 'Стоп'}
-        </button>
+    <div style={{ background: '#FEE2E2', borderRadius: 16, padding: '12px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <span style={{ color: '#DC2626', fontWeight: 700, fontSize: 14 }}>🔴 Запись... {countdown}с</span>
+        <Btn label="⏹ Стоп" onClick={handleStop} color="#DC2626" />
       </div>
-      <div style={{ height: 4, background: '#FECACA', borderRadius: 4, marginTop: 8 }}>
-        <div style={{ height: 4, background: '#E53935', borderRadius: 4, width: `${((10 - countdown) / 10) * 100}%`, transition: 'width 1s linear' }} />
+      <div style={{ height: 6, background: '#FECACA', borderRadius: 4 }}>
+        <div style={{ height: 6, background: '#DC2626', borderRadius: 4, transition: 'width 1s linear', width: `${((10 - countdown) / 10) * 100}%` }} />
       </div>
     </div>
   );
 
   if (status === 'done') return (
-    <div style={{ background: '#f5f5f5', borderRadius: 12, padding: '12px 14px', marginTop: 8 }}>
-      <div style={{ fontSize: 12, color: '#888', marginBottom: 10 }}>
-        {lang === 'ru' ? 'Аудио записано' : 'Аудио жазылды'}
-      </div>
+    <div style={{ background: '#F0FAF7', borderRadius: 16, padding: '12px 16px', border: '1px solid #C6E8DF' }}>
+      <div style={{ fontSize: 13, color: '#2D7D6F', fontWeight: 600, marginBottom: 10 }}>✅ Аудио готово</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {!playing && !paused && (
-          <button onClick={handlePlay} style={{ padding: '8px 16px', borderRadius: 20, border: 'none', background: '#111', color: '#fff', fontSize: 13, cursor: 'pointer' }}>
-            {lang === 'ru' ? 'Слушать' : 'Укуу'}
-          </button>
-        )}
-        {playing && (
-          <button onClick={handlePause} style={{ padding: '8px 16px', borderRadius: 20, border: '1px solid #111', background: '#fff', color: '#111', fontSize: 13, cursor: 'pointer' }}>
-            {lang === 'ru' ? 'Пауза' : 'Токто'}
-          </button>
-        )}
-        {paused && (
-          <button onClick={handleResume} style={{ padding: '8px 16px', borderRadius: 20, border: 'none', background: '#111', color: '#fff', fontSize: 13, cursor: 'pointer' }}>
-            {lang === 'ru' ? 'Продолжить' : 'Улантуу'}
-          </button>
-        )}
-        <button onClick={handleRecord} style={{ padding: '8px 16px', borderRadius: 20, border: '1px solid #ddd', background: '#fff', color: '#666', fontSize: 13, cursor: 'pointer' }}>
-          {lang === 'ru' ? 'Перезаписать' : 'Кайра жаз'}
-        </button>
-        <button onClick={handleDelete} style={{ padding: '8px 16px', borderRadius: 20, border: '1px solid #E53935', background: '#fff', color: '#E53935', fontSize: 13, cursor: 'pointer' }}>
-          {lang === 'ru' ? 'Удалить' : 'Өчүрүү'}
-        </button>
+        {!playing && !paused && <Btn label="▶ Играть" onClick={handlePlay} color="#2D7D6F" />}
+        {playing && <Btn label="⏸ Пауза" onClick={handlePause} color="#F59E0B" />}
+        {paused && <Btn label="▶ Продолжить" onClick={handleResume} color="#2D7D6F" />}
+        <Btn label="🔄 Перезаписать" onClick={handleRecord} color="#6B7280" />
+        <Btn label="🗑 Удалить" onClick={handleDelete} color="#EF4444" />
       </div>
     </div>
   );
 
   return (
-    <button onClick={handleRecord} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '13px', borderRadius: 12, border: '1.5px dashed #ddd', background: 'none', cursor: 'pointer', fontSize: 13, color: '#888', marginTop: 8 }}>
-      {lang === 'ru' ? 'Записать аромат (10 сек)' : 'Жыт жаз (10 с)'}
+    <button onClick={handleRecord} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      width: '100%', padding: '14px', borderRadius: 16, border: '2px dashed #9BB5A8',
+      background: 'none', cursor: 'pointer', fontSize: 14, color: '#5A7A6A'
+    }}>
+      🎤 Записать описание аромата (10 сек)
     </button>
   );
 }
@@ -2330,8 +1537,6 @@ function AudioRecordBtn({ productId }) {
   const [countdown, setCountdown] = React.useState(10);
 
   const handleRecord = () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('idle'); return; }
-    if (!window.MediaRecorder) { setStatus('idle'); return; }
     setStatus('recording');
     setCountdown(10);
     let currentCount = 10;
@@ -2372,30 +1577,30 @@ function AudioRecordBtn({ productId }) {
   };
 
   if (status === 'recording') return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'rgba(229,57,53,0.10)', borderRadius: 20, fontSize: 12, color: '#E53935' }}>
-      Запись... {countdown}с
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#FEE2E2', borderRadius: 20, fontSize: 12, color: '#DC2626' }}>
+      🔴 Запись... {countdown}с
     </div>
   );
   if (status === 'done') return (
     <div style={{ display: 'flex', gap: 6 }}>
       <button onClick={() => { const a = new Audio(localStorage.getItem('parfum_audio_' + productId)); a.play(); }}
-        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
-        Слушать
+        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #2D7D6F', background: 'none', fontSize: 12, color: '#2D7D6F', cursor: 'pointer' }}>
+        ▶ Прослушать
       </button>
       <button onClick={handleRecord}
         style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #F59E0B', background: 'none', fontSize: 12, color: '#F59E0B', cursor: 'pointer' }}>
-        Перезаписать
+        🔄 Перезаписать
       </button>
       <button onClick={handleDelete}
         style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #EF4444', background: 'none', fontSize: 12, color: '#EF4444', cursor: 'pointer' }}>
-        Удалить
+        🗑
       </button>
     </div>
   );
   return (
     <button onClick={handleRecord}
-      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #AAAAAA', background: 'none', fontSize: 12, color: '#666666', cursor: 'pointer' }}>
-      Записать аромат (10с)
+      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #6B7280', background: 'none', fontSize: 12, color: '#6B7280', cursor: 'pointer' }}>
+      🎤 Записать аромат (10с)
     </button>
   );
 }
@@ -2436,18 +1641,18 @@ function ClientAudioBtn({ productId }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
       {!playing && !paused && (
-        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
-          Слушать аромат
+        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #2D7D6F', background: 'none', fontSize: 12, color: '#2D7D6F', cursor: 'pointer' }}>
+          🎧 Послушайте аромат
         </button>
       )}
       {playing && (
         <button onClick={handlePause} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #F59E0B', background: 'none', fontSize: 12, color: '#F59E0B', cursor: 'pointer' }}>
-          Пауза
+          ⏸ Пауза
         </button>
       )}
       {paused && (
-        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
-          Продолжить
+        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #2D7D6F', background: 'none', fontSize: 12, color: '#2D7D6F', cursor: 'pointer' }}>
+          ▶ Продолжить
         </button>
       )}
     </div>
@@ -2460,103 +1665,27 @@ export default function App() {
   const [screen, setScreen] = useState("catalog");
   const [adminScreen, setAdminScreen] = useState("orders");
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
-  const [pbLoading, setPbLoading] = useState(true);
   const [banners, setBanners] = useState(DEFAULT_BANNERS);
   const [cart, setCart] = useState(() => { try { return JSON.parse(localStorage.getItem('parfum_cart') || '[]'); } catch { return []; } });
   const [orders, setOrders] = useState([]);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [toast, setToast] = useState(null);
-  const [settings, setSettings] = useState(() => {
-    const loginBg = localStorage.getItem('parfum_login_bg') || null;
-    return { ...DEFAULT_SETTINGS, loginBg };
-  });
-  const [bonusBalance, setBonusBalance] = useState(() => { try { return parseInt(localStorage.getItem('parfum_bonus_balance') || '0'); } catch { return 0; } });
-  const [bonusHistory, setBonusHistory] = useState(() => { try { return JSON.parse(localStorage.getItem('parfum_bonus_history') || '[]'); } catch { return []; } });
-  const [registeredUsers, setRegisteredUsers] = useState([]);
-  const [visitCount, setVisitCount] = useState(() => { const v = parseInt(localStorage.getItem('parfum_visits') || '0'); return v; });
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [bonusBalance, setBonusBalance] = useState(0);
+  const [bonusHistory, setBonusHistory] = useState([]);
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [showMBank, setShowMBank] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
   const [referralCode] = useState(() => Math.random().toString(36).substring(2, 8).toUpperCase());
-  const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminLoginPass, setAdminLoginPass] = useState("");
-  const [adminLoginErr, setAdminLoginErr] = useState("");
 
   const t = TRANSLATIONS[lang];
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
-  // Clear stale localStorage banner data and ensure correct accent/bg colors
-  useEffect(() => {
-    try {
-      const storedBanners = localStorage.getItem('parfum_banners');
-      if (storedBanners) {
-        const parsed = JSON.parse(storedBanners);
-        const fixed = parsed.map(b => ({
-          ...b,
-          bg: b.bg && (b.bg.includes('green') || b.bg.includes('#4CAF') || b.bg.includes('#43A0') || b.bg.includes('#388E') || b.bg.includes('#2E7D'))
-            ? "linear-gradient(135deg, #111111 0%, #000000 100%)"
-            : b.bg,
-        }));
-        localStorage.setItem('parfum_banners', JSON.stringify(fixed));
-      }
-    } catch { /* ignore */ }
-  }, []);
-
-  // Load data from PocketBase on startup
-  useEffect(() => {
-    const loadAll = async () => {
-      try {
-        const [pbProducts, pbOrders, pbClients] = await Promise.all([
-          api.getProducts(),
-          api.getOrders(),
-          api.getClients(),
-        ]);
-        if (pbProducts.length > 0) {
-          setProducts(pbProducts.map(p => ({
-            ...p,
-            img: p.images?.[0] ? api.getImageUrl(p, p.images[0]) : null,
-            images: (p.images || []).map(img => api.getImageUrl(p, img)),
-            variants: Array.isArray(p.variants) ? p.variants : (p.variants ? JSON.parse(p.variants) : []),
-          })));
-        }
-        if (pbOrders.length > 0) setOrders(pbOrders.map(o => ({
-          ...o,
-          items: Array.isArray(o.items) ? o.items : (o.items ? (() => { try { return JSON.parse(o.items); } catch { return []; } })() : []),
-        })));
-        if (pbClients.length > 0) setRegisteredUsers(pbClients);
-      } catch (e) {
-        console.warn("PocketBase load error:", e);
-      } finally {
-        setPbLoading(false);
-      }
-    };
-    loadAll();
-  }, []);
-
-  // Persist bonus balance and history
-  useEffect(() => {
-    localStorage.setItem('parfum_bonus_balance', String(bonusBalance));
-    localStorage.setItem('parfum_bonus_history', JSON.stringify(bonusHistory));
-  }, [bonusBalance, bonusHistory]);
-
-  // Count unique daily sessions
-  useEffect(() => {
-    const key = 'parfum_session_' + new Date().toDateString();
-    if (!sessionStorage.getItem(key)) {
-      sessionStorage.setItem(key, '1');
-      setVisitCount(prev => {
-        const newCount = prev + 1;
-        localStorage.setItem('parfum_visits', String(newCount));
-        return newCount;
-      });
-    }
-  }, []);
-
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
-  const handleLogin = async ({ phone, name, isAdminLogin, password }) => {
+  const handleLogin = ({ phone, name, isAdminLogin, password }) => {
     if (isAdminLogin) {
       if (password === (settings.adminPassword || "admin123")) { setIsAdmin(true); setScreen("admin"); showToast(t.welcomeAdmin); }
       else showToast(t.wrongPassword, "error");
@@ -2564,25 +1693,6 @@ export default function App() {
     }
     const now = new Date().toLocaleDateString("ru-RU");
     setUser({ phone: phone || name, name: name || phone, registrationDate: now });
-    // Sync with PocketBase clients
-    try {
-      let client = await api.findClientByPhone(phone || name);
-      if (!client) {
-        client = await api.createClient({ phone: phone || name, name: name || phone, date: now });
-      }
-      setRegisteredUsers(prev => {
-        const exists = prev.find(u => u.phone === (phone || name));
-        if (!exists) return [...prev, client];
-        return prev;
-      });
-    } catch (e) {
-      console.warn("Client sync error:", e);
-      setRegisteredUsers(prev => {
-        const exists = prev.find(u => u.phone === (phone || name));
-        if (!exists) return [...prev, { phone: phone || name, name: name || phone, date: now }];
-        return prev;
-      });
-    }
     const bonusKey = 'parfum_welcome_' + (phone || name || "guest");
     if (settings.welcomeBonusEnabled && settings.welcomeBonus > 0 && !welcomeBonusUsed && !localStorage.getItem(bonusKey)) {
       localStorage.setItem(bonusKey, '1');
@@ -2597,6 +1707,7 @@ export default function App() {
   const handleLogout = () => { setUser(null); setIsAdmin(false); setScreen("catalog"); setCart([]); };
 
   const addToCart = (productId, variantId) => {
+    if (!user && guestMode) { showToast('Войдите для добавления в корзину'); return; }
     setCart(prev => {
       const ex = prev.find(i => i.productId === productId && i.variantId === variantId);
       const next = ex
@@ -2608,65 +1719,24 @@ export default function App() {
     showToast(t.addedToCart);
   };
 
-  const handleOrder = async (orderData) => {
-    if (!user) { setGuestMode(false); showToast(lang === 'kg' ? 'Заказ берүү үчүн кириңиз' : 'Войдите для оформления заказа', 'error'); return; }
+  const handleOrder = (orderData) => {
     const now = new Date().toLocaleString("ru-RU");
     const items = cart.map(ci => {
-      const prod = products.find(p => String(p.id) === String(ci.productId));
-      const variant = prod?.variants.find(v => String(v.id) === String(ci.variantId));
+      const prod = products.find(p => p.id === ci.productId);
+      const variant = prod?.variants.find(v => v.id === ci.variantId);
       return { name: `${prod?.name} ${variant?.label}`, qty: ci.qty, price: variant?.price || 0 };
     });
-    const localId = (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase().slice(0, 8);
-    const newOrder = { id: localId, clientName: user?.name || "", clientPhone: user?.phone || "", items, date: now, status: "new", ...orderData };
+    const newOrder = { id: (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase().slice(0, 8), clientName: user?.name || "", clientPhone: user?.phone || "", items, date: now, status: "new", ...orderData };
     if (orderData.payMethod === 'mbank') {
       setPendingOrder(newOrder);
       setShowMBank(true);
       return;
     }
-    // Save to PocketBase
-    try {
-      const pbData = {
-        clientName: newOrder.clientName,
-        clientPhone: newOrder.clientPhone,
-        items: JSON.stringify(newOrder.items),
-        date: now,
-        status: "new",
-        total: orderData.total || 0,
-        payMethod: orderData.payMethod || "cash",
-        address: orderData.address || "",
-        comment: orderData.comment || "",
-        bonusDiscount: orderData.bonusDiscount || 0,
-      };
-      const created = await api.createOrder(pbData);
-      setOrders(p => [...p, { ...newOrder, id: created.id, collectionId: created.collectionId }]);
-    } catch (e) {
-      console.warn("PocketBase order error:", e);
-      setOrders(p => [...p, newOrder]);
-    }
+    setOrders(p => [...p, newOrder]);
     const earned = Math.floor((orderData.total || 0) * (settings.bonusPercent || 0) / 100);
     if (earned > 0) { setBonusBalance(p => p - (orderData.bonusDiscount || 0) + earned); setBonusHistory(p => [...p, ...(orderData.bonusDiscount ? [{ type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }] : []), { type: "earned", amount: earned, label: "Бонус за заказ", date: now }]); }
     else if (orderData.bonusDiscount) { setBonusBalance(p => p - orderData.bonusDiscount); setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]); }
     setCart([]); localStorage.removeItem('parfum_cart'); setScreen("myorders"); showToast(t.orderPlaced);
-    const clientMsg = `Здравствуйте, ${newOrder.clientName}!\nВаш заказ принят!\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${newOrder.total} сом\nСкоро свяжемся с вами!\n\n— Kemal Usman Parfum`;
-    const adminPhone = localStorage.getItem('mbank_phone') || '';
-    const adminMsg = `Новый заказ!\n\nКлиент: ${newOrder.clientName}\nТел: ${newOrder.clientPhone}\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${newOrder.total} сом\nОплата: ${orderData.payMethod === 'mbank' ? 'M-Bank' : 'Наличные'}\nАдрес: ${orderData.address || 'Самовывоз'}`;
-    if (newOrder.clientPhone) sendWhatsApp(newOrder.clientPhone, clientMsg);
-    if (adminPhone) sendWhatsApp(adminPhone, adminMsg);
-  };
-
-  const sendWhatsApp = async (phone, message) => {
-    const instance = localStorage.getItem('green_instance');
-    const token = localStorage.getItem('green_token');
-    if (!instance || !token) return;
-    const cleanPhone = phone.replace(/\D/g, '');
-    const chatId = cleanPhone + '@c.us';
-    try {
-      await fetch(`https://api.green-api.com/waInstance${instance}/sendMessage/${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, message })
-      });
-    } catch (e) { console.log('WhatsApp error:', e); }
   };
 
   const handleSendWhatsApp = (order) => {
@@ -2698,32 +1768,33 @@ export default function App() {
     <LangContext.Provider value={t_ctx}>
       <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
         <Toast toast={toast} />
-        <LoginScreen onLogin={handleLogin} welcomeConfig={{ enabled: settings.welcomeBonusEnabled, amount: settings.welcomeBonus, expireDays: 30 }} onGuest={() => setGuestMode(true)} loginBg={settings.loginBg} />
+        <LoginScreen onLogin={handleLogin} welcomeConfig={{ enabled: settings.welcomeBonusEnabled, amount: settings.welcomeBonus, expireDays: 30 }} onGuest={() => setGuestMode(true)} />
       </div>
     </LangContext.Provider>
   );
 
   return (
     <LangContext.Provider value={t_ctx}>
-      <div style={{ width: "100%", minHeight: "100vh", background: "#fff", position: "relative", overflow: "hidden", color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif", position: "relative" }}>
         <Toast toast={toast} />
         <div style={{ paddingBottom: T.navH + 16 }}>
           {isAdmin ? (
             <>
-              <div style={{ padding: "16px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#000000", borderBottom: "0.5px solid rgba(255,255,255,0.15)", paddingBottom: 12 }}>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: 2, textTransform: "uppercase" }}>{t.adminPanel}</div>
+              <div style={{ padding: "16px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, borderBottom: `1px solid ${T.border}`, paddingBottom: 12 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>{t.adminPanel}</div>
                 <LangToggle />
               </div>
-              {adminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onStatusChange={async (id, st) => { setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o)); try { await api.updateOrder(id, { status: st }); } catch (e) { console.warn("Status update error:", e); } }} onDelete={async (id) => { setOrders(p => p.filter(o => o.id !== id)); try { await api.deleteOrder(id); } catch (e) { console.warn("Delete order error:", e); } }} onSendWhatsApp={handleSendWhatsApp} onConfirmMBankPayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast(t.orderPlaced); }} />}
-              {adminScreen === "products" && <AdminProductsScreen products={products} setProducts={setProducts} showToast={showToast} />}
-              {adminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />}
+              {adminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onStatusChange={(id, st) => setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o))} onSendWhatsApp={handleSendWhatsApp} onConfirmMBankPayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast('Оплата подтверждена'); }} />}
+              {adminScreen === "products" && <AdminProductsScreen products={products} setProducts={setProducts} />}
+              {adminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} />}
               {adminScreen === "banners" && <AdminBannersScreen banners={banners} setBanners={setBanners} />}
               {adminScreen === "bonus" && <AdminBonusScreen settings={settings} setSettings={setSettings} />}
-              {adminScreen === "settings" && <AdminSettingsScreen settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
+              {adminScreen === "settings" && <AdminSettingsScreen settings={settings} setSettings={setSettings} onLogout={handleLogout} />}
             </>
           ) : (
             <>
-              {screen === "catalog" && <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} />}
+              {screen === "catalog" && <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} />}
+              {screen === "catalog" && <div style={{ textAlign: "center", paddingBottom: 8 }}><span onClick={() => { setIsAdmin(true); setAdminScreen("orders"); }} style={{ fontSize: 11, color: T.textMuted, cursor: "pointer" }}>Admin</span></div>}
               {screen === "cart" && <CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} />}
               {screen === "myorders" && <MyOrdersScreen orders={orders.filter(o => o.clientPhone === user?.phone)} />}
               {screen === "profile" && <ProfileScreen user={user} onLogout={handleLogout} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); setAdminScreen("orders"); }} />}
@@ -2731,21 +1802,6 @@ export default function App() {
           )}
         </div>
         <NavBar items={isAdmin ? ADMIN_NAV : USER_NAV} active={isAdmin ? adminScreen : screen} onSelect={isAdmin ? setAdminScreen : setScreen} />
-        {showAdminLogin && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div style={{ background: "#fff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: "#111", marginBottom: 16, textAlign: "center" }}>{t.adminPanel}</div>
-              <div style={{ position: "relative", marginBottom: 12 }}>
-                <input type="password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.adminPassword} style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 15, outline: "none", boxSizing: "border-box" }} autoFocus />
-              </div>
-              {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center" }}>{adminLoginErr}</div>}
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Отмена</button>
-                <button onClick={() => { if (adminLoginPass === (settings?.adminPassword || "admin123")) { setShowAdminLogin(false); setIsAdmin(true); setAdminScreen("orders"); } else setAdminLoginErr(t.wrongPassword); }} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>OK</button>
-              </div>
-            </div>
-          </div>
-        )}
         {showMBank && pendingOrder && (
           <MBankPayment
             total={pendingOrder.total}
