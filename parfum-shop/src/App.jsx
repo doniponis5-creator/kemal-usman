@@ -183,43 +183,43 @@ function useLang() { return useContext(LangContext); }
 
 // ─── DESIGN SYSTEM ─────────────────────────────────────────────────────────────
 const T = {
-  bg: "#FDF6EE",
-  bgSecond: "#FAF0E4",
-  white: "#FFFCF8",
-  accent: "#C47F5A",
-  accentDark: "#A0623E",
-  accentLight: "rgba(196,127,90,0.10)",
-  accentPale: "rgba(196,127,90,0.06)",
-  text: "#3D2B1F",
-  textSecond: "#8B6650",
-  textMuted: "#B09080",
-  border: "#EAD8C8",
-  card: "#FFFCF8",
-  shadow: "0 2px 16px rgba(196,127,90,0.08), 0 1px 4px rgba(0,0,0,0.04)",
-  shadowSm: "0 1px 6px rgba(0,0,0,0.06)",
-  shadowLg: "0 8px 32px rgba(196,127,90,0.15)",
-  danger: "#C0392B",
-  success: "#5A8A6A",
-  bonus: "#C47F5A",
-  referral: "#9B7A6A",
+  bg: "#F5F5F5",
+  bgSecond: "#EEEEEE",
+  white: "#FFFFFF",
+  accent: "#111111",
+  accentDark: "#000000",
+  accentLight: "rgba(0,0,0,0.06)",
+  accentPale: "rgba(0,0,0,0.04)",
+  text: "#111111",
+  textSecond: "#666666",
+  textMuted: "#AAAAAA",
+  border: "#EEEEEE",
+  card: "#FFFFFF",
+  shadow: "0 2px 8px rgba(0,0,0,0.06)",
+  shadowSm: "0 2px 8px rgba(0,0,0,0.06)",
+  shadowLg: "0 2px 8px rgba(0,0,0,0.06)",
+  danger: "#E53935",
+  success: "#43A047",
+  bonus: "#FF6B00",
+  referral: "#7C5CBF",
   navH: 64,
 };
 
 // Card helper
 const card = (extra = {}) => ({
   background: T.card,
-  borderRadius: 20,
-  boxShadow: '0 2px 12px rgba(0,0,0,0.08)',
-  border: `1px solid ${T.border}`,
+  borderRadius: 16,
+  boxShadow: T.shadow,
+  border: "none",
   ...extra,
 });
 
 const inputStyle = {
-  background: T.bg,
-  border: `1.5px solid ${T.border}`,
-  borderRadius: 14,
+  background: "#F5F5F5",
+  border: "none",
+  borderRadius: 12,
   color: T.text,
-  fontSize: 15,
+  fontSize: 16,
   padding: "13px 16px",
   width: "100%",
   boxSizing: "border-box",
@@ -228,17 +228,17 @@ const inputStyle = {
 };
 
 const btnGreen = (extra = {}) => ({
-  background: T.accent,
+  background: "#111111",
   color: "#fff",
   border: "none",
-  borderRadius: 16,
+  borderRadius: 14,
   padding: "15px 20px",
   fontSize: 15,
-  fontWeight: 700,
+  fontWeight: 600,
   cursor: "pointer",
   width: "100%",
   boxSizing: "border-box",
-  boxShadow: T.shadowLg,
+  boxShadow: "none",
   fontFamily: "inherit",
   transition: "all 0.15s ease",
   ...extra,
@@ -248,7 +248,7 @@ const btnOutline = (extra = {}) => ({
   background: "transparent",
   color: T.accent,
   border: `1.5px solid ${T.accent}`,
-  borderRadius: 16,
+  borderRadius: 14,
   padding: "13px 20px",
   fontSize: 15,
   fontWeight: 600,
@@ -295,18 +295,18 @@ const IC = {
 const PAYMENT_METHODS = [
   { id: "mbank", label: "M Bank", color: "#E4002B" },
   { id: "obank", label: "O!Bank", color: "#7B2D8B" },
-  { id: "cash", label: "Наличные / Нак. акча", color: "#C47F5A" },
+  { id: "cash", label: "Наличные / Нак. акча", color: "#111111" },
 ];
 
 const BG_PRESETS = [
-  "linear-gradient(135deg,#C47F5A,#A0623E)",
+  "linear-gradient(135deg,#111111,#000000)",
   "linear-gradient(135deg,#3B82F6,#1D4ED8)",
   "linear-gradient(135deg,#F59E0B,#D97706)",
   "linear-gradient(135deg,#EF4444,#B91C1C)",
   "linear-gradient(135deg,#8B5CF6,#6D28D9)",
   "linear-gradient(135deg,#EC4899,#BE185D)",
   "linear-gradient(135deg,#06B6D4,#0E7490)",
-  "linear-gradient(135deg,#3D2B1F,#C47F5A)",
+  "linear-gradient(135deg,#111111,#111111)",
 ];
 
 const DEFAULT_SETTINGS = {
@@ -326,9 +326,9 @@ const INITIAL_PRODUCTS = [
 ];
 
 const DEFAULT_BANNERS = [
-  { id: 1, active: true, bg: "linear-gradient(135deg,#C47F5A,#A0623E)", img: null, title: "Скидка 20%", subtitle: "На все ароматы Tom Ford", accent: "#fff" },
-  { id: 2, active: true, bg: "linear-gradient(135deg,#F59E0B,#D97706)", img: null, title: "Бонусы 5%", subtitle: "С каждого заказа", accent: "#fff" },
-  { id: 3, active: true, bg: "linear-gradient(135deg,#8B5CF6,#6D28D9)", img: null, title: "Приведи друга", subtitle: "Получи 100 сом бонус", accent: "#fff" },
+  { id: 1, active: true, bg: "linear-gradient(135deg, #111111 0%, #000000 100%)", img: null, title: "Скидка 20%", subtitle: "На все ароматы Tom Ford", accent: "#fff" },
+  { id: 2, active: true, bg: "linear-gradient(135deg, #111111 0%, #000000 100%)", img: null, title: "Бонусы 5%", subtitle: "С каждого заказа", accent: "#fff" },
+  { id: 3, active: true, bg: "linear-gradient(135deg, #111111 0%, #000000 100%)", img: null, title: "Приведи друга", subtitle: "Получи 100 сом бонус", accent: "#fff" },
 ];
 
 function formatSum(n) { return Number(n).toLocaleString() + " сом"; }
@@ -337,15 +337,15 @@ function generateReferralCode(name) { return (name.slice(0, 4).toUpperCase() + M
 function Toast({ toast }) {
   if (!toast) return null;
   return (
-    <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: toast.type === "error" ? T.danger : T.accent, color: "#fff", padding: "12px 24px", borderRadius: 30, fontSize: 14, fontWeight: 700, boxShadow: T.shadowLg, whiteSpace: "nowrap" }}>
+    <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "#111111", color: "#F5F5F5", padding: "12px 24px", borderRadius: 30, fontSize: 14, fontWeight: 700, boxShadow: T.shadowLg, whiteSpace: "nowrap" }}>
       {toast.msg}
     </div>
   );
 }
 
 function StatusChip({ status }) {
-  const map = { new: { bg: "rgba(196,127,90,0.12)", color: T.accent, label: "Новый" }, confirmed: { bg: "rgba(90,138,106,0.12)", color: T.success, label: "Подтверждён" }, preparing: { bg: "#FFF8E1", color: "#C8850A", label: "Готовится" }, delivering: { bg: "rgba(155,122,106,0.12)", color: T.referral, label: "Доставляется" }, delivered: { bg: "rgba(90,138,106,0.15)", color: T.success, label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: T.danger, label: "Отменён" } };
-  const s = map[status] || { bg: "#F5F5F5", color: "#757575", label: status };
+  const map = { new: { bg: "#FFF3E0", color: "#FF6B00", label: "Новый" }, confirmed: { bg: "#E3F2FD", color: "#1976D2", label: "Подтверждён" }, preparing: { bg: "#E8F5E9", color: "#388E3C", label: "Готовится" }, delivering: { bg: "#EDE7F6", color: "#7C5CBF", label: "Доставляется" }, delivered: { bg: "#E8F5E9", color: "#388E3C", label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: "#E53935", label: "Отменён" } };
+  const s = map[status] || { bg: "rgba(0,0,0,0.08)", color: T.textSecond, label: status };
   return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>{s.label}</span>;
 }
 
@@ -365,17 +365,17 @@ function LangToggle() {
 
 function NavBar({ items, active, onSelect }) {
   return (
-    <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: T.card, borderTop: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-around", height: T.navH, zIndex: 100, boxShadow: "0 -4px 20px rgba(0,0,0,0.06)" }}>
+    <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 430, background: "#FFFFFF", borderTop: "0.5px solid #EEEEEE", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
       {items.map((item, i) => {
         const isActive = item.id === active;
         const isCenter = item.center;
         if (isCenter) return (
-          <button key={item.id} onClick={() => onSelect(item.id)} style={{ width: 52, height: 52, borderRadius: "50%", background: T.accent, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: T.shadowLg, transform: "translateY(-12px)" }}>
+          <button key={item.id} onClick={() => onSelect(item.id)} style={{ width: 52, height: 52, borderRadius: "50%", background: "#111111", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transform: "translateY(-12px)" }}>
             {React.cloneElement(item.icon, { style: { width: 24, height: 24 } })}
           </button>
         );
         return (
-          <button key={item.id} onClick={() => onSelect(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? T.accent : T.textMuted, position: "relative", paddingBottom: 4 }}>
+          <button key={item.id} onClick={() => onSelect(item.id)} style={{ flex: 1, minHeight: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? "#111111" : T.textMuted, position: "relative", paddingBottom: 4, fontSize: 11 }}>
             <div style={{ position: "relative" }}>
               {React.cloneElement(item.icon, { style: { width: 22, height: 22 } })}
               {item.badge > 0 && <div style={{ position: "absolute", top: -4, right: -6, background: T.danger, color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{item.badge}</div>}
@@ -475,13 +475,13 @@ function ImageUpload({ value, onChange }) {
 function BannerSlider({ banners }) {
   const [idx, setIdx] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setIdx(i => (i + 1) % banners.length), 4000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setIdx(i => (i + 1) % banners.length), 3000);
+    return () => clearInterval(timer);
   }, [banners.length]);
   if (!banners.length) return null;
   const b = banners[idx];
   return (
-    <div style={{ margin: "0 16px", borderRadius: 20, overflow: "hidden", boxShadow: T.shadowLg, position: "relative", height: 140 }}>
+    <div style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", height: 160 }}>
       <div style={{ width: "100%", height: "100%", background: b.img ? "transparent" : b.bg, position: "relative" }}>
         {b.img && <img src={b.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
         <div style={{ position: "absolute", inset: 0, padding: "20px 22px", display: "flex", flexDirection: "column", justifyContent: "center", background: b.img ? "rgba(0,0,0,0.35)" : "transparent" }}>
@@ -492,7 +492,7 @@ function BannerSlider({ banners }) {
       </div>
       {banners.length > 1 && (
         <div style={{ position: "absolute", bottom: 10, right: 14, display: "flex", gap: 5 }}>
-          {banners.map((_, i) => <div key={i} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, background: i === idx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s" }} />)}
+          {banners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, background: i === idx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s", cursor: "pointer" }} />)}
         </div>
       )}
     </div>
@@ -501,110 +501,143 @@ function BannerSlider({ banners }) {
 
 // ─── LOGIN SCREEN ──────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, expireDays: 0 }, onGuest }) {
-  const { lang, t } = useLang();
-  const [mode, setMode] = useState("splash");
-  const [loginVal, setLoginVal] = useState("");
-  const [pass, setPass] = useState("");
-  const [regName, setRegName] = useState("");
-  const [regPhone, setRegPhone] = useState("");
-  const [regPass, setRegPass] = useState("");
+  const { lang, setLang } = useLang();
+  const [phone, setPhone] = useState("+996");
+  const [name, setName] = useState("");
   const [err, setErr] = useState("");
 
-  function doLogin() {
-    if (!loginVal || !pass) { setErr(t.fillAll); return; }
-    if (loginVal === "admin") { onLogin({ isAdminLogin: true, password: pass }); }
-    else { onLogin({ phone: loginVal, name: loginVal, isAdminLogin: false }); }
-  }
-  function doRegister() {
-    if (!regName || !regPhone) { setErr(t.fillAll); return; }
-    const isValidPhone = (ph) => /^[0-9]{9,12}$/.test(ph.replace(/[\s\-\+\(\)]/g, ''));
-    if (!isValidPhone(regPhone)) { setErr("Введите корректный номер телефона"); return; }
-    onLogin({ phone: regPhone, name: regName, isAdminLogin: false });
-  }
+  const formatPhone = (v) => {
+    const digits = v.replace(/\D/g, '').slice(0, 12);
+    if (digits.length <= 3) return '+' + digits;
+    if (digits.length <= 6) return '+' + digits.slice(0, 3) + ' ' + digits.slice(3);
+    if (digits.length <= 9) return '+' + digits.slice(0, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6);
+    return '+' + digits.slice(0, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6, 9) + ' ' + digits.slice(9, 12);
+  };
 
-  // Splash screen
-  if (mode === "splash") return (
-    <div style={{ height: "100vh", background: T.accent, display: "flex", flexDirection: "column", padding: "60px 28px 48px" }}>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-        <div style={{ width: 80, height: 80, borderRadius: 24, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 32 }}>
-          {React.cloneElement(IC.bottle, { style: { color: "#fff" } })}
-        </div>
-        <div style={{ color: "#fff", fontSize: 32, fontWeight: 900, lineHeight: 1.15, marginBottom: 16 }}>Parfum Shop{"\n"}Bishkek</div>
-        <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 15, lineHeight: 1.6, marginBottom: 48 }}>{lang === "kg" ? "Бишкектеги эң жакшы атир дүкөнү. Сапат жана жыт кепилдиги." : "Лучший парфюм Бишкека. Гарантия качества и аромата."}</div>
-        <button onClick={() => setMode("login")} style={{ background: "#fff", color: T.accent, border: "none", borderRadius: 18, padding: "17px 20px", fontSize: 16, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 20px rgba(0,0,0,0.15)" }}>{t.getStarted}</button>
-      </div>
-    </div>
-  );
+  function doLogin() {
+    if (!phone || !name) { setErr(lang === "ru" ? "Заполните все поля" : "Бардык талааларды толтуруңуз"); return; }
+    if (name.toLowerCase() === "admin") { onLogin({ isAdminLogin: true, password: phone }); return; }
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 11) { setErr(lang === "ru" ? "Введите корректный номер" : "Туура номер жазыңыз"); return; }
+    onLogin({ phone, name, isAdminLogin: false });
+  }
+  const setGuestMode = () => onGuest && onGuest();
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, padding: "0 0 40px" }}>
-      {/* Header */}
-      <div style={{ background: T.accent, padding: "48px 24px 32px", borderRadius: "0 0 32px 32px", marginBottom: 24, position: "relative" }}>
-        <div style={{ position: "absolute", top: 16, right: 16 }}><LangToggle /></div>
-        <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-          {React.cloneElement(IC.bottle, { style: { color: "#fff" } })}
-        </div>
-        <div style={{ color: "#fff", fontSize: 22, fontWeight: 800 }}>Parfum Shop</div>
-        <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, marginTop: 3 }}>{t.appSubtitle}</div>
-      </div>
-      {/* Tabs */}
-      <div style={{ display: "flex", margin: "0 20px 20px", background: T.card, borderRadius: 16, padding: 4, gap: 4, border: `1px solid ${T.border}` }}>
-        {[["login", "ru" === lang ? "Войти" : "Кирүү"], ["register", "ru" === lang ? "Регистрация" : "Катталуу"]].map(([m, label]) => (
-          <button key={m} onClick={() => { setMode(m); setErr(""); }} style={{ flex: 1, padding: "10px", borderRadius: 12, border: "none", background: mode === m ? T.accent : "transparent", color: mode === m ? "#fff" : T.textMuted, fontSize: 14, fontWeight: mode === m ? 700 : 500, cursor: "pointer" }}>{label}</button>
+    <div style={{
+      minHeight: "100vh", background: "#F5F5F5",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "40px 24px", position: "relative"
+    }}>
+
+      {/* Lang toggle top right */}
+      <div style={{ position: "absolute", top: 52, right: 20, display: "flex", background: "rgba(0,0,0,0.06)", borderRadius: 30, padding: 3, border: "1px solid #EEEEEE" }}>
+        {["ru", "kg"].map(l => (
+          <button key={l} onClick={() => setLang(l)} style={{
+            padding: "6px 18px", borderRadius: 26, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, letterSpacing: 1,
+            background: lang === l ? "#111111" : "transparent",
+            color: lang === l ? "#fff" : "#AAAAAA",
+            transition: "all 0.2s"
+          }}>{l === "ru" ? "РУС" : "КЫР"}</button>
         ))}
       </div>
-      <div style={{ padding: "0 20px" }}>
-        {mode === "login" ? (
-          <>
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.loginLabel}</div>
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.user}</div>
-                <input value={loginVal} onChange={e => { setLoginVal(e.target.value); setErr(""); }} placeholder={t.loginPlaceholder} style={{ ...inputStyle, paddingLeft: 42 }} />
-              </div>
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.passwordLabel}</div>
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.lock}</div>
-                <input value={pass} onChange={e => { setPass(e.target.value); setErr(""); }} type="password" placeholder={t.passwordPlaceholder} style={{ ...inputStyle, paddingLeft: 42 }} />
-              </div>
-            </div>
-            {err && <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 12, border: "1px solid #FFE0E0" }}>{err}</div>}
-            <button onClick={doLogin} style={btnGreen()}>{lang === "kg" ? "Кирүү" : "Войти"}</button>
-            <div style={{ color: T.textMuted, fontSize: 12, textAlign: "center", marginTop: 14, padding: "10px", background: T.card, borderRadius: 12 }}>{t.demoHint}</div>
-            {onGuest && <button onClick={onGuest} style={{ marginTop: 12, background: 'none', border: 'none', color: T.textMuted, fontSize: 13, cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>Смотреть без регистрации</button>}
-          </>
-        ) : (
-          <>
-            {welcomeConfig.enabled && (
-              <div style={{ background: T.accentLight, borderRadius: 16, padding: "14px 16px", marginBottom: 16, border: `1px solid ${T.accent}30` }}>
-                <div style={{ color: T.accent, fontWeight: 800, fontSize: 16 }}>+{formatSum(welcomeConfig.amount)}</div>
-                <div style={{ color: T.textSecond, fontSize: 13, marginTop: 2 }}>{lang === "kg" ? "Биринчи заказга бонус" : "Бонус на первый заказ"}</div>
-              </div>
-            )}
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.name}</div>
-              <input value={regName} onChange={e => { setRegName(e.target.value); setErr(""); }} placeholder="Иванов Иван" style={inputStyle} />
-            </div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: T.textSecond, marginBottom: 6, fontWeight: 600 }}>{t.phone}</div>
-              <div style={{ position: "relative" }}>
-                <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.phone}</div>
-                <input value={regPhone} onChange={e => { setRegPhone(e.target.value); setErr(""); }} type="tel" placeholder="+996 700 000 000" style={{ ...inputStyle, paddingLeft: 42 }} />
-              </div>
-            </div>
-            {err && <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 12 }}>{err}</div>}
-            <button onClick={doRegister} style={btnGreen()}>{welcomeConfig.enabled ? (lang === "kg" ? "Катталуу + бонус алуу" : "Зарегистрироваться + бонус") : (lang === "kg" ? "Катталуу" : "Зарегистрироваться")}</button>
-          </>
-        )}
+
+      {/* Logo area */}
+      <div style={{ marginBottom: 40, textAlign: "center" }}>
+        <div style={{
+          width: 90, height: 90, borderRadius: 24,
+          background: "rgba(0,0,0,0.06)",
+          border: "1px solid rgba(0,0,0,0.12)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 28px"
+        }}>
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+            <path d="M9 2h6v3H9zM7 5h10l1 14H6L7 5z" stroke="#111111" strokeWidth="1.5" strokeLinejoin="round" />
+            <path d="M10 9c0 1.1.9 2 2 2s2-.9 2-2" stroke="#111111" strokeWidth="1.5" />
+          </svg>
+        </div>
+        <div style={{ fontSize: 11, letterSpacing: 4, color: "#111111", marginBottom: 10, textTransform: "uppercase", opacity: 0.7 }}>
+          Бишкек · Парфюм
+        </div>
+        <div style={{ fontSize: 32, fontWeight: 700, color: "#111111", letterSpacing: 3, textTransform: "uppercase", lineHeight: 1.1 }}>
+          KEMAL
+        </div>
+        <div style={{ fontSize: 32, fontWeight: 300, color: "#111111", letterSpacing: 6, textTransform: "uppercase", lineHeight: 1.1 }}>
+          USMAN
+        </div>
+        <div style={{ width: 60, height: 1, background: "linear-gradient(90deg,transparent,#111111,transparent)", margin: "16px auto 0" }} />
+      </div>
+
+      {/* Phone input */}
+      <div style={{ width: "100%", maxWidth: 340, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: "#666666", marginBottom: 6, letterSpacing: 0.5 }}>
+          {lang === "ru" ? "Номер телефона" : "Телефон номери"}
+        </div>
+        <input
+          type="tel" value={phone} onChange={e => { setPhone(formatPhone(e.target.value)); setErr(""); }}
+          placeholder="+996 700 123 456"
+          style={{
+            width: "100%", padding: "14px 18px", fontSize: 16,
+            background: "rgba(0,0,0,0.04)", border: "1px solid #EEEEEE",
+            borderRadius: 14, color: "#111111", outline: "none",
+            letterSpacing: 1
+          }}
+        />
+      </div>
+
+      {/* Name input */}
+      <div style={{ width: "100%", maxWidth: 340, marginBottom: 24 }}>
+        <div style={{ fontSize: 12, color: "#666666", marginBottom: 6, letterSpacing: 0.5 }}>
+          {lang === "ru" ? "Ваше имя" : "Атыңыз"}
+        </div>
+        <input
+          type="text" value={name} onChange={e => { setName(e.target.value); setErr(""); }}
+          placeholder={lang === "ru" ? "Введите имя" : "Атыңызды жазыңыз"}
+          style={{
+            width: "100%", padding: "14px 18px", fontSize: 16,
+            background: "rgba(0,0,0,0.04)", border: "1px solid #EEEEEE",
+            borderRadius: 14, color: "#111111", outline: "none"
+          }}
+        />
+      </div>
+
+      {err && (
+        <div style={{ width: "100%", maxWidth: 340, color: "#E53935", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "rgba(224,85,85,0.10)", borderRadius: 12, border: "1px solid rgba(224,85,85,0.3)", textAlign: "center" }}>{err}</div>
+      )}
+
+      {/* Main button */}
+      <button onClick={doLogin} style={{
+        width: "100%", maxWidth: 340, padding: "16px",
+        background: "#111111",
+        border: "none", borderRadius: 14, fontSize: 16, fontWeight: 600,
+        color: "#fff", cursor: "pointer", letterSpacing: 1,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+        marginBottom: 16
+      }}>
+        {lang === "ru" ? "ВОЙТИ" : "КИРҮҮ"}
+      </button>
+
+      {/* Guest mode */}
+      {onGuest && (
+        <button onClick={setGuestMode} style={{
+          background: "none", border: "none", color: "#AAAAAA",
+          fontSize: 13, cursor: "pointer", letterSpacing: 0.5
+        }}>
+          {lang === "ru" ? "Войти как гость" : "Мейман катары кирүү"}
+        </button>
+      )}
+
+      {/* Bottom decoration */}
+      <div style={{ position: "absolute", bottom: 40, fontSize: 11, color: "#C0BDB5", letterSpacing: 2 }}>
+        PARFUM SHOP © 2025
       </div>
     </div>
   );
 }
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
 function CatalogScreen({ products, addToCart, banners, showToast }) {
-  const { lang, t } = useLang();
+  const { lang, setLang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
   const [detail, setDetail] = useState(null);
@@ -676,33 +709,48 @@ function CatalogScreen({ products, addToCart, banners, showToast }) {
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
       {/* Header */}
-      <div style={{ padding: "16px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 500 }}>Бишкек · Парфюм</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: T.text, fontFamily: "'Georgia','Times New Roman',serif" }}>Kemal Usman</div>
+      <div style={{ background: "#fff", paddingTop: 44, paddingBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "#111", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M9 2h6v3H9zM7 5h10l1 14H6L7 5z" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: 0.5 }}>Kemal Usman</div>
+              <div style={{ fontSize: 10, color: "#aaa" }}>{lang === "ru" ? "Парфюм на разлив" : "Атыр дүкөнү"}</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", background: "#f5f5f5", borderRadius: 20, padding: 3 }}>
+            {["ru", "kg"].map(l => (
+              <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 14px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: lang === l ? "#111" : "transparent", color: lang === l ? "#fff" : "#aaa", transition: "all 0.2s" }}>
+                {l === "ru" ? "РУС" : "КЫР"}
+              </button>
+            ))}
+          </div>
         </div>
-        <LangToggle />
-      </div>
-      {/* Search */}
-      <div style={{ position: "relative", margin: "0 16px 12px" }}>
-        <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: T.textMuted }}>{IC.search}</div>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search} style={{ width: "100%", boxSizing: "border-box", background: T.white, border: `1.5px solid ${T.border}`, borderRadius: 14, padding: "13px 50px 13px 42px", fontSize: 15, color: T.text, outline: "none", fontFamily: "inherit" }} />
-        <div onClick={() => document.querySelector('input[type="text"],input[placeholder]')?.focus()} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 36, height: 36, borderRadius: 10, background: "#C47F5A", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff" }}>{IC.filter}</div>
+        <div style={{ padding: "0 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", background: "#f5f5f5", borderRadius: 10, padding: "10px 14px", gap: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#aaa" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#aaa" strokeWidth="2" /></svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: "#111", width: "100%", fontFamily: "inherit" }} />
+          </div>
+        </div>
       </div>
       {/* Banner */}
       {banners.length > 0 && <div style={{ marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
       {/* Categories */}
-      <div style={{ padding: "0 16px 12px" }}>
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+      <div className="no-scrollbar" style={{ padding: "8px 16px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        <div style={{ display: "flex", gap: 8 }}>
           {cats.map(c => (
-            <button key={c} onClick={() => setCat(c)} style={{ padding: "8px 18px", borderRadius: 20, border: `1.5px solid ${cat === c ? T.accent : T.border}`, background: cat === c ? T.accent : T.card, color: cat === c ? "#fff" : T.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+            <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: cat === c ? "none" : "0.5px solid #EEEEEE", background: cat === c ? "#111111" : "transparent", color: cat === c ? "#fff" : T.textSecond, fontSize: 13, fontWeight: cat === c ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
               {c === "all" ? t.allCategories : c}
             </button>
           ))}
         </div>
       </div>
       {/* Products grid */}
-      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {filteredProducts.length === 0 && (
           <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: T.textMuted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
@@ -713,17 +761,17 @@ function CatalogScreen({ products, addToCart, banners, showToast }) {
         {filteredProducts.map(p => {
           const stk = hasStock(p);
           return (
-            <div key={p.id} onClick={() => openDetail(p)} style={{ ...card({ borderRadius: 20, overflow: "hidden", cursor: "pointer" }) }}>
-              <div style={{ height: 140, background: `linear-gradient(160deg, ${T.accentPale}, ${T.bg})`, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <div key={p.id} onClick={() => openDetail(p)} style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: "pointer", minHeight: 220 }) }}>
+              <div style={{ width: "100%", height: 140, background: "#EEEEEE", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
                 {p.img
                   ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   : React.cloneElement(IC.bottle, { style: { width: 60, height: 60, color: T.accent, opacity: 0.5 } })}
-                {!stk && <div style={{ position: "absolute", top: 8, left: 8, background: T.danger, color: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{t.outOfStock}</div>}
-                {(p.variants || []).every(v => !v.inStock) && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.6)", color: "#fff", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>Нет в наличии</div>}
+                {!stk && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", color: "#E53935", borderRadius: 8, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{t.outOfStock}</div>}
+                {(p.variants || []).every(v => !v.inStock) && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#E53935", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>Нет в наличии</div>}
               </div>
-              <div style={{ padding: "12px 12px 14px" }}>
-                <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>{p.brand}</div>
-                <div style={{ color: T.text, fontSize: 13, fontWeight: 700, lineHeight: 1.3, marginBottom: 6 }}>{p.name}</div>
+              <div style={{ padding: "10px 12px" }}>
+                <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2, fontWeight: 300 }}>{p.brand}</div>
+                <div style={{ color: T.text, fontSize: 13, fontWeight: 600, lineHeight: 1.3, marginBottom: 4, letterSpacing: 0.5 }}>{p.name}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
                   {(() => {
                     const sizes = (p.sizes || p.variants || []).slice(0, 2);
@@ -739,8 +787,8 @@ function CatalogScreen({ products, addToCart, banners, showToast }) {
                   })()}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ color: T.text, fontWeight: 800, fontSize: 13 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: T.danger, fontSize: 11 }}>Нет в наличии</span>}</div>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: stk ? T.accent : T.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff" }}>
+                  <div style={{ color: "#111111", fontWeight: 700, fontSize: 14 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: T.danger, fontSize: 11 }}>Нет в наличии</span>}</div>
+                  <div style={{ width: 36, height: 36, borderRadius: 18, background: stk ? "#111111" : T.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 20 }}>
                     {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
                   </div>
                 </div>
@@ -788,7 +836,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 120 }}>
-      <div style={{ padding: "20px 16px 12px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.cart}</div>
+      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "#111", background: "#f5f5f5" }}>{t.cart}</div>
       {/* Items */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         {items.map((item, i) => (
@@ -895,7 +943,7 @@ function MyOrdersScreen({ orders }) {
   );
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "20px 16px 12px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.myOrders}</div>
+      <div style={{ padding: "52px 16px 14px", fontSize: 26, fontWeight: 800, color: "#111" }}>{t.myOrders}</div>
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         {orders.slice().reverse().map(order => (
           <div key={order.id} style={{ ...card({ padding: "16px" }) }}>
@@ -921,30 +969,40 @@ function MyOrdersScreen({ orders }) {
 }
 // ─── PROFILE SCREEN ────────────────────────────────────────────────────────────
 function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin }) {
-  const { t } = useLang();
+  const { t, lang, setLang } = useLang();
   const [tab, setTab] = useState("bonus");
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminPass, setAdminPass] = useState("");
   const [adminErr, setAdminErr] = useState("");
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ background: T.accent, padding: "48px 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
+      <div style={{ background: "linear-gradient(160deg, #111111 0%, #000000 100%)", padding: "48px 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
+        {/* Lang toggle row */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.15)", borderRadius: 30, padding: 3, border: "1px solid rgba(255,255,255,0.2)" }}>
+            {["ru", "kg"].map(l => (
+              <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 14px", borderRadius: 26, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, background: lang === l ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", transition: "all 0.2s" }}>
+                {l === "ru" ? "РУС" : "КЫР"}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "#fff" } })}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>{user?.name || t.guest}</div>
-            <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13 }}>{user?.phone}</div>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>{user?.name || t.guest}</div>
+            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 300 }}>{user?.phone}</div>
           </div>
-          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.2)", border: "none", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
+          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
         </div>
-        <div style={{ marginTop: 20, background: "rgba(255,255,255,0.15)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 12 }}>{t.bonusBalance}</div>
-            <div style={{ color: "#fff", fontSize: 28, fontWeight: 900 }}>{formatSum(bonusBalance)}</div>
+            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 300, letterSpacing: 1, textTransform: "uppercase" }}>{t.bonusBalance}</div>
+            <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>{formatSum(bonusBalance)}</div>
           </div>
-          {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "rgba(255,255,255,0.7)" } })}
+          {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
         </div>
       </div>
       {referralCode && (
@@ -959,7 +1017,7 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
       )}
       <div style={{ margin: "0 16px 14px", display: "flex", gap: 8 }}>
         {[{ id: "bonus", label: t.bonusHistory }, { id: "info", label: t.accountInfo }].map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1.5px solid ${tab === tb.id ? T.accent : T.border}`, background: tab === tb.id ? T.accent : T.card, color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
+          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: tab === tb.id ? "none" : `1px solid ${T.border}`, background: tab === tb.id ? "#111111" : "transparent", color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
         ))}
       </div>
       {tab === "bonus" ? (
@@ -968,7 +1026,7 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
             ? <div style={{ color: T.textMuted, textAlign: "center", padding: 40 }}>{t.noBonusHistory}</div>
             : bonusHistory.slice().reverse().map((h, i) => (
               <div key={i} style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "#FFF5F5" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "rgba(224,85,85,0.10)" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {React.cloneElement(h.type === "spent" ? IC.cart : IC.gift, { style: { width: 18, height: 18, color: h.type === "spent" ? T.danger : T.accent } })}
                 </div>
                 <div style={{ flex: 1 }}>
@@ -1030,7 +1088,7 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onSendWhatsApp, onConfir
   const handleStatus = (id, st) => { setStatusMap(p => ({ ...p, [id]: st })); onStatusChange?.(id, st); };
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "20px 16px 12px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.orders}</div>
+      <div style={{ padding: "52px 16px 14px", fontSize: 18, fontWeight: 700, letterSpacing: 1, color: T.text }}>{t.orders}</div>
       <div style={{ padding: "0 16px 14px", overflowX: "auto" }}>
         <div style={{ display: "flex", gap: 8, width: "max-content" }}>
           {statuses.map(s => (
@@ -1107,7 +1165,7 @@ function AdminProductsScreen({ products, setProducts }) {
   const delVar = (pId, vId) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.filter(v => v.id !== vId) } : p));
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "20px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.products}</div>
         <button onClick={addProd} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
       </div>
@@ -1247,9 +1305,18 @@ function AdminBannersScreen({ banners, setBanners }) {
   const editB = banners.find(b => b.id === editing);
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "20px 16px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.banners}</div>
         <button onClick={addBanner} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
+      </div>
+      <div style={{ margin: "0 16px 16px", background: '#FFFBF0', borderRadius: 12, padding: 14, border: '1px solid #FFE0B2' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#FF6B00', marginBottom: 6 }}>📐 Rasm tavsiyasi</div>
+        <div style={{ fontSize: 12, color: '#888', lineHeight: 1.8 }}>
+          • O'lcham: 1200 × 480 px<br/>
+          • Format: JPG yoki PNG<br/>
+          • Og'irlik: 2MB dan kam<br/>
+          • Canva.com da yaratishingiz mumkin
+        </div>
       </div>
       {editB && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
@@ -1341,59 +1408,154 @@ function AdminBonusScreen({ settings, setSettings }) {
 }
 
 // ─── ADMIN SETTINGS ────────────────────────────────────────────────────────────
-function AdminSettingsScreen({ settings, setSettings, onLogout }) {
+function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang }) {
   const { t } = useLang();
-  const [local, setLocal] = useState({ ...settings });
-  const upd = (f, v) => setLocal(p => ({ ...p, [f]: v }));
-  const rows = [
-    { f: "shopName", label: t.shopName, type: "text" },
-    { f: "whatsappPhone", label: t.whatsappPhone, type: "tel" },
-    { f: "adminPassword", label: t.adminPassword, type: "password" },
-  ];
+  const [mbankPhone, setMbankPhone] = React.useState(localStorage.getItem('mbank_phone') || '');
+  const [greenToken, setGreenToken] = React.useState(localStorage.getItem('green_token') || '');
+  const [greenInstance, setGreenInstance] = React.useState(localStorage.getItem('green_instance') || '');
+  const [welcomeBonus, setWelcomeBonus] = React.useState(Number(localStorage.getItem('bonus_welcome') || settings.welcomeBonus || 50));
+  const [welcomeOn, setWelcomeOn] = React.useState(localStorage.getItem('bonus_welcome_on') !== 'false');
+  const [orderBonus, setOrderBonus] = React.useState(Number(localStorage.getItem('bonus_order_pct') || settings.bonusPercent || 5));
+  const [orderBonusOn, setOrderBonusOn] = React.useState(localStorage.getItem('bonus_order_on') !== 'false');
+  const [referralBonus, setReferralBonus] = React.useState(Number(localStorage.getItem('bonus_referral') || settings.referralBonus || 100));
+  const [referralOn, setReferralOn] = React.useState(localStorage.getItem('bonus_referral_on') !== 'false');
+
+  const save = () => {
+    localStorage.setItem('mbank_phone', mbankPhone);
+    localStorage.setItem('green_token', greenToken);
+    localStorage.setItem('green_instance', greenInstance);
+    localStorage.setItem('bonus_welcome', welcomeBonus);
+    localStorage.setItem('bonus_welcome_on', welcomeOn);
+    localStorage.setItem('bonus_order_pct', orderBonus);
+    localStorage.setItem('bonus_order_on', orderBonusOn);
+    localStorage.setItem('bonus_referral', referralBonus);
+    localStorage.setItem('bonus_referral_on', referralOn);
+    setSettings(p => ({ ...p, welcomeBonus, bonusPercent: orderBonus, referralBonus }));
+    showToast('✅ Сохранено');
+  };
+
+  const Row = ({ label, children }) => (
+    <div style={{ padding: '14px 16px', borderBottom: '0.5px solid #f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <span style={{ fontSize: 13, color: '#666', flexShrink: 0 }}>{label}</span>
+      {children}
+    </div>
+  );
+
+  const Toggle = ({ value, onChange }) => (
+    <div onClick={() => onChange(!value)} style={{ width: 44, height: 24, borderRadius: 12, background: value ? '#111' : '#ddd', cursor: 'pointer', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
+      <div style={{ width: 20, height: 20, borderRadius: 10, background: '#fff', position: 'absolute', top: 2, left: value ? 22 : 2, transition: 'all 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+    </div>
+  );
+
+  const NumInput = ({ value, onChange, suffix }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <input type="number" value={value} onChange={e => onChange(Number(e.target.value))} style={{ width: 70, padding: '6px 10px', border: '0.5px solid #eee', borderRadius: 8, fontSize: 14, fontWeight: 600, textAlign: 'center', outline: 'none', background: '#f5f5f5' }} />
+      {suffix && <span style={{ fontSize: 12, color: '#aaa' }}>{suffix}</span>}
+    </div>
+  );
+
+  const TextInput = ({ value, onChange, placeholder }) => (
+    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+  );
+
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
-      <div style={{ padding: "20px 16px 16px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.settings}</div>
-      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {rows.map(row => (
-          <div key={row.f} style={{ ...card({ padding: "14px 16px" }) }}>
-            <div style={{ color: T.textSecond, fontSize: 12, marginBottom: 6 }}>{row.label}</div>
-            <input type={row.type} style={inputStyle} value={local[row.f] || ""} onChange={e => upd(row.f, e.target.value)} />
+    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 100 }}>
+      <div style={{ background: '#111', padding: '52px 16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Настройки</span>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>💳 M-BANK</span></div>
+          <Row label="Номер телефона"><TextInput value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" /></Row>
+          <div style={{ padding: '10px 16px', background: '#FFFBF0' }}>
+            <div style={{ fontSize: 11, color: '#FF6B00' }}>💡 Mijoz shu raqamga M-Bank orqali to'laydi</div>
           </div>
-        ))}
-        <button onClick={() => setSettings(local)} style={btnGreen({ padding: "15px 0", borderRadius: 16 })}>{t.saveSettings}</button>
-        <button onClick={onLogout} style={{ padding: "15px 0", borderRadius: 16, border: `1.5px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontWeight: 700, fontSize: 15, cursor: "pointer", width: "100%" }}>{t.logout}</button>
+        </div>
+
+        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>📱 WHATSAPP (GREEN API)</span></div>
+          <Row label="Instance ID"><TextInput value={greenInstance} onChange={setGreenInstance} placeholder="1234567890" /></Row>
+          <Row label="API Token"><TextInput value={greenToken} onChange={setGreenToken} placeholder="token..." /></Row>
+          <div style={{ padding: '10px 16px', background: '#F0FFF4' }}>
+            <div style={{ fontSize: 11, color: '#388E3C' }}>💡 green-api.com dan oling</div>
+          </div>
+        </div>
+
+        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>🎁 BONUSLAR</span></div>
+          <Row label="Xush kelibsiz bonus">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <NumInput value={welcomeBonus} onChange={setWelcomeBonus} suffix="сом" />
+              <Toggle value={welcomeOn} onChange={setWelcomeOn} />
+            </div>
+          </Row>
+          <Row label="Har buyurtmadan">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <NumInput value={orderBonus} onChange={setOrderBonus} suffix="%" />
+              <Toggle value={orderBonusOn} onChange={setOrderBonusOn} />
+            </div>
+          </Row>
+          <Row label="Referal bonus">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <NumInput value={referralBonus} onChange={setReferralBonus} suffix="сом" />
+              <Toggle value={referralOn} onChange={setReferralOn} />
+            </div>
+          </Row>
+        </div>
+
+        <button onClick={save} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
+          Сохранить
+        </button>
+        <button onClick={onLogout} style={{ width: '100%', padding: 14, background: 'none', border: '1.5px solid #E53935', borderRadius: 14, color: '#E53935', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{t.logout}</button>
       </div>
     </div>
   );
 }
 // ─── MBANK PAYMENT ────────────────────────────────────────────────────────────
 function MBankPayment({ total, orderId, onConfirm, onCancel }) {
-  const [step, setStep] = React.useState('qr');
-  const phone = '0700000000';
-  const qrData = `mbank://pay?phone=${phone}&amount=${total}&comment=Order_${orderId}`;
+  const phone = localStorage.getItem('mbank_phone') || '';
+  const cleanPhone = phone.replace(/\D/g, '');
+  const [step, setStep] = React.useState('pay');
+
+  const openMBank = () => {
+    const deepLink = `mbank://transfer?phone=${cleanPhone}&amount=${total}&comment=Kemal_Usman_${orderId}`;
+    window.location.href = deepLink;
+    setTimeout(() => setStep('confirm'), 2000);
+  };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', borderRadius: 24, padding: 28, maxWidth: 340, width: '100%', textAlign: 'center' }}>
-        {step === 'qr' && <>
-          <div style={{ fontSize: 20, fontWeight: 700, color: T.text, marginBottom: 4 }}>Оплата через M-Bank</div>
-          <div style={{ fontSize: 13, color: T.textSecond, marginBottom: 20 }}>Сумма: <b style={{ color: T.accent }}>{total.toLocaleString()} сом</b></div>
-          <div style={{ background: T.bgSecond, borderRadius: 16, padding: 20, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 12 }}>Отсканируйте QR или нажмите кнопку</div>
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrData)}`} alt="M-Bank QR" style={{ width: 180, height: 180, borderRadius: 12 }} />
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 430 }}>
+        {step === 'pay' && <>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#111', marginBottom: 4 }}>Оплата M-Bank</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#111' }}>{total.toLocaleString()} сом</div>
+            <div style={{ fontSize: 13, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
           </div>
-          <a href={`tel:+996${phone.replace(/^0/, '')}`} style={{ display: 'block', textDecoration: 'none' }}>
-            <div style={{ background: '#0066CC', color: '#fff', borderRadius: 14, padding: '12px', fontSize: 14, fontWeight: 600, marginBottom: 10, cursor: 'pointer' }}>📱 Открыть M-Bank</div>
-          </a>
-          <div style={{ fontSize: 12, color: T.textMuted, marginBottom: 16 }}>Номер получателя: <b>{phone}</b></div>
-          <button onClick={() => setStep('waiting')} style={{ width: '100%', padding: '12px', borderRadius: 14, background: T.accent, color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginBottom: 8 }}>✅ Я оплатил</button>
-          <button onClick={onCancel} style={{ width: '100%', padding: '12px', borderRadius: 14, background: 'none', color: T.textMuted, border: 'none', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
+          <button onClick={openMBank} style={{ width: '100%', padding: 16, background: '#00AEEF', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            📱 Открыть M-Bank · {total.toLocaleString()} сом
+          </button>
+          <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Нет M-Bank? Переведите вручную:</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>📱 {phone || 'Не указан'}</div>
+            <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
+            <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
+          </div>
+          <button onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
+            ✅ Я оплатил
+          </button>
+          <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
         </>}
-        {step === 'waiting' && <>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 8 }}>Ожидаем подтверждение</div>
-          <div style={{ fontSize: 13, color: T.textSecond, marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
-          <button onClick={() => { setStep('done'); onConfirm('mbank_pending'); }} style={{ width: '100%', padding: '12px', borderRadius: 14, background: T.accent, color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Готово</button>
+        {step === 'confirm' && <>
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
+            <button onClick={() => onConfirm('mbank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+              Готово
+            </button>
+          </div>
         </>}
       </div>
     </div>
@@ -1403,17 +1565,26 @@ function MBankPayment({ total, orderId, onConfirm, onCancel }) {
 // ─── AUDIO COMPONENTS ─────────────────────────────────────────────────────────
 function ProductAudioRecorder({ productId }) {
   const key = 'parfum_audio_' + productId;
-  const [status, setStatus] = React.useState(
-    localStorage.getItem(key) ? 'done' : 'idle'
-  );
+  const [status, setStatus] = React.useState(localStorage.getItem(key) ? 'done' : 'idle');
   const [countdown, setCountdown] = React.useState(10);
   const [playing, setPlaying] = React.useState(false);
   const [paused, setPaused] = React.useState(false);
   const audioRef = React.useRef(null);
   const recorderRef = React.useRef(null);
+  const streamRef = React.useRef(null);
+
+  const stopRecorder = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  };
 
   const handleRecord = () => {
-    if (recorderRef.current) return;
+    stopRecorder();
     setStatus('recording');
     setCountdown(10);
     let c = 10;
@@ -1424,6 +1595,7 @@ function ProductAudioRecorder({ productId }) {
     }, 1000);
 
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      streamRef.current = stream;
       const chunks = [];
       const rec = new MediaRecorder(stream);
       recorderRef.current = rec;
@@ -1442,90 +1614,69 @@ function ProductAudioRecorder({ productId }) {
         reader.readAsDataURL(blob);
       };
       rec.start(100);
-      setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, 10000);
-    }).catch(() => {
-      setStatus('idle');
-      clearInterval(iv);
-      recorderRef.current = null;
-    });
-  };
-
-  const handleStop = () => {
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-      recorderRef.current.stop();
-    }
+      setTimeout(() => stopRecorder(), 10000);
+    }).catch(() => { setStatus('idle'); clearInterval(iv); });
   };
 
   const handlePlay = () => {
     const data = localStorage.getItem(key);
     if (!data) return;
-    if (audioRef.current) { audioRef.current.pause(); }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     const audio = new Audio(data);
     audioRef.current = audio;
     audio.onended = () => { setPlaying(false); setPaused(false); };
     audio.play();
-    setPlaying(true);
-    setPaused(false);
+    setPlaying(true); setPaused(false);
   };
 
   const handlePause = () => {
-    if (audioRef.current) { audioRef.current.pause(); }
-    setPlaying(false);
-    setPaused(true);
+    if (audioRef.current) audioRef.current.pause();
+    setPlaying(false); setPaused(true);
   };
 
   const handleResume = () => {
-    if (audioRef.current) { audioRef.current.play(); }
-    setPlaying(true);
-    setPaused(false);
+    if (audioRef.current) audioRef.current.play();
+    setPlaying(true); setPaused(false);
   };
 
   const handleDelete = () => {
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+    stopRecorder();
     localStorage.removeItem(key);
-    setStatus('idle');
-    setPlaying(false);
-    setPaused(false);
+    setStatus('idle'); setPlaying(false); setPaused(false);
   };
 
-  const Btn = ({ label, onClick, color }) => (
-    <button onClick={onClick} style={{
-      padding: '8px 16px', borderRadius: 20, border: `1.5px solid ${color}`,
-      background: 'none', fontSize: 13, color, cursor: 'pointer', fontWeight: 600
-    }}>{label}</button>
+  const Btn = ({ label, onClick, color = '#111', bg = 'transparent', border = '1px solid #eee' }) => (
+    <button onClick={onClick} style={{ padding: '7px 14px', borderRadius: 20, border, background: bg, fontSize: 12, color, cursor: 'pointer', fontWeight: 500 }}>{label}</button>
   );
 
   if (status === 'recording') return (
-    <div style={{ background: '#FEE2E2', borderRadius: 16, padding: '12px 16px' }}>
+    <div style={{ background: '#FEF2F2', borderRadius: 12, padding: '12px 14px', marginTop: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ color: '#DC2626', fontWeight: 700, fontSize: 14 }}>🔴 Запись... {countdown}с</span>
-        <Btn label="⏹ Стоп" onClick={handleStop} color="#DC2626" />
+        <span style={{ color: '#E53935', fontWeight: 700, fontSize: 13 }}>🔴 Запись... {countdown}с</span>
+        <Btn label="⏹ Стоп" onClick={stopRecorder} color="#E53935" border="1px solid #E53935" />
       </div>
-      <div style={{ height: 6, background: '#FECACA', borderRadius: 4 }}>
-        <div style={{ height: 6, background: '#DC2626', borderRadius: 4, transition: 'width 1s linear', width: `${((10 - countdown) / 10) * 100}%` }} />
+      <div style={{ height: 4, background: '#FECACA', borderRadius: 4 }}>
+        <div style={{ height: 4, background: '#E53935', borderRadius: 4, width: `${((10 - countdown) / 10) * 100}%`, transition: 'width 1s linear' }} />
       </div>
     </div>
   );
 
   if (status === 'done') return (
-    <div style={{ background: T.accentPale, borderRadius: 16, padding: '12px 16px', border: `1px solid ${T.border}` }}>
-      <div style={{ fontSize: 13, color: T.accent, fontWeight: 600, marginBottom: 10 }}>✅ Аудио готово</div>
+    <div style={{ background: '#F5F5F5', borderRadius: 12, padding: '12px 14px', marginTop: 8 }}>
+      <div style={{ fontSize: 11, color: '#888', marginBottom: 10 }}>✅ Аудио записано</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {!playing && !paused && <Btn label="▶ Играть" onClick={handlePlay} color={T.accent} />}
-        {playing && <Btn label="⏸ Пауза" onClick={handlePause} color="#C8850A" />}
-        {paused && <Btn label="▶ Продолжить" onClick={handleResume} color={T.accent} />}
-        <Btn label="🔄 Перезаписать" onClick={handleRecord} color="#6B7280" />
-        <Btn label="🗑 Удалить" onClick={handleDelete} color="#EF4444" />
+        {!playing && !paused && <Btn label="▶ Играть" onClick={handlePlay} color="#fff" bg="#111" border="none" />}
+        {playing && <Btn label="⏸ Пауза" onClick={handlePause} color="#FF6B00" border="1px solid #FF6B00" />}
+        {paused && <Btn label="▶ Продолжить" onClick={handleResume} color="#fff" bg="#111" border="none" />}
+        <Btn label="🔄 Перезаписать" onClick={handleRecord} color="#666" />
+        <Btn label="🗑" onClick={handleDelete} color="#E53935" border="1px solid #E53935" />
       </div>
     </div>
   );
 
   return (
-    <button onClick={handleRecord} style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-      width: '100%', padding: '14px', borderRadius: 16, border: `2px dashed ${T.border}`,
-      background: 'none', cursor: 'pointer', fontSize: 14, color: T.textSecond
-    }}>
+    <button onClick={handleRecord} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '13px', borderRadius: 12, border: '1.5px dashed #ddd', background: 'none', cursor: 'pointer', fontSize: 13, color: '#888', marginTop: 8 }}>
       🎤 Записать описание аромата (10 сек)
     </button>
   );
@@ -1578,14 +1729,14 @@ function AudioRecordBtn({ productId }) {
   };
 
   if (status === 'recording') return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#FEE2E2', borderRadius: 20, fontSize: 12, color: '#DC2626' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'rgba(229,57,53,0.10)', borderRadius: 20, fontSize: 12, color: '#E53935' }}>
       🔴 Запись... {countdown}с
     </div>
   );
   if (status === 'done') return (
     <div style={{ display: 'flex', gap: 6 }}>
       <button onClick={() => { const a = new Audio(localStorage.getItem('parfum_audio_' + productId)); a.play(); }}
-        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #C47F5A', background: 'none', fontSize: 12, color: '#C47F5A', cursor: 'pointer' }}>
+        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
         ▶ Прослушать
       </button>
       <button onClick={handleRecord}
@@ -1600,7 +1751,7 @@ function AudioRecordBtn({ productId }) {
   );
   return (
     <button onClick={handleRecord}
-      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #6B7280', background: 'none', fontSize: 12, color: '#6B7280', cursor: 'pointer' }}>
+      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #AAAAAA', background: 'none', fontSize: 12, color: '#666666', cursor: 'pointer' }}>
       🎤 Записать аромат (10с)
     </button>
   );
@@ -1642,7 +1793,7 @@ function ClientAudioBtn({ productId }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
       {!playing && !paused && (
-        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #C47F5A', background: 'none', fontSize: 12, color: '#C47F5A', cursor: 'pointer' }}>
+        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
           🎧 Послушайте аромат
         </button>
       )}
@@ -1652,7 +1803,7 @@ function ClientAudioBtn({ productId }) {
         </button>
       )}
       {paused && (
-        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #C47F5A', background: 'none', fontSize: 12, color: '#C47F5A', cursor: 'pointer' }}>
+        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
           ▶ Продолжить
         </button>
       )}
@@ -1738,6 +1889,26 @@ export default function App() {
     if (earned > 0) { setBonusBalance(p => p - (orderData.bonusDiscount || 0) + earned); setBonusHistory(p => [...p, ...(orderData.bonusDiscount ? [{ type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }] : []), { type: "earned", amount: earned, label: "Бонус за заказ", date: now }]); }
     else if (orderData.bonusDiscount) { setBonusBalance(p => p - orderData.bonusDiscount); setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]); }
     setCart([]); localStorage.removeItem('parfum_cart'); setScreen("myorders"); showToast(t.orderPlaced);
+    const clientMsg = `Salom ${newOrder.clientName}! 🎉\nBuyurtmangiz qabul qilindi!\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nJami: ${newOrder.total} сом\nTez orada bog'lanamiz! 🌿\n\n— Kemal Usman Parfum`;
+    const adminPhone = localStorage.getItem('mbank_phone') || '';
+    const adminMsg = `🔔 Yangi buyurtma!\n\nMijoz: ${newOrder.clientName}\nTel: ${newOrder.clientPhone}\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nJami: ${newOrder.total} сом\nTo'lov: ${orderData.payMethod === 'mbank' ? 'M-Bank' : 'Naqd'}\nManzil: ${orderData.address || "O'zi oladi"}`;
+    if (newOrder.clientPhone) sendWhatsApp(newOrder.clientPhone, clientMsg);
+    if (adminPhone) sendWhatsApp(adminPhone, adminMsg);
+  };
+
+  const sendWhatsApp = async (phone, message) => {
+    const instance = localStorage.getItem('green_instance');
+    const token = localStorage.getItem('green_token');
+    if (!instance || !token) return;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const chatId = cleanPhone + '@c.us';
+    try {
+      await fetch(`https://api.green-api.com/waInstance${instance}/sendMessage/${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, message })
+      });
+    } catch (e) { console.log('WhatsApp error:', e); }
   };
 
   const handleSendWhatsApp = (order) => {
@@ -1776,13 +1947,13 @@ export default function App() {
 
   return (
     <LangContext.Provider value={t_ctx}>
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif", position: "relative" }}>
+      <div style={{ maxWidth: 430, width: "100%", minHeight: "100vh", margin: "0 auto", background: T.bg, color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif", position: "relative", overflow: "hidden" }}>
         <Toast toast={toast} />
         <div style={{ paddingBottom: T.navH + 16 }}>
           {isAdmin ? (
             <>
-              <div style={{ padding: "16px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", background: T.card, borderBottom: `1px solid ${T.border}`, paddingBottom: 12 }}>
-                <div style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>{t.adminPanel}</div>
+              <div style={{ padding: "16px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#000000", borderBottom: "0.5px solid rgba(255,255,255,0.15)", paddingBottom: 12 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: 2, textTransform: "uppercase" }}>{t.adminPanel}</div>
                 <LangToggle />
               </div>
               {adminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onStatusChange={(id, st) => setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o))} onSendWhatsApp={handleSendWhatsApp} onConfirmMBankPayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast('Оплата подтверждена'); }} />}
@@ -1790,7 +1961,7 @@ export default function App() {
               {adminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} />}
               {adminScreen === "banners" && <AdminBannersScreen banners={banners} setBanners={setBanners} />}
               {adminScreen === "bonus" && <AdminBonusScreen settings={settings} setSettings={setSettings} />}
-              {adminScreen === "settings" && <AdminSettingsScreen settings={settings} setSettings={setSettings} onLogout={handleLogout} />}
+              {adminScreen === "settings" && <AdminSettingsScreen settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
             </>
           ) : (
             <>
