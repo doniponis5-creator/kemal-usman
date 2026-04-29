@@ -94,6 +94,12 @@ code {
   background: var(--code-bg);
 }
 
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Login glassmorphism inputs — placeholder oq */
 input::placeholder {
   color: rgba(255, 255, 255, 0.35);
