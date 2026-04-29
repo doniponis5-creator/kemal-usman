@@ -1077,8 +1077,13 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
   const items = cart.map(ci => {
     const prod = products.find(p => String(p.id) === String(ci.productId));
     const variant = prod?.variants.find(v => String(v.id) === String(ci.variantId));
-    return prod && variant ? { ...ci, prod, variant } : null;
-  }).filter(Boolean);
+    if (prod && variant) return { ...ci, prod, variant };
+    return {
+      ...ci,
+      prod: { id: ci.productId, name: ci.name || "Товар", brand: ci.brand || "", img: ci.img || null, variants: [] },
+      variant: { id: ci.variantId, label: ci.variantLabel || "", price: ci.price || 0 },
+    };
+  });
 
   const subtotal = items.reduce((s, i) => s + i.variant.price * i.qty, 0);
   const deliveryCost = deliveryType === "delivery" ? (settings?.deliveryCost || 0) : 0;
@@ -1188,7 +1193,13 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
         </div>
       </div>
       <div style={{ padding: "0 16px" }}>
-        <button onClick={() => { if (deliveryType === "delivery" && !address.trim()) { showToast?.(t.enterAddress); return; } onOrder({ comment, useBonus, bonusDiscount, deliveryType, address, payMethod, subtotal, deliveryCost, total }); }} style={btnGreen({ fontSize: 16, padding: "16px 20px", borderRadius: 18 })}>{t.placeOrder}</button>
+        <button onClick={() => { if (deliveryType === "delivery" && !address.trim()) { showToast?.(t.enterAddress); return; } onOrder({ comment, useBonus, bonusDiscount, deliveryType, address, payMethod, subtotal, deliveryCost, total }); }} style={{ borderRadius: 50, padding: "6px 6px 6px 18px", background: "#111", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", cursor: "pointer", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{t.placeOrder}</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{items.reduce((s, i) => s + i.qty, 0)} товар</span>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 50, padding: "10px 20px", color: "#111", fontSize: 16, fontWeight: 700 }}>→</div>
+        </button>
       </div>
     </div>
   );
