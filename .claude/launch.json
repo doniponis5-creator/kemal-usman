@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "parfum-shop (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "parfum-shop", "run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "kemal-usman (Expo)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 8081
+    }
+  ]
+}

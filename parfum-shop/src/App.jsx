@@ -10,7 +10,7 @@ const TRANSLATIONS = {
     appName: "Kemal Usman", appSubtitle: "Бишкек · Парфюм на разлив",
     login: "Войти", logout: "Выйти", loginLabel: "Логин", passwordLabel: "Пароль",
     loginPlaceholder: "user или admin", passwordPlaceholder: "Пароль",
-    loginError: "Неверный логин или пароль!", demoHint: "",
+    loginError: "Неверный логин или пароль!", demoHint: "Демо: admin / admin123",
     register: "Регистрация", getStarted: "Начать",
     catalog: "Каталог", cart: "Корзина", myOrders: "Заказы", profile: "Профиль",
     orders: "Заказы", products: "Товары", stats: "Статистика", settings: "Настройки",
@@ -72,7 +72,7 @@ const TRANSLATIONS = {
     appName: "Kemal Usman", appSubtitle: "Бишкек · Атир куюп жана упаковка",
     login: "Кирүү", logout: "Чыгуу", loginLabel: "Логин", passwordLabel: "Сыр сөз",
     loginPlaceholder: "user же admin", passwordPlaceholder: "Сыр сөз",
-    loginError: "Логин же сыр сөз туура эмес!", demoHint: "",
+    loginError: "Логин же сыр сөз туура эмес!", demoHint: "Демо: admin / admin123",
     register: "Катталуу", getStarted: "Баштоо",
     catalog: "Каталог", myOrders: "Заказдар", profile: "Профиль",
     orders: "Заказдар", products: "Товарлар", stats: "Статистика", settings: "Жөндөөлөр",
@@ -292,7 +292,7 @@ const api = {
 
 const DEFAULT_SETTINGS = {
   shopName: "Kemal Usman", whatsappPhone: "996557100505",
-  adminPassword: "", bonusPercent: 5, useBonusPercent: 30,
+  adminPassword: "admin123", bonusPercent: 5, useBonusPercent: 30,
   welcomeBonus: 150, welcomeBonusEnabled: true,
   referralBonus: 100, referralFriendBonus: 50,
   deliveryCost: 0, minOrderForFreeDelivery: 0,
@@ -836,15 +836,12 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   );
 }
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
-function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, cartCount, onAdminLogin, onGoToCart }) {
+function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }) {
   const { lang, setLang, t } = useLang();
   const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [cat, setCat] = useState("all");
   const [detail, setDetail] = useState(null);
   const [selVariant, setSelVariant] = useState(null);
-  const [quickAdd, setQuickAdd] = useState(null);
-  const [quickVariant, setQuickVariant] = useState(null);
   const [adminTap, setAdminTap] = React.useState(0);
   const [adminTapTimer, setAdminTapTimer] = React.useState(null);
   const [scrolled, setScrolled] = useState(false);
@@ -883,17 +880,6 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
     const inStock = (p.variants || []).filter(v => v.inStock).map(v => v.price);
     if (inStock.length === 0) return null;
     return Math.min(...inStock);
-  };
-  const minOldPrice = (p) => {
-    const inStock = (p.variants || []).filter(v => v.inStock && v.oldPrice > v.price);
-    if (inStock.length === 0) return null;
-    const sorted = [...inStock].sort((a, b) => a.price - b.price);
-    return sorted[0]?.oldPrice || null;
-  };
-  const maxDiscount = (p) => {
-    const discounted = (p.variants || []).filter(v => v.inStock && v.oldPrice > v.price);
-    if (!discounted.length) return null;
-    return Math.max(...discounted.map(v => Math.round((1 - v.price / v.oldPrice) * 100)));
   };
   const hasStock = (p) => (p.variants || []).some(v => v.inStock);
 
@@ -968,11 +954,9 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
             {detail.variants.map(v => {
               const isSel = selVariant?.id === v.id;
               return (
-                <button key={v.id} onClick={() => v.inStock && setSelVariant(v)} style={{ padding: "10px 16px", borderRadius: 14, border: isSel ? `2px solid ${T.accent}` : `1.5px solid ${T.border}`, background: isSel ? T.accentLight : T.card, cursor: v.inStock ? "pointer" : "default", opacity: v.inStock ? 1 : 0.4, position: "relative" }}>
-                  {v.oldPrice > 0 && v.oldPrice > v.price && <div style={{ position: "absolute", top: -6, right: -6, background: "#E53935", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "2px 5px" }}>-{Math.round((1 - v.price / v.oldPrice) * 100)}%</div>}
+                <button key={v.id} onClick={() => v.inStock && setSelVariant(v)} style={{ padding: "10px 16px", borderRadius: 14, border: isSel ? `2px solid ${T.accent}` : `1.5px solid ${T.border}`, background: isSel ? T.accentLight : T.card, cursor: v.inStock ? "pointer" : "default", opacity: v.inStock ? 1 : 0.4 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? T.accent : T.text }}>{v.label}</div>
                   <div style={{ fontSize: 12, color: isSel ? T.accent : T.textSecond, marginTop: 2 }}>{formatSum(v.price)}</div>
-                  {v.oldPrice > 0 && v.oldPrice > v.price && <div style={{ fontSize: 10, color: "#bbb", textDecoration: "line-through", marginTop: 1 }}>{formatSum(v.oldPrice)}</div>}
                   {!v.inStock && <div style={{ fontSize: 10, color: T.danger }}>{t.outOfStock}</div>}
                 </button>
               );
@@ -981,12 +965,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
           {selVariant && (
             <div style={{ ...card({ padding: "16px 18px", marginBottom: 16 }), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ color: T.textSecond, fontSize: 13 }}>{t.total}</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                {selVariant.oldPrice > 0 && selVariant.oldPrice > selVariant.price && (
-                  <span style={{ color: "#bbb", fontSize: 14, textDecoration: "line-through" }}>{formatSum(selVariant.oldPrice)}</span>
-                )}
-                <span style={{ color: T.accent, fontSize: 22, fontWeight: 900 }}>{formatSum(selVariant.price)}</span>
-              </div>
+              <div style={{ color: T.accent, fontSize: 22, fontWeight: 900 }}>{formatSum(selVariant.price)}</div>
             </div>
           )}
           <button onClick={() => { if (!selVariant) return; addToCart(detail.id, selVariant.id); setDetail(null); }} disabled={!selVariant?.inStock} style={{ ...btnGreen({ opacity: selVariant?.inStock ? 1 : 0.5 }) }}>
@@ -1001,28 +980,24 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
   return (
     <div id="catalog-scroll" style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100, overflowY: "auto", height: "100vh" }}>
       {/* Header */}
-      <div style={{ background: "#fff", paddingTop: 36, paddingBottom: scrolled ? 8 : 10, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", position: "sticky", top: 0, zIndex: 50, transition: "padding-bottom 0.2s" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 8px" }}>
+      <div style={{ background: "#fff", paddingTop: 44, paddingBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px" }}>
           <div>
-            <div style={{ overflow: "hidden", maxHeight: scrolled ? 0 : 16, opacity: scrolled ? 0 : 1, transition: "max-height 0.2s ease, opacity 0.15s ease", fontSize: 10, color: "#aaa", letterSpacing: 0.5 }}>{lang === "ru" ? "Добро пожаловать" : "Кош келиңиз"}</div>
-            <div onClick={handleSecretTap} style={{ fontSize: scrolled ? 18 : 21, color: "#111", fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.3, cursor: "default", userSelect: "none", transition: "font-size 0.2s ease" }}>Kemal Usman</div>
+            <div style={{ fontSize: 11, color: "#aaa", letterSpacing: 0.5 }}>{lang === "ru" ? "Добро пожаловать" : "Кош келиңиз"}</div>
+            <div onClick={handleSecretTap} style={{ fontSize: 24, color: "#111", fontFamily: "'Playfair Display', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.3, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {["ru", "kg"].map((l, i) => (
-              <React.Fragment key={l}>
-                {i > 0 && <span style={{ color: "#ddd", fontSize: 11 }}>·</span>}
-                <button onClick={() => setLang(l)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: lang === l ? 700 : 400, color: lang === l ? "#111" : "#bbb", letterSpacing: 0.5, padding: "4px 2px" }}>
-                  {l === "ru" ? "RU" : "KG"}
-                </button>
-              </React.Fragment>
+          <div style={{ display: "flex", background: "#f5f5f5", borderRadius: 20, padding: 3 }}>
+            {["ru", "kg"].map(l => (
+              <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 14px", borderRadius: 16, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: lang === l ? "#111" : "transparent", color: lang === l ? "#fff" : "#aaa", transition: "all 0.2s" }}>
+                {l === "ru" ? "РУС" : "КЫР"}
+              </button>
             ))}
           </div>
         </div>
-        <div style={{ overflow: "hidden", maxHeight: scrolled ? 52 : 0, opacity: scrolled ? 1 : 0, transition: "max-height 0.25s ease, opacity 0.2s ease", padding: scrolled ? "0 16px" : "0 16px" }}>
+        <div style={{ padding: "0 16px 12px", overflow: "hidden", maxHeight: scrolled ? "60px" : "0px", opacity: scrolled ? 1 : 0, transition: "max-height 0.3s ease, opacity 0.2s ease" }}>
           <div style={{ display: "flex", alignItems: "center", background: "#f5f5f5", borderRadius: 10, padding: "10px 14px", gap: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="#aaa" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#aaa" strokeWidth="2" /></svg>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: "#111", width: "100%", fontFamily: "inherit" }} />
-            {search.length > 0 && <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>}
           </div>
         </div>
       </div>
@@ -1040,24 +1015,14 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
       </div>
       {/* Products grid */}
       <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        {pbLoading && [1,2,3,4,5,6].map(i => (
-          <div key={i} style={{ borderRadius: 16, overflow: "hidden", background: T.card, border: `1px solid ${T.border}` }}>
-            <div style={{ width: "100%", height: 140, background: "linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.4s infinite" }} />
-            <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ height: 10, borderRadius: 6, background: "#f0f0f0", width: "60%" }} />
-              <div style={{ height: 13, borderRadius: 6, background: "#f0f0f0", width: "85%" }} />
-              <div style={{ height: 10, borderRadius: 6, background: "#f0f0f0", width: "40%" }} />
-            </div>
-          </div>
-        ))}
-        {!pbLoading && filteredProducts.length === 0 && (
+        {filteredProducts.length === 0 && (
           <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: T.textMuted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
             <div style={{ fontSize: 16, fontWeight: 600, color: T.textSecond, marginBottom: 6 }}>Ничего не найдено</div>
             <div style={{ fontSize: 13 }}>Попробуйте изменить запрос</div>
           </div>
         )}
-        {!pbLoading && filteredProducts.map(p => {
+        {filteredProducts.map(p => {
           const stk = hasStock(p);
           return (
             <div key={p.id} onClick={() => openDetail(p)} style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: "pointer", minHeight: 220 }) }}>
@@ -1086,17 +1051,9 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
                   })()}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    {minPrice(p) !== null ? (
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 5, flexWrap: "wrap" }}>
-                        {maxDiscount(p) && <span style={{ background: "#E53935", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 5, padding: "2px 5px", letterSpacing: 0.3 }}>-{maxDiscount(p)}%</span>}
-                        <span style={{ color: "#111", fontWeight: 700, fontSize: 14 }}>{t.fromPrice} {formatSum(minPrice(p))}</span>
-                        {minOldPrice(p) && <span style={{ color: "#bbb", fontSize: 11, textDecoration: "line-through" }}>{formatSum(minOldPrice(p))}</span>}
-                      </div>
-                    ) : <span style={{ color: T.danger, fontSize: 11 }}>Нет в наличии</span>}
-                  </div>
-                  <div onClick={e => { e.stopPropagation(); if (!stk) return; const first = (p.variants || []).find(v => v.inStock); setQuickAdd(p); setQuickVariant(first || p.variants[0]); }} style={{ width: 36, height: 36, borderRadius: 10, background: stk ? "#f5f5f5" : T.border, border: "1px solid #e0e0e0", display: "flex", alignItems: "center", justifyContent: "center", cursor: stk ? "pointer" : "default", opacity: stk ? 1 : 0.4, flexShrink: 0 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#444" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 001.99 1.61h9.72a2 2 0 001.95-1.56L23 6H6"/></svg>
+                  <div style={{ color: "#111111", fontWeight: 700, fontSize: 14 }}>{minPrice(p) !== null ? `${t.fromPrice} ${formatSum(minPrice(p))}` : <span style={{ color: T.danger, fontSize: 11 }}>Нет в наличии</span>}</div>
+                  <div style={{ width: 36, height: 36, borderRadius: 18, background: stk ? "#111111" : T.border, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 700, fontSize: 20 }}>
+                    {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
                   </div>
                 </div>
                 <ClientAudioBtn productId={p.id} />
@@ -1105,120 +1062,12 @@ function CatalogScreen({ products, addToCart, banners, showToast, pbLoading, car
           );
         })}
       </div>
-
-      {/* ── QUICK ADD BOTTOM SHEET ── */}
-      {quickAdd && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
-          {/* overlay */}
-          <div onClick={() => setQuickAdd(null)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
-          {/* sheet */}
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 16px 40px", maxHeight: "80vh", overflowY: "auto" }}>
-            {/* handle */}
-            <div style={{ width: 40, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "0 auto 16px" }} />
-
-            {/* product info */}
-            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 18 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 14, background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-                {quickAdd.img
-                  ? <img src={quickAdd.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: "#111", opacity: 0.4 } })}
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: "#aaa", textTransform: "uppercase", letterSpacing: 1 }}>{quickAdd.brand}</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>{quickAdd.name}</div>
-              </div>
-            </div>
-
-            {/* variant chips */}
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#666", marginBottom: 10 }}>{t.chooseSize}</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              {(quickAdd.variants || []).map(v => {
-                const sel = quickVariant?.id === v.id;
-                return (
-                  <button key={v.id} onClick={() => v.inStock && setQuickVariant(v)}
-                    style={{ padding: "10px 16px", borderRadius: 14, border: sel ? "2px solid #111" : "1.5px solid #eee", background: sel ? "#111" : "#f5f5f5", color: sel ? "#fff" : "#111", cursor: v.inStock ? "pointer" : "default", opacity: v.inStock ? 1 : 0.4, fontFamily: "inherit", position: "relative" }}>
-                    {v.oldPrice > 0 && v.oldPrice > v.price && <div style={{ position: "absolute", top: -6, right: -6, background: "#E53935", color: "#fff", fontSize: 9, fontWeight: 700, borderRadius: 6, padding: "2px 5px" }}>-{Math.round((1 - v.price / v.oldPrice) * 100)}%</div>}
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{v.label}</div>
-                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 2 }}>{formatSum(v.price)}</div>
-                    {v.oldPrice > 0 && v.oldPrice > v.price && <div style={{ fontSize: 10, textDecoration: "line-through", opacity: 0.5, marginTop: 1 }}>{formatSum(v.oldPrice)}</div>}
-                    {!v.inStock && <div style={{ fontSize: 10, color: "#e53935" }}>{t.outOfStock}</div>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* price */}
-            {quickVariant && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f5f5f5", borderRadius: 14, padding: "12px 16px", marginBottom: 16 }}>
-                <span style={{ color: "#666", fontSize: 13 }}>{t.total}</span>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  {quickVariant.oldPrice > 0 && quickVariant.oldPrice > quickVariant.price && (
-                    <span style={{ color: "#bbb", fontSize: 13, textDecoration: "line-through" }}>{formatSum(quickVariant.oldPrice)}</span>
-                  )}
-                  <span style={{ color: "#111", fontSize: 20, fontWeight: 900 }}>{formatSum(quickVariant.price)}</span>
-                </div>
-              </div>
-            )}
-
-            {/* buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button
-                onClick={() => {
-                  if (!quickVariant) return;
-                  addToCart(quickAdd.id, quickVariant.id);
-                  setQuickAdd(null);
-                }}
-                disabled={!quickVariant?.inStock}
-                style={{ ...btnGreen({ opacity: quickVariant?.inStock ? 1 : 0.5, padding: "15px", fontSize: 15 }) }}>
-                {t.addToCart}
-              </button>
-              <button
-                onClick={() => {
-                  if (!quickVariant) return;
-                  addToCart(quickAdd.id, quickVariant.id);
-                  setQuickAdd(null);
-                  onGoToCart?.();
-                }}
-                disabled={!quickVariant?.inStock}
-                style={{ ...btnOutline({ opacity: quickVariant?.inStock ? 1 : 0.5, padding: "13px", fontSize: 15 }) }}>
-                {lang === "ru" ? "Оформить заказ →" : "Заказ берүү →"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Floating checkout button */}
-      {cartCount > 0 && (
-        <div style={{ position: "fixed", bottom: 76, left: 0, right: 0, padding: "0 16px", zIndex: 45, pointerEvents: "none" }}>
-          <button
-            onClick={onGoToCart}
-            style={{
-              width: "100%", background: "#111", color: "#fff", border: "none",
-              borderRadius: 18, padding: "11px 16px", fontSize: 14, fontWeight: 700,
-              cursor: "pointer", display: "flex", alignItems: "center",
-              justifyContent: "space-between", pointerEvents: "all",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
-              boxSizing: "border-box"
-            }}
-          >
-            <div style={{
-              background: "rgba(255,255,255,0.15)", borderRadius: 10,
-              padding: "3px 10px", fontSize: 13, fontWeight: 800, minWidth: 28, textAlign: "center"
-            }}>{cartCount}</div>
-            <span style={{ letterSpacing: 0.3 }}>{lang === "ru" ? "Оформить заказ" : "Заказ берүү"}</span>
-            <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 10, width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </div>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 // ─── CART SCREEN ───────────────────────────────────────────────────────────────
-function CartScreen({ cart, setCart, products, onOrder, orderLoading, bonusBalance, useBonusPercent, settings, showToast }) {
-  const { lang, t } = useLang();
-  const [checkout, setCheckout] = useState(false);
+function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPercent, settings, showToast }) {
+  const { t } = useLang();
   const [comment, setComment] = useState("");
   const [useBonus, setUseBonus] = useState(false);
   const [deliveryType, setDeliveryType] = useState("delivery");
@@ -1228,22 +1077,21 @@ function CartScreen({ cart, setCart, products, onOrder, orderLoading, bonusBalan
   const items = cart.map(ci => {
     const prod = products.find(p => String(p.id) === String(ci.productId));
     const variant = prod?.variants.find(v => String(v.id) === String(ci.variantId));
-    return prod && variant ? { ...ci, prod, variant } : null;
-  }).filter(Boolean);
+    if (prod && variant) return { ...ci, prod, variant };
+    return {
+      ...ci,
+      prod: { id: ci.productId, name: ci.name || "Товар", brand: ci.brand || "", img: ci.img || null, variants: [] },
+      variant: { id: ci.variantId, label: ci.variantLabel || "", price: ci.price || 0 },
+    };
+  });
 
   const subtotal = items.reduce((s, i) => s + i.variant.price * i.qty, 0);
   const deliveryCost = deliveryType === "delivery" ? (settings?.deliveryCost || 0) : 0;
-  const bonusDiscount = useBonus ? Math.min(bonusBalance, Math.floor(subtotal * (useBonusPercent / 100)), subtotal) : 0;
-  const total = Math.max(0, subtotal + deliveryCost - bonusDiscount);
+  const bonusDiscount = useBonus ? Math.min(bonusBalance, Math.floor(subtotal * (useBonusPercent / 100))) : 0;
+  const total = subtotal + deliveryCost - bonusDiscount;
 
   const updateQty = (ci, d) => setCart(prev => { const next = prev.map(i => i.productId === ci.productId && i.variantId === ci.variantId ? { ...i, qty: Math.max(1, i.qty + d) } : i); localStorage.setItem('parfum_cart', JSON.stringify(next)); return next; });
   const remove = (ci) => setCart(prev => { const next = prev.filter(i => !(i.productId === ci.productId && i.variantId === ci.variantId)); localStorage.setItem('parfum_cart', JSON.stringify(next)); return next; });
-
-  const doOrder = () => {
-    if (deliveryType === "delivery" && !address.trim()) { showToast?.(t.enterAddress, "error"); return; }
-    onOrder({ comment, useBonus, bonusDiscount, deliveryType, address, payMethod, subtotal, deliveryCost, total });
-    setCheckout(false);
-  };
 
   if (!items.length) return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", padding: 32, gap: 16 }}>
@@ -1257,144 +1105,102 @@ function CartScreen({ cart, setCart, products, onOrder, orderLoading, bonusBalan
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 120 }}>
-      {/* Header */}
-      <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-        <div style={{ fontSize: 24, fontWeight: 800, color: "#111" }}>{t.cart}</div>
-        <div style={{ fontSize: 12, color: T.textMuted }}>{items.length} {lang === "ru" ? "товара" : "товар"}</div>
-      </div>
-
+      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "#111", background: "#f5f5f5" }}>{t.cart}</div>
       {/* Items */}
-      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         {items.map((item, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14, padding: "12px 14px", border: `0.5px solid ${T.border}` }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={i} style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 60, height: 60, borderRadius: 14, background: T.accentPale, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.accent, opacity: 0.5 } })}
+            </div>
+            <div style={{ flex: 1 }}>
               <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{item.prod.brand}</div>
-              <div style={{ color: T.text, fontWeight: 700, fontSize: 14, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.prod.name}</div>
-              <div style={{ color: T.textMuted, fontSize: 12, marginTop: 1 }}>{item.variant.label}</div>
+              <div style={{ color: T.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{item.prod.name}</div>
+              <div style={{ color: T.accent, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              <button onClick={() => updateQty(item, -1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 16, fontWeight: 700, color: T.text, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-              <span style={{ fontWeight: 700, minWidth: 18, textAlign: "center", fontSize: 14, color: T.text }}>{item.qty}</span>
-              <button onClick={() => updateQty(item, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: "#111", border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
-              <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
-              <div style={{ color: "#111", fontWeight: 800, fontSize: 14 }}>{formatSum(item.variant.price * item.qty)}</div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+              <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 2 }}>{IC.close}</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => updateQty(item, -1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 16, fontWeight: 700, color: T.text }}>−</button>
+                <span style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text }}>{item.qty}</span>
+                <button onClick={() => updateQty(item, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.accent, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#fff" }}>+</button>
+              </div>
+              <div style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{formatSum(item.variant.price * item.qty)}</div>
             </div>
           </div>
         ))}
       </div>
-
-      {/* Итого + кнопка */}
-      <div style={{ padding: "0 16px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <span style={{ color: T.textSecond, fontSize: 15 }}>{t.total}</span>
-          <span style={{ color: "#111", fontSize: 22, fontWeight: 900 }}>{formatSum(subtotal)}</span>
+      {/* Delivery */}
+      <div style={{ padding: "0 16px", marginBottom: 12 }}>
+        <div style={{ ...card({ padding: "16px" }) }}>
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.deliveryType}</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: deliveryType === "delivery" ? 12 : 0 }}>
+            {[{ id: "delivery", label: t.delivery }, { id: "pickup", label: t.pickup }].map(opt => (
+              <button key={opt.id} onClick={() => setDeliveryType(opt.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1.5px solid ${deliveryType === opt.id ? T.accent : T.border}`, background: deliveryType === opt.id ? T.accentLight : T.card, color: deliveryType === opt.id ? T.accent : T.textSecond, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>{opt.label}</button>
+            ))}
+          </div>
+          {deliveryType === "delivery" && <input style={inputStyle} placeholder={t.address} value={address} onChange={e => setAddress(e.target.value)} />}
         </div>
-        <button onClick={() => setCheckout(true)} style={{ ...btnGreen({ fontSize: 16, padding: "16px 20px", borderRadius: 16 }) }}>{t.placeOrder} →</button>
       </div>
-
-      {/* ── CHECKOUT BOTTOM SHEET ── */}
-      {checkout && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
-          <div onClick={() => setCheckout(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" }} />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 16px 48px", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ width: 40, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "0 auto 20px" }} />
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 20 }}>{lang === "ru" ? "Оформление заказа" : "Заказды жасоо"}</div>
-
-            {/* Delivery */}
-            <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{t.deliveryType}</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              {[{ id: "delivery", label: t.delivery }, { id: "pickup", label: t.pickup }].map(opt => (
-                <button key={opt.id} onClick={() => setDeliveryType(opt.id)} style={{ flex: 1, padding: "11px", borderRadius: 12, border: `1.5px solid ${deliveryType === opt.id ? "#111" : T.border}`, background: deliveryType === opt.id ? "#111" : T.bg, color: deliveryType === opt.id ? "#fff" : T.textSecond, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>{opt.label}</button>
-              ))}
-            </div>
-            {deliveryType === "delivery" && (
-              <div style={{ marginBottom: 14 }}>
-                {address.startsWith("https") ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#f1f8e9", borderRadius: 12, border: "1px solid #c8e6c9" }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#43A047" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <span style={{ flex: 1, fontSize: 13, color: "#2e7d32", fontWeight: 600 }}>{lang === "ru" ? "Локация отправлена в WhatsApp ✓" : "Локация WhatsApp'ка жиберилди ✓"}</span>
-                    <button onClick={() => setAddress("")} style={{ background: "none", border: "none", color: "#aaa", fontSize: 18, cursor: "pointer", padding: 0 }}>×</button>
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input style={{ ...inputStyle, flex: 1 }} placeholder={lang === "ru" ? "ул. Ленина, дом 5..." : "Ленина көч., 5-үй..."} value={address} onChange={e => setAddress(e.target.value)} />
-                    <button onClick={() => {
-                      if (!navigator.geolocation) { showToast?.("Геолокация недоступна", "error"); return; }
-                      navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                          const { latitude: lat, longitude: lng } = pos.coords;
-                          const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
-                          setAddress(mapsLink);
-                          const adminPhone = settings?.whatsappPhone || "996557100505";
-                          const msg = encodeURIComponent(`📍 Моя локация для доставки:\n${mapsLink}`);
-                          window.open(`https://wa.me/${adminPhone}?text=${msg}`, "_blank");
-                        },
-                        () => showToast?.("Разрешите доступ к геолокации", "error"),
-                        { enableHighAccuracy: true, timeout: 8000 }
-                      );
-                    }} style={{ background: "#E0E0E0", border: "none", cursor: "pointer", borderRadius: 12, width: 50, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Payment */}
-            <div style={{ fontSize: 12, color: T.textMuted, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{t.paymentMethod}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-              {PAYMENT_METHODS.map(pm => (
-                <button key={pm.id} onClick={() => setPayMethod(pm.id)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: `1.5px solid ${payMethod === pm.id ? "#111" : T.border}`, background: payMethod === pm.id ? "#f5f5f5" : T.bg, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${payMethod === pm.id ? "#111" : "#ddd"}`, background: payMethod === pm.id ? "#111" : "transparent", flexShrink: 0 }} />
-                  <span style={{ color: "#111", fontWeight: payMethod === pm.id ? 700 : 400, fontSize: 14 }}>{pm.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Comment */}
-            <textarea style={{ ...inputStyle, minHeight: 64, resize: "none", marginBottom: 14 }} placeholder={`${t.comment} (${lang === "ru" ? "необязательно" : "милдеттүү эмес"})`} value={comment} onChange={e => setComment(e.target.value)} />
-
-            {/* Bonus */}
-            {bonusBalance > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: "#fffbf0", borderRadius: 12, border: "1px solid #ffe082", marginBottom: 14 }}>
-                <div>
-                  <div style={{ color: T.bonus, fontWeight: 700, fontSize: 13 }}>{t.useBonus}</div>
-                  <div style={{ color: T.textMuted, fontSize: 11 }}>{formatSum(bonusBalance)} · max {useBonusPercent}%</div>
-                </div>
-                <div onClick={() => setUseBonus(v => !v)} style={{ width: 44, height: 26, borderRadius: 13, background: useBonus ? "#111" : "#ddd", cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
-                  <div style={{ position: "absolute", top: 3, left: useBonus ? 21 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
-                </div>
-              </div>
-            )}
-
-            {/* Summary */}
-            <div style={{ background: "#f5f5f5", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
-              {deliveryType === "delivery" && deliveryCost > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ color: T.textSecond, fontSize: 13 }}>{t.delivery}</span>
-                  <span style={{ color: T.text, fontSize: 13 }}>{formatSum(deliveryCost)}</span>
-                </div>
-              )}
-              {useBonus && bonusDiscount > 0 && (
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ color: T.bonus, fontSize: 13 }}>{t.bonusDiscount}</span>
-                  <span style={{ color: T.bonus, fontSize: 13 }}>−{formatSum(bonusDiscount)}</span>
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ color: "#111", fontSize: 15, fontWeight: 700 }}>{t.total}</span>
-                <span style={{ color: "#111", fontSize: 20, fontWeight: 900 }}>{formatSum(total)}</span>
-              </div>
-            </div>
-
-            <button onClick={doOrder} disabled={orderLoading} style={{ ...btnGreen({ fontSize: 16, padding: "16px", borderRadius: 16, opacity: orderLoading ? 0.7 : 1 }) }}>
-              {orderLoading ? (lang === "ru" ? "Отправляем..." : "Жөнөтүлүүдө...") : t.placeOrder}
+      {/* Comment */}
+      <div style={{ padding: "0 16px", marginBottom: 12 }}>
+        <textarea style={{ ...inputStyle, minHeight: 72, resize: "vertical" }} placeholder={t.comment} value={comment} onChange={e => setComment(e.target.value)} />
+      </div>
+      {/* Payment */}
+      <div style={{ padding: "0 16px", marginBottom: 12 }}>
+        <div style={{ ...card({ padding: "16px" }) }}>
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.paymentMethod}</div>
+          {PAYMENT_METHODS.map(pm => (
+            <button key={pm.id} onClick={() => setPayMethod(pm.id)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === pm.id ? T.accent : T.border}`, background: payMethod === pm.id ? T.accentLight : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left" }}>
+              <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${payMethod === pm.id ? T.accent : T.border}`, background: payMethod === pm.id ? T.accent : "transparent", flexShrink: 0 }} />
+              <span style={{ color: payMethod === pm.id ? T.accent : T.text, fontWeight: 600, fontSize: 14 }}>{pm.label}</span>
             </button>
+          ))}
+        </div>
+      </div>
+      {/* Bonus */}
+      {bonusBalance > 0 && (
+        <div style={{ padding: "0 16px", marginBottom: 12 }}>
+          <div style={{ ...card({ padding: "14px 16px" }), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ color: T.bonus, fontWeight: 700, fontSize: 14 }}>{t.useBonus}</div>
+              <div style={{ color: T.textMuted, fontSize: 12 }}>{formatSum(bonusBalance)} · {t.maxDiscount} {useBonusPercent}%</div>
+            </div>
+            <div onClick={() => setUseBonus(v => !v)} style={{ width: 48, height: 28, borderRadius: 14, background: useBonus ? T.accent : T.border, cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
+              <div style={{ position: "absolute", top: 3, left: useBonus ? 23 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+            </div>
           </div>
         </div>
       )}
+      {/* Summary */}
+      <div style={{ padding: "0 16px", marginBottom: 16 }}>
+        <div style={{ ...card({ padding: "16px" }) }}>
+          {[
+            { label: t.subtotal, val: formatSum(subtotal) },
+            deliveryType === "delivery" && { label: t.delivery, val: deliveryCost > 0 ? formatSum(deliveryCost) : t.free },
+            useBonus && bonusDiscount > 0 && { label: t.bonusDiscount, val: `−${formatSum(bonusDiscount)}`, color: T.bonus },
+          ].filter(Boolean).map(row => (
+            <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ color: T.textSecond, fontSize: 14 }}>{row.label}</span>
+              <span style={{ color: row.color || T.text, fontWeight: 600, fontSize: 14 }}>{row.val}</span>
+            </div>
+          ))}
+          <div style={{ height: 1, background: T.border, margin: "8px 0 12px" }} />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ color: T.text, fontSize: 16, fontWeight: 800 }}>{t.total}</span>
+            <span style={{ color: T.accent, fontSize: 20, fontWeight: 900 }}>{formatSum(total)}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: "0 16px" }}>
+        <button onClick={() => { if (deliveryType === "delivery" && !address.trim()) { showToast?.(t.enterAddress); return; } onOrder({ comment, useBonus, bonusDiscount, deliveryType, address, payMethod, subtotal, deliveryCost, total }); }} style={{ borderRadius: 50, padding: "6px 6px 6px 18px", background: "#111", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", cursor: "pointer", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{t.placeOrder}</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{items.reduce((s, i) => s + i.qty, 0)} товар</span>
+          </div>
+          <div style={{ background: "#fff", borderRadius: 50, padding: "10px 20px", color: "#111", fontSize: 16, fontWeight: 700 }}>→</div>
+        </button>
+      </div>
     </div>
   );
 }
@@ -1437,7 +1243,7 @@ function MyOrdersScreen({ orders }) {
   );
 }
 // ─── PROFILE SCREEN ────────────────────────────────────────────────────────────
-function ProfileScreen({ user, onLogout, onGoToLogin, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin }) {
+function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin }) {
   const { t, lang, setLang } = useLang();
   const [tab, setTab] = useState("bonus");
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -1454,59 +1260,31 @@ function ProfileScreen({ user, onLogout, onGoToLogin, bonusBalance, bonusHistory
       <div style={{ background: "linear-gradient(160deg, #111111 0%, #000000 100%)", padding: "48px 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
         {/* Lang toggle row */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {["ru", "kg"].map((l, i) => (
-              <React.Fragment key={l}>
-                {i > 0 && <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>·</span>}
-                <button onClick={() => setLang(l)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: lang === l ? 700 : 400, color: lang === l ? "#fff" : "rgba(255,255,255,0.45)", letterSpacing: 0.5, padding: "4px 2px" }}>
-                  {l === "ru" ? "RU" : "KG"}
-                </button>
-              </React.Fragment>
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.15)", borderRadius: 30, padding: 3, border: "1px solid rgba(255,255,255,0.2)" }}>
+            {["ru", "kg"].map(l => (
+              <button key={l} onClick={() => setLang(l)} style={{ padding: "5px 14px", borderRadius: 26, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: 0.5, background: lang === l ? "rgba(255,255,255,0.25)" : "transparent", color: "#fff", transition: "all 0.2s" }}>
+                {l === "ru" ? "РУС" : "КЫР"}
+              </button>
             ))}
           </div>
         </div>
-        {user ? (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "#fff" } })}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>{user.name}</div>
-                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 300 }}>{user.phone}</div>
-              </div>
-              <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
-            </div>
-            <div style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 300, letterSpacing: 1, textTransform: "uppercase" }}>{t.bonusBalance}</div>
-                <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>{formatSum(bonusBalance)}</div>
-              </div>
-              {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
-            </div>
-          </>
-        ) : (
-          <>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "rgba(255,255,255,0.5)" } })}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>{lang === "ru" ? "Гость" : "Коноок"}</div>
-                <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13 }}>{lang === "ru" ? "Вы не вошли в аккаунт" : "Каттоодон өтпөгөнсүз"}</div>
-              </div>
-            </div>
-            <button onClick={onGoToLogin} style={{ width: "100%", background: "#fff", border: "none", borderRadius: 14, padding: "14px", color: "#111", fontSize: 15, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-              {lang === "ru" ? "Войти и получить бонус" : "Кирип бонус алыңыз"}
-            </button>
-            {settings?.welcomeBonusEnabled && settings?.welcomeBonus > 0 && (
-              <div style={{ marginTop: 10, color: "rgba(255,255,255,0.6)", fontSize: 12, textAlign: "center" }}>
-                {lang === "ru" ? `🎁 При регистрации ${settings.welcomeBonus} сом бонус` : `🎁 Катталганда ${settings.welcomeBonus} сом бонус`}
-              </div>
-            )}
-          </>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "#fff" } })}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>{user?.name || t.guest}</div>
+            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 300 }}>{user?.phone}</div>
+          </div>
+          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
+        </div>
+        <div style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 300, letterSpacing: 1, textTransform: "uppercase" }}>{t.bonusBalance}</div>
+            <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>{formatSum(bonusBalance)}</div>
+          </div>
+          {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
+        </div>
       </div>
       {referralCode && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
@@ -1601,57 +1379,6 @@ function ProfileScreen({ user, onLogout, onGoToLogin, bonusBalance, bonusHistory
           ))}
         </div>
       )}
-      {/* О нас */}
-      <div style={{ margin: "16px 16px 0", ...card({ padding: "18px" }) }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 14 }}>{lang === "ru" ? "О нас" : "Биз жөнүндө"}</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {settings?.shopAddress && (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: T.accentPale, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                </div>
-                <span style={{ color: T.text, fontSize: 13 }}>{settings.shopAddress}</span>
-              </div>
-              {(() => {
-                const addr = encodeURIComponent(settings.shopAddress);
-                const lat = settings.shopLat;
-                const lng = settings.shopLng;
-                const geoQ = lat && lng ? `${lat},${lng}` : addr;
-                const maps = [
-                  { label: "Google Maps", color: "#1a73e8", href: `https://maps.google.com/?q=${geoQ}` },
-                  { label: "Яндекс", color: "#fc3f1d", href: `https://maps.yandex.ru/?text=${addr}` },
-                  { label: "2GIS", color: "#00b33c", href: `https://2gis.kg/search/${addr}` },
-                ];
-                return (
-                  <div style={{ display: "flex", gap: 8 }}>
-                    {maps.map(m => (
-                      <a key={m.label} href={m.href} target="_blank" rel="noreferrer" style={{ flex: 1, background: m.color, borderRadius: 10, padding: "9px 4px", textAlign: "center", textDecoration: "none", color: "#fff", fontSize: 11, fontWeight: 700 }}>{m.label}</a>
-                    ))}
-                  </div>
-                );
-              })()}
-            </>
-          )}
-          {settings?.workingHours && (
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: T.accentPale, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.accent} strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </div>
-              <span style={{ color: T.text, fontSize: 13 }}>{settings.workingHours}</span>
-            </div>
-          )}
-          {settings?.aboutText && (
-            <div style={{ color: T.textSecond, fontSize: 13, lineHeight: 1.6, paddingTop: 4 }}>{settings.aboutText}</div>
-          )}
-          {settings?.whatsappPhone && (
-            <a href={`https://wa.me/${settings.whatsappPhone.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 12, background: "#25D366", borderRadius: 12, padding: "12px 14px", textDecoration: "none", marginTop: 4 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.126 1.532 5.859L.057 23.57a.5.5 0 0 0 .608.65l5.98-1.566A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22a9.944 9.944 0 0 1-5.072-1.38l-.361-.214-3.754.984.999-3.651-.235-.376A9.944 9.944 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-              <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{lang === "ru" ? "Написать нам в WhatsApp" : "WhatsApp жазуу"}</span>
-            </a>
-          )}
-        </div>
-      </div>
       {showAdminModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div style={{ background: T.card, borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }}>
@@ -1663,7 +1390,7 @@ function ProfileScreen({ user, onLogout, onGoToLogin, bonusBalance, bonusHistory
             {adminErr && <div style={{ color: T.danger, fontSize: 13, marginBottom: 10, textAlign: "center" }}>{adminErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setShowAdminModal(false)} style={{ ...btnOutline({ flex: 1, padding: "12px 0", borderRadius: 14 }) }}>Отмена</button>
-              <button onClick={() => { if (adminPass === (settings?.adminPassword)) { setShowAdminModal(false); onAdminLogin?.(); } else setAdminErr(t.wrongPassword); }} style={{ ...btnGreen({ flex: 1, padding: "12px 0", borderRadius: 14 }) }}>OK</button>
+              <button onClick={() => { if (adminPass === (settings?.adminPassword || "admin123")) { setShowAdminModal(false); onAdminLogin?.(); } else setAdminErr(t.wrongPassword); }} style={{ ...btnGreen({ flex: 1, padding: "12px 0", borderRadius: 14 }) }}>OK</button>
             </div>
           </div>
         </div>
@@ -1759,7 +1486,7 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
   const editProd = products.find(p => p.id === editing);
   const upd = (id, f, v) => setProducts(prev => prev.map(p => p.id === id ? { ...p, [f]: v } : p));
   const updVar = (pId, vId, f, v) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.map(vr => vr.id === vId ? { ...vr, [f]: v } : vr) } : p));
-  const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", variants: [{ id: Date.now(), label: "5 мл", price: 0, oldPrice: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
+  const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
   const delProd = async (id) => {
     if (!window.confirm(t.confirmDelete)) return;
     const prod = products.find(p => p.id === id);
@@ -1835,30 +1562,13 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
               <button onClick={() => addVar(editProd.id)} style={{ background: T.accentLight, border: `1px solid ${T.accent}`, borderRadius: 8, padding: "4px 12px", color: T.accent, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Добавить</button>
             </div>
             {editProd.variants.map(v => (
-              <div key={v.id} style={{ marginBottom: 10, background: T.bg, borderRadius: 12, padding: "10px 10px 8px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto auto", gap: 8, alignItems: "end" }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 3, paddingLeft: 2 }}>Объём</div>
-                    <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} placeholder="5 мл" value={v.label} onChange={e => updVar(editProd.id, v.id, "label", e.target.value)} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 3, paddingLeft: 2 }}>Цена продажи</div>
-                    <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} type="number" min={0} placeholder="0" value={v.price} onChange={e => updVar(editProd.id, v.id, "price", Math.max(0, +e.target.value))} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 3, paddingLeft: 2 }}>Старая цена</div>
-                    <input style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }} type="number" min={0} placeholder="—" value={v.oldPrice || ""} onChange={e => updVar(editProd.id, v.id, "oldPrice", Math.max(0, +e.target.value) || 0)} />
-                  </div>
-                  <button onClick={() => updVar(editProd.id, v.id, "inStock", !v.inStock)} style={{ padding: "8px 10px", borderRadius: 10, border: `1px solid ${v.inStock ? T.accent : T.border}`, background: v.inStock ? T.accentLight : T.bg, color: v.inStock ? T.accent : T.textMuted, fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-                    {v.inStock ? "Есть" : "Нет"}
-                  </button>
-                  <button onClick={() => delVar(editProd.id, v.id)} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 18 }}>×</button>
-                </div>
-                {v.oldPrice > 0 && v.price > 0 && v.oldPrice > v.price && (
-                  <div style={{ fontSize: 11, color: "#E53935", marginTop: 6, paddingLeft: 2 }}>
-                    Скидка: {Math.round((1 - v.price / v.oldPrice) * 100)}% · {v.label}: <s style={{ color: "#aaa" }}>{formatSum(v.oldPrice)}</s> → <b>{formatSum(v.price)}</b>
-                  </div>
-                )}
+              <div key={v.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                <input style={{ ...inputStyle, flex: 2 }} placeholder="5 мл" value={v.label} onChange={e => updVar(editProd.id, v.id, "label", e.target.value)} />
+                <input style={{ ...inputStyle, flex: 2 }} type="number" min={0} placeholder="0" value={v.price} onChange={e => updVar(editProd.id, v.id, "price", Math.max(0, +e.target.value))} />
+                <button onClick={() => updVar(editProd.id, v.id, "inStock", !v.inStock)} style={{ padding: "8px 10px", borderRadius: 10, border: `1px solid ${v.inStock ? T.accent : T.border}`, background: v.inStock ? T.accentLight : T.bg, color: v.inStock ? T.accent : T.textMuted, fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                  {v.inStock ? "Есть" : "Нет"}
+                </button>
+                <button onClick={() => delVar(editProd.id, v.id)} style={{ background: "none", border: "none", color: T.danger, cursor: "pointer", fontSize: 18, flexShrink: 0 }}>×</button>
               </div>
             ))}
           </div>
@@ -2327,32 +2037,6 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
       </div>
 
       <div style={{ padding: 16 }}>
-        {/* Parol ogohlantirishi */}
-        {!settings?.adminPassword && (
-          <div style={{ background: '#FFF3E0', border: '1px solid #FFB74D', borderRadius: 12, padding: '12px 14px', marginBottom: 16, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>⚠️</span>
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#E65100', marginBottom: 2 }}>Пароль не установлен!</div>
-              <div style={{ fontSize: 12, color: '#BF360C' }}>Кто угодно может войти в панель администратора. Установите пароль ниже в разделе "Безопасность".</div>
-            </div>
-          </div>
-        )}
-        {/* Безопасность */}
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>🔒 БЕЗОПАСНОСТЬ</span></div>
-          <Row label="Пароль администратора">
-            <input
-              type="password"
-              value={settings?.adminPassword || ''}
-              onChange={e => setSettings(p => ({ ...p, adminPassword: e.target.value }))}
-              placeholder="Введите новый пароль"
-              style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: settings?.adminPassword ? '#f0fff4' : '#fff5f5' }}
-            />
-          </Row>
-          <div style={{ padding: '10px 16px', background: '#F5F5F5' }}>
-            <div style={{ fontSize: 11, color: '#888' }}>* Минимум 6 символов. После изменения сохраните страницу.</div>
-          </div>
-        </div>
         <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
           <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>💳 M-BANK</span></div>
           <Row label="Номер телефона"><TextInput value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" /></Row>
@@ -2390,27 +2074,6 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
               <Toggle value={referralOn} onChange={setReferralOn} />
             </div>
           </Row>
-        </div>
-
-        {/* О НАС */}
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>📍 О НАС</span></div>
-          <Row label="Адрес магазина">
-            <input value={settings?.shopAddress || ''} onChange={e => setSettings(p => ({ ...p, shopAddress: e.target.value }))} placeholder="ул. Ленина, 45" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
-          </Row>
-          <Row label="Широта (lat)">
-            <input value={settings?.shopLat || ''} onChange={e => setSettings(p => ({ ...p, shopLat: e.target.value }))} placeholder="42.8746" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
-          </Row>
-          <Row label="Долгота (lng)">
-            <input value={settings?.shopLng || ''} onChange={e => setSettings(p => ({ ...p, shopLng: e.target.value }))} placeholder="74.5698" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
-          </Row>
-          <Row label="Время работы">
-            <input value={settings?.workingHours || ''} onChange={e => setSettings(p => ({ ...p, workingHours: e.target.value }))} placeholder="Пн–Вс: 10:00–21:00" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
-          </Row>
-          <div style={{ padding: '14px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>О нас (описание)</div>
-            <textarea value={settings?.aboutText || ''} onChange={e => setSettings(p => ({ ...p, aboutText: e.target.value }))} placeholder="Расскажите о вашем магазине..." rows={3} style={{ width: '100%', border: '0.5px solid #eee', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', background: '#f5f5f5', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
-          </div>
         </div>
 
         {/* LOGIN ФОНА */}
@@ -2823,11 +2486,10 @@ export default function App() {
   const [bonusHistory, setBonusHistory] = useState(() => { try { return JSON.parse(localStorage.getItem('parfum_bonus_history') || '[]'); } catch { return []; } });
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [visitCount, setVisitCount] = useState(() => { const v = parseInt(localStorage.getItem('parfum_visits') || '0'); return v; });
-  const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(() => !!localStorage.getItem('parfum_device_bonus'));
+  const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [showMBank, setShowMBank] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
-  const [orderLoading, setOrderLoading] = useState(false);
   const [referralCode] = useState(() => Math.random().toString(36).substring(2, 8).toUpperCase());
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminLoginPass, setAdminLoginPass] = useState("");
@@ -2863,30 +2525,12 @@ export default function App() {
           api.getClients(),
         ]);
         if (pbProducts.length > 0) {
-          const mappedProducts = pbProducts.map(p => ({
+          setProducts(pbProducts.map(p => ({
             ...p,
             img: p.images?.[0] ? api.getImageUrl(p, p.images[0]) : null,
             images: (p.images || []).map(img => api.getImageUrl(p, img)),
             variants: Array.isArray(p.variants) ? p.variants : (p.variants ? JSON.parse(p.variants) : []),
-          }));
-          setProducts(mappedProducts);
-          // Remap stale localStorage cart IDs (numeric) → PocketBase string IDs
-          setCart(prev => {
-            const remapped = prev.map(ci => {
-              if (isNaN(Number(ci.productId))) return ci; // already PB ID
-              const oldProd = INITIAL_PRODUCTS.find(p => String(p.id) === String(ci.productId));
-              if (!oldProd) return null;
-              const pbProd = mappedProducts.find(p => p.name === oldProd.name);
-              if (!pbProd) return null;
-              const pbVars = Array.isArray(pbProd.variants) ? pbProd.variants : [];
-              const oldVar = oldProd.variants.find(v => String(v.id) === String(ci.variantId));
-              const pbVar = oldVar ? pbVars.find(v => v.label === oldVar.label) : pbVars[0];
-              if (!pbVar) return null;
-              return { ...ci, productId: pbProd.id, variantId: pbVar.id };
-            }).filter(Boolean);
-            localStorage.setItem('parfum_cart', JSON.stringify(remapped));
-            return remapped;
-          });
+          })));
         }
         if (pbOrders.length > 0) setOrders(pbOrders.map(o => ({
           ...o,
@@ -2925,8 +2569,7 @@ export default function App() {
 
   const handleLogin = async ({ phone, name, isAdminLogin, password }) => {
     if (isAdminLogin) {
-      if (!settings.adminPassword && password === "") { setIsAdmin(true); setScreen("admin"); showToast("Паролды орнотиңиз!"); return; }
-      if (password === settings.adminPassword) { setIsAdmin(true); setScreen("admin"); showToast(t.welcomeAdmin); }
+      if (password === (settings.adminPassword || "admin123")) { setIsAdmin(true); setScreen("admin"); showToast(t.welcomeAdmin); }
       else showToast(t.wrongPassword, "error");
       return;
     }
@@ -2951,10 +2594,9 @@ export default function App() {
         return prev;
       });
     }
-    // Device-based welcome bonus — one per device regardless of phone number
-    const deviceBonusClaimed = localStorage.getItem('parfum_device_bonus');
-    if (settings.welcomeBonusEnabled && settings.welcomeBonus > 0 && !welcomeBonusUsed && !deviceBonusClaimed) {
-      localStorage.setItem('parfum_device_bonus', '1'); // never cleared on logout
+    const bonusKey = 'parfum_welcome_' + (phone || name || "guest");
+    if (settings.welcomeBonusEnabled && settings.welcomeBonus > 0 && !welcomeBonusUsed && !localStorage.getItem(bonusKey)) {
+      localStorage.setItem(bonusKey, '1');
       setBonusBalance(p => p + settings.welcomeBonus);
       setBonusHistory(p => [...p, { type: "welcome", amount: settings.welcomeBonus, label: t.welcomeBonus || "Приветственный бонус", date: now }]);
       setWelcomeBonusUsed(true);
@@ -2978,9 +2620,7 @@ export default function App() {
   };
 
   const handleOrder = async (orderData) => {
-    if (orderLoading) return;
     if (!user) { setGuestMode(false); showToast(lang === 'kg' ? 'Заказ берүү үчүн кириңиз' : 'Войдите для оформления заказа', 'error'); return; }
-    setOrderLoading(true);
     const now = new Date().toLocaleString("ru-RU");
     const items = cart.map(ci => {
       const prod = products.find(p => String(p.id) === String(ci.productId));
@@ -3013,14 +2653,10 @@ export default function App() {
     } catch (e) {
       console.warn("PocketBase order error:", e);
       setOrders(p => [...p, newOrder]);
-    } finally {
-      setOrderLoading(false);
     }
     const earned = Math.floor((orderData.total || 0) * (settings.bonusPercent || 0) / 100);
-    const safeDiscount = Math.min(orderData.bonusDiscount || 0, bonusBalance);
-    if (earned > 0) { setBonusBalance(p => Math.max(0, p - safeDiscount + earned)); setBonusHistory(p => [...p, ...(safeDiscount ? [{ type: "spent", amount: -safeDiscount, label: "Бонус потрачен", date: now }] : []), { type: "earned", amount: earned, label: "Бонус за заказ", date: now }]); }
-    else if (safeDiscount) { setBonusBalance(p => Math.max(0, p - safeDiscount)); setBonusHistory(p => [...p, { type: "spent", amount: -safeDiscount, label: "Бонус потрачен", date: now }]); }
-    setOrderLoading(false);
+    if (earned > 0) { setBonusBalance(p => p - (orderData.bonusDiscount || 0) + earned); setBonusHistory(p => [...p, ...(orderData.bonusDiscount ? [{ type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }] : []), { type: "earned", amount: earned, label: "Бонус за заказ", date: now }]); }
+    else if (orderData.bonusDiscount) { setBonusBalance(p => p - orderData.bonusDiscount); setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]); }
     setCart([]); localStorage.removeItem('parfum_cart'); setScreen("myorders"); showToast(t.orderPlaced);
     const clientMsg = `Здравствуйте, ${newOrder.clientName}!\nВаш заказ принят!\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${newOrder.total} сом\nСкоро свяжемся с вами!\n\n— Kemal Usman Parfum`;
     const adminPhone = localStorage.getItem('mbank_phone') || '';
@@ -3098,10 +2734,10 @@ export default function App() {
             </>
           ) : (
             <>
-              {screen === "catalog" && <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} pbLoading={pbLoading} cartCount={cartCount} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onGoToCart={() => setScreen("cart")} />}
-              {screen === "cart" && <CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} orderLoading={orderLoading} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} />}
+              {screen === "catalog" && <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} />}
+              {screen === "cart" && <CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} />}
               {screen === "myorders" && <MyOrdersScreen orders={orders.filter(o => o.clientPhone === user?.phone)} />}
-              {screen === "profile" && <ProfileScreen user={user} onLogout={handleLogout} onGoToLogin={() => setGuestMode(false)} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); setAdminScreen("orders"); }} />}
+              {screen === "profile" && <ProfileScreen user={user} onLogout={handleLogout} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); setAdminScreen("orders"); }} />}
             </>
           )}
         </div>
@@ -3116,7 +2752,7 @@ export default function App() {
               {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center" }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Отмена</button>
-                <button onClick={() => { if (adminLoginPass === (settings?.adminPassword)) { setShowAdminLogin(false); setIsAdmin(true); setAdminScreen("orders"); } else setAdminLoginErr(t.wrongPassword); }} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>OK</button>
+                <button onClick={() => { if (adminLoginPass === (settings?.adminPassword || "admin123")) { setShowAdminLogin(false); setIsAdmin(true); setAdminScreen("orders"); } else setAdminLoginErr(t.wrongPassword); }} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>OK</button>
               </div>
             </div>
           </div>
