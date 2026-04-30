@@ -2096,67 +2096,72 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
     showToast('Сохранено');
   };
 
-  const Row = ({ label, children }) => (
-    <div style={{ padding: '14px 16px', borderBottom: '0.5px solid #f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ fontSize: 13, color: '#666', flexShrink: 0 }}>{label}</span>
+  const S = {
+    page: { background: '#f7f7f7', minHeight: '100vh', paddingBottom: 100 },
+    header: { background: '#111', padding: '52px 16px 16px' },
+    headerTitle: { fontSize: 17, fontWeight: 700, color: '#fff' },
+    section: { background: '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 12, border: '0.5px solid #ebebeb' },
+    sectionTitle: { padding: '13px 16px', borderBottom: '0.5px solid #f0f0f0', fontSize: 11, fontWeight: 700, color: '#999', letterSpacing: 1.5 },
+    hint: { padding: '10px 16px', fontSize: 11, color: '#aaa', borderTop: '0.5px solid #f0f0f0' },
+    input: { border: '0.5px solid #e8e8e8', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none', background: '#f7f7f7', textAlign: 'right', color: '#111' },
+  };
+
+  const Row = ({ label, children, last }) => (
+    <div style={{ padding: '13px 16px', borderBottom: last ? 'none' : '0.5px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+      <span style={{ fontSize: 14, color: '#444', flexShrink: 0 }}>{label}</span>
       {children}
     </div>
   );
 
   const Toggle = ({ value, onChange }) => (
-    <div onClick={() => onChange(!value)} style={{ width: 44, height: 24, borderRadius: 12, background: value ? '#111' : '#ddd', cursor: 'pointer', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
-      <div style={{ width: 20, height: 20, borderRadius: 10, background: '#fff', position: 'absolute', top: 2, left: value ? 22 : 2, transition: 'all 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
+    <div onClick={() => onChange(!value)} style={{ width: 44, height: 26, borderRadius: 13, background: value ? '#111' : '#ddd', cursor: 'pointer', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
+      <div style={{ width: 22, height: 22, borderRadius: 11, background: '#fff', position: 'absolute', top: 2, left: value ? 20 : 2, transition: 'all 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
     </div>
   );
 
   const NumInput = ({ value, onChange, suffix }) => (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input type="number" value={value} onChange={e => onChange(Number(e.target.value))} style={{ width: 70, padding: '6px 10px', border: '0.5px solid #eee', borderRadius: 8, fontSize: 14, fontWeight: 600, textAlign: 'center', outline: 'none', background: '#f5f5f5' }} />
-      {suffix && <span style={{ fontSize: 12, color: '#aaa' }}>{suffix}</span>}
+      <input type="number" value={value} onChange={e => onChange(Number(e.target.value))} style={{ ...S.input, width: 72, textAlign: 'center', fontWeight: 600, fontSize: 14 }} />
+      {suffix && <span style={{ fontSize: 12, color: '#bbb' }}>{suffix}</span>}
     </div>
   );
 
   const TextInput = ({ value, onChange, placeholder }) => (
-    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...S.input, width: 164 }} />
   );
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 100 }}>
-      <div style={{ background: '#111', padding: '52px 16px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Настройки</span>
+    <div style={S.page}>
+      <div style={S.header}>
+        <span style={S.headerTitle}>Настройки</span>
       </div>
 
-      <div style={{ padding: 16 }}>
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>💳 M-BANK</span></div>
-          <Row label="Номер телефона"><TextInput value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" /></Row>
-          <div style={{ padding: '10px 16px', background: '#FFFBF0' }}>
-            <div style={{ fontSize: 11, color: '#FF6B00' }}>* Клиент платит на этот номер через M-Bank</div>
-          </div>
+      <div style={{ padding: '12px 16px' }}>
+
+        <div style={S.section}>
+          <div style={S.sectionTitle}>💳 M-BANK</div>
+          <Row label="Номер телефона" last><TextInput value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" /></Row>
+          <div style={S.hint}>Клиент переводит на этот номер через M-Bank</div>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>🏦 O!BANK</span></div>
-          <Row label="Номер телефона"><TextInput value={obankPhone} onChange={setObankPhone} placeholder="+996 700 000 000" /></Row>
-          <div style={{ padding: '10px 16px', background: '#FFFBF0' }}>
-            <div style={{ fontSize: 11, color: '#FF6B00' }}>* Клиент платит на этот номер через O!Bank</div>
-          </div>
+        <div style={S.section}>
+          <div style={S.sectionTitle}>🏦 O!BANK</div>
+          <Row label="Номер телефона" last><TextInput value={obankPhone} onChange={setObankPhone} placeholder="+996 700 000 000" /></Row>
+          <div style={S.hint}>Клиент переводит на этот номер через O!Bank</div>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>WHATSAPP (GREEN API)</span></div>
-          <Row label="Ваш номер (для уведомлений)">
-            <input value={whatsappAdmin} onChange={e => setWhatsappAdmin(e.target.value)} placeholder="+996 700 000 000" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+        <div style={S.section}>
+          <div style={S.sectionTitle}>💬 WHATSAPP (GREEN API)</div>
+          <Row label="Ваш номер">
+            <input value={whatsappAdmin} onChange={e => setWhatsappAdmin(e.target.value)} placeholder="+996 700 000 000" style={{ ...S.input, width: 164 }} />
           </Row>
           <Row label="Instance ID"><TextInput value={greenInstance} onChange={setGreenInstance} placeholder="1234567890" /></Row>
-          <Row label="API Token"><TextInput value={greenToken} onChange={setGreenToken} placeholder="token..." /></Row>
-          <div style={{ padding: '10px 16px', background: '#F0FFF4' }}>
-            <div style={{ fontSize: 11, color: '#388E3C' }}>* Получите на сайте green-api.com</div>
-          </div>
+          <Row label="API Token" last><TextInput value={greenToken} onChange={setGreenToken} placeholder="token..." /></Row>
+          <div style={S.hint}>Получите на сайте green-api.com</div>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>БОНУСЫ</span></div>
+        <div style={S.section}>
+          <div style={S.sectionTitle}>🎁 БОНУСЫ</div>
           <Row label="Приветственный бонус">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <NumInput value={welcomeBonus} onChange={setWelcomeBonus} suffix="сом" />
@@ -2169,7 +2174,7 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
               <Toggle value={orderBonusOn} onChange={setOrderBonusOn} />
             </div>
           </Row>
-          <Row label="Реферальный бонус">
+          <Row label="Реферальный бонус" last>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <NumInput value={referralBonus} onChange={setReferralBonus} suffix="сом" />
               <Toggle value={referralOn} onChange={setReferralOn} />
@@ -2177,25 +2182,23 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
           </Row>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>📍 О НАС</span>
-          </div>
+        <div style={S.section}>
+          <div style={S.sectionTitle}>📍 О НАС</div>
           <Row label="Адрес магазина">
-            <input value={settings?.shopAddress || ''} onChange={e => setSettings(p => ({ ...p, shopAddress: e.target.value }))} placeholder="ул. Ленина, 45" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+            <input value={settings?.shopAddress || ''} onChange={e => setSettings(p => ({ ...p, shopAddress: e.target.value }))} placeholder="ул. Ленина, 45" style={{ ...S.input, width: 164 }} />
           </Row>
           <Row label="Широта (lat)">
-            <input value={settings?.shopLat || ''} onChange={e => setSettings(p => ({ ...p, shopLat: e.target.value }))} placeholder="42.8746" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+            <input value={settings?.shopLat || ''} onChange={e => setSettings(p => ({ ...p, shopLat: e.target.value }))} placeholder="42.8746" style={{ ...S.input, width: 164 }} />
           </Row>
           <Row label="Долгота (lng)">
-            <input value={settings?.shopLng || ''} onChange={e => setSettings(p => ({ ...p, shopLng: e.target.value }))} placeholder="74.5698" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+            <input value={settings?.shopLng || ''} onChange={e => setSettings(p => ({ ...p, shopLng: e.target.value }))} placeholder="74.5698" style={{ ...S.input, width: 164 }} />
           </Row>
-          <Row label="Время работы">
-            <input value={settings?.workingHours || ''} onChange={e => setSettings(p => ({ ...p, workingHours: e.target.value }))} placeholder="Пн–Вс: 10:00–21:00" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+          <Row label="Время работы" last>
+            <input value={settings?.workingHours || ''} onChange={e => setSettings(p => ({ ...p, workingHours: e.target.value }))} placeholder="Пн–Вс: 10:00–21:00" style={{ ...S.input, width: 164 }} />
           </Row>
-          <div style={{ padding: '14px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>О нас (описание)</div>
-            <textarea value={settings?.aboutText || ''} onChange={e => setSettings(p => ({ ...p, aboutText: e.target.value }))} placeholder="Расскажите о вашем магазине..." rows={3} style={{ width: '100%', border: '0.5px solid #eee', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', background: '#f5f5f5', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+          <div style={{ padding: '14px 16px' }}>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>О нас (описание)</div>
+            <textarea value={settings?.aboutText || ''} onChange={e => setSettings(p => ({ ...p, aboutText: e.target.value }))} placeholder="Расскажите о вашем магазине..." rows={3} style={{ width: '100%', border: '0.5px solid #e8e8e8', borderRadius: 10, padding: '10px 12px', fontSize: 13, outline: 'none', background: '#f7f7f7', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box', color: '#111' }} />
           </div>
         </div>
 
