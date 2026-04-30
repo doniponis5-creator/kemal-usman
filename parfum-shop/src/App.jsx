@@ -270,7 +270,7 @@ const api = {
   createProduct: (data) => pb.collection("products").create(data, { requestKey: null }),
   updateProduct: (id, data) => pb.collection("products").update(id, data, { requestKey: null }),
   deleteProduct: (id) => pb.collection("products").delete(id, { requestKey: null }),
-  getImageUrl: (record, filename) => pb.files.getURL(record, filename),
+  getImageUrl: (record, filename) => `http://145.223.100.16:8090/api/files/products/${record.id}/${filename}`,
 
   // Orders
   getOrders: () => pb.collection("orders").getFullList({ sort: "-created", requestKey: null }),
@@ -300,11 +300,36 @@ const DEFAULT_SETTINGS = {
 };
 
 const INITIAL_PRODUCTS = [
-  { id: 1, name: "Chanel No. 5", brand: "Chanel", category: "Женские", img: null, images: [], desc: "Классический цветочный аромат.", variants: [{ id: "v1", label: "5 мл", price: 120, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 220, type: "ml", inStock: true }, { id: "v3", label: "20 мл", price: 400, type: "ml", inStock: true }, { id: "v4", label: "Упаковка 50 мл", price: 850, type: "package", inStock: true }] },
-  { id: 2, name: "Sauvage", brand: "Dior", category: "Мужские", img: null, images: [], desc: "Свежий и сильный аромат.", variants: [{ id: "v1", label: "5 мл", price: 130, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 240, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 100 мл", price: 920, type: "package", inStock: true }] },
-  { id: 3, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс", img: null, images: [], desc: "Редкий и таинственный аромат.", variants: [{ id: "v1", label: "3 мл", price: 90, type: "ml", inStock: true }, { id: "v2", label: "5 мл", price: 140, type: "ml", inStock: true }, { id: "v3", label: "10 мл", price: 260, type: "ml", inStock: true }] },
-  { id: 4, name: "Oud Wood", brand: "Tom Ford", category: "Премиум", img: null, images: [], desc: "Восточный аромат уда.", variants: [{ id: "v1", label: "5 мл", price: 200, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 380, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 50 мл", price: 1850, type: "package", inStock: true }] },
-  { id: 5, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские", img: null, images: [], desc: "Радостный и сладкий аромат.", variants: [{ id: "v1", label: "5 мл", price: 110, type: "ml", inStock: true }, { id: "v2", label: "10 мл", price: 200, type: "ml", inStock: true }, { id: "v3", label: "Упаковка 75 мл", price: 780, type: "package", inStock: true }] },
+  { id: 1, name: "Sauvage", brand: "Dior", category: "Мужские", description: "Свежий, дикий и благородный аромат", image: "", variants: [{ id: 1, label: "30 мл", price: 950 }, { id: 2, label: "50 мл", price: 1400 }, { id: 3, label: "100 мл", price: 2100 }] },
+  { id: 2, name: "Miss Dior", brand: "Dior", category: "Женские", description: "Нежный цветочный аромат с нотами пиона", image: "", variants: [{ id: 4, label: "30 мл", price: 1000 }, { id: 5, label: "50 мл", price: 1500 }, { id: 6, label: "100 мл", price: 2200 }] },
+  { id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Мужские", description: "Древесный ароматический аромат", image: "", variants: [{ id: 7, label: "50 мл", price: 1600 }, { id: 8, label: "100 мл", price: 2400 }] },
+  { id: 4, name: "N°5", brand: "Chanel", category: "Женские", description: "Легендарный цветочный альдегидный аромат", image: "", variants: [{ id: 9, label: "35 мл", price: 1200 }, { id: 10, label: "50 мл", price: 1700 }, { id: 11, label: "100 мл", price: 2600 }] },
+  { id: 5, name: "Black Opium", brand: "YSL", category: "Женские", description: "Соблазнительный кофейно-ванильный аромат", image: "", variants: [{ id: 12, label: "30 мл", price: 900 }, { id: 13, label: "50 мл", price: 1350 }, { id: 14, label: "90 мл", price: 2000 }] },
+  { id: 6, name: "Y Eau de Parfum", brand: "YSL", category: "Мужские", description: "Свежий, мужественный и уверенный", image: "", variants: [{ id: 15, label: "60 мл", price: 1300 }, { id: 16, label: "100 мл", price: 1900 }] },
+  { id: 7, name: "Eros", brand: "Versace", category: "Мужские", description: "Свежий восточный аромат с мятой и ванилью", image: "", variants: [{ id: 17, label: "30 мл", price: 850 }, { id: 18, label: "50 мл", price: 1250 }, { id: 19, label: "100 мл", price: 1850 }] },
+  { id: 8, name: "Bright Crystal", brand: "Versace", category: "Женские", description: "Цветочный аромат с нотами граната и пиона", image: "", variants: [{ id: 20, label: "30 мл", price: 800 }, { id: 21, label: "50 мл", price: 1200 }, { id: 22, label: "90 мл", price: 1750 }] },
+  { id: 9, name: "Acqua di Giò", brand: "Armani", category: "Мужские", description: "Свежий морской аромат с бергамотом", image: "", variants: [{ id: 23, label: "40 мл", price: 900 }, { id: 24, label: "75 мл", price: 1400 }, { id: 25, label: "100 мл", price: 1800 }] },
+  { id: 10, name: "Sì Passione", brand: "Armani", category: "Женские", description: "Чувственный цветочно-фруктовый аромат", image: "", variants: [{ id: 26, label: "30 мл", price: 950 }, { id: 27, label: "50 мл", price: 1450 }, { id: 28, label: "100 мл", price: 2100 }] },
+  { id: 11, name: "Light Blue", brand: "Dolce&Gabbana", category: "Унисекс", description: "Лёгкий свежий средиземноморский аромат", image: "", variants: [{ id: 29, label: "25 мл", price: 750 }, { id: 30, label: "50 мл", price: 1200 }, { id: 31, label: "100 мл", price: 1750 }] },
+  { id: 12, name: "The One", brand: "Dolce&Gabbana", category: "Мужские", description: "Восточный пряный аромат с табаком", image: "", variants: [{ id: 32, label: "50 мл", price: 1150 }, { id: 33, label: "100 мл", price: 1700 }] },
+  { id: 13, name: "Boss Bottled", brand: "Hugo Boss", category: "Мужские", description: "Классический мужской древесный аромат", image: "", variants: [{ id: 34, label: "50 мл", price: 1000 }, { id: 35, label: "100 мл", price: 1550 }] },
+  { id: 14, name: "Hugo Man", brand: "Hugo Boss", category: "Мужские", description: "Дерзкий свежий аромат для молодых", image: "", variants: [{ id: 36, label: "40 мл", price: 800 }, { id: 37, label: "75 мл", price: 1250 }] },
+  { id: 15, name: "CK One", brand: "Calvin Klein", category: "Унисекс", description: "Культовый унисекс аромат с цитрусом", image: "", variants: [{ id: 38, label: "50 мл", price: 750 }, { id: 39, label: "100 мл", price: 1100 }, { id: 40, label: "200 мл", price: 1600 }] },
+  { id: 16, name: "Euphoria", brand: "Calvin Klein", category: "Женские", description: "Чувственный восточный цветочный аромат", image: "", variants: [{ id: 41, label: "30 мл", price: 850 }, { id: 42, label: "50 мл", price: 1250 }, { id: 43, label: "100 мл", price: 1800 }] },
+  { id: 17, name: "My Burberry", brand: "Burberry", category: "Женские", description: "Цветочный аромат с нотами садовых цветов", image: "", variants: [{ id: 44, label: "30 мл", price: 900 }, { id: 45, label: "50 мл", price: 1350 }, { id: 46, label: "90 мл", price: 1950 }] },
+  { id: 18, name: "1 Million", brand: "Paco Rabanne", category: "Мужские", description: "Пряный кожаный аромат с корицей", image: "", variants: [{ id: 47, label: "50 мл", price: 1100 }, { id: 48, label: "100 мл", price: 1650 }] },
+  { id: 19, name: "Lady Million", brand: "Paco Rabanne", category: "Женские", description: "Роскошный цветочный аромат с нероли", image: "", variants: [{ id: 49, label: "30 мл", price: 950 }, { id: 50, label: "50 мл", price: 1400 }, { id: 51, label: "80 мл", price: 2000 }] },
+  { id: 20, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс", description: "Роскошный тёмный цветочный ориентал", image: "", variants: [{ id: 52, label: "30 мл", price: 1800 }, { id: 53, label: "50 мл", price: 2600 }, { id: 54, label: "100 мл", price: 4200 }] },
+  { id: 21, name: "Oud Wood", brand: "Tom Ford", category: "Унисекс", description: "Экзотический уд с розовым перцем", image: "", variants: [{ id: 55, label: "30 мл", price: 2000 }, { id: 56, label: "50 мл", price: 3000 }] },
+  { id: 22, name: "Guilty", brand: "Gucci", category: "Унисекс", description: "Чувственный цветочный восточный аромат", image: "", variants: [{ id: 57, label: "50 мл", price: 1200 }, { id: 58, label: "90 мл", price: 1800 }] },
+  { id: 23, name: "Bloom", brand: "Gucci", category: "Женские", description: "Белый цветочный аромат с жасмином", image: "", variants: [{ id: 59, label: "30 мл", price: 1000 }, { id: 60, label: "50 мл", price: 1500 }, { id: 61, label: "100 мл", price: 2200 }] },
+  { id: 24, name: "L'Interdit", brand: "Givenchy", category: "Женские", description: "Белый цветочный аромат с тёмным сердцем", image: "", variants: [{ id: 62, label: "35 мл", price: 950 }, { id: 63, label: "50 мл", price: 1400 }, { id: 64, label: "80 мл", price: 2000 }] },
+  { id: 25, name: "Gentleman", brand: "Givenchy", category: "Мужские", description: "Элегантный ирисово-ванильный аромат", image: "", variants: [{ id: 65, label: "50 мл", price: 1100 }, { id: 66, label: "100 мл", price: 1650 }] },
+  { id: 26, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские", description: "Сладкий цветочно-гурманский аромат", image: "", variants: [{ id: 67, label: "30 мл", price: 900 }, { id: 68, label: "50 мл", price: 1350 }, { id: 69, label: "100 мл", price: 1950 }] },
+  { id: 27, name: "Cool Water", brand: "Davidoff", category: "Мужские", description: "Классический свежий морской аромат", image: "", variants: [{ id: 70, label: "40 мл", price: 700 }, { id: 71, label: "75 мл", price: 1050 }, { id: 72, label: "125 мл", price: 1500 }] },
+  { id: 28, name: "Angel", brand: "Mugler", category: "Женские", description: "Сладкий гурманский аромат с пачули", image: "", variants: [{ id: 73, label: "25 мл", price: 850 }, { id: 74, label: "50 мл", price: 1300 }, { id: 75, label: "100 мл", price: 1900 }] },
+  { id: 29, name: "Aventus", brand: "Creed", category: "Мужские", description: "Фруктово-дымный аромат с ананасом и берёзой", image: "", variants: [{ id: 76, label: "30 мл", price: 2500 }, { id: 77, label: "50 мл", price: 3800 }, { id: 78, label: "100 мл", price: 6500 }] },
+  { id: 30, name: "Baccarat Rouge 540", brand: "Maison Margiela", category: "Унисекс", description: "Культовый янтарно-цветочный аромат", image: "", variants: [{ id: 79, label: "35 мл", price: 3200 }, { id: 80, label: "70 мл", price: 5500 }] },
 ];
 
 const DEFAULT_BANNERS = [
@@ -662,40 +687,32 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
   return (
     <div style={{
-      width: "100%",
       minHeight: "100svh",
-      background: "#000",
+      position: "relative",
       display: "flex",
       flexDirection: "column",
-      position: "relative",
-      overflow: "hidden",
-      boxSizing: "border-box"
+      justifyContent: "flex-end",
+      overflow: "hidden"
     }}>
       {/* Full-screen background photo */}
-      <img
-        src={loginBg || "/login-bg.jpeg"}
-        alt=""
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "center top",
-          zIndex: 0
-        }}
-      />
+      <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+        <img
+          src={loginBg || "/login-bg.jpeg"}
+          alt=""
+          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }}
+        />
+      </div>
       {/* Dark gradient overlay */}
       <div style={{
         position: "absolute",
         inset: 0,
-        background: "linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.35) 40%, rgba(0,0,0,0.80) 68%, rgba(0,0,0,0.97) 100%)",
-        zIndex: 1
+        zIndex: 1,
+        background: "linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.3) 40%, rgba(0,0,0,0.85) 70%, rgba(0,0,0,0.97) 100%)"
       }} />
 
       {/* Lang toggle — top right */}
       <div style={{
-        position: "absolute", top: 20, right: 16, zIndex: 10,
+        position: "absolute", top: 52, right: 20, zIndex: 10,
         display: "flex",
         background: "rgba(255,255,255,0.15)",
         backdropFilter: "blur(12px)",
@@ -716,17 +733,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
       {/* Branding */}
       <div style={{
-        position: "relative", zIndex: 2,
-        flex: 1,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        paddingBottom: 28,
-        paddingTop: 60,
-        width: "100%",
-        boxSizing: "border-box",
-        overflow: "hidden"
+        position: "absolute", top: "35%", left: 0, right: 0, zIndex: 2, textAlign: "center"
       }}>
         <div style={{
           fontFamily: "'Playfair Display', serif",
@@ -753,19 +760,14 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
         }}>Parfum</div>
       </div>
 
-      {/* Glassmorphism form panel */}
+      {/* Form section */}
       <div style={{
         position: "relative", zIndex: 2,
-        width: "100%",
-        background: "rgba(20,20,20,0.72)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        borderTop: "1px solid rgba(255,255,255,0.12)",
-        borderRadius: "24px 24px 0 0",
-        padding: "28px 20px 48px",
+        padding: "0 24px 48px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
+        width: "100%",
         boxSizing: "border-box"
       }}>
 
@@ -775,13 +777,14 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           {lang === "ru" ? "НОМЕР ТЕЛЕФОНА" : "ТЕЛЕФОН НОМЕРИ"}
         </div>
         <input
+          className="login-input"
           type="tel" value={phone} onChange={e => { setPhone(formatPhone(e.target.value)); setErr(""); }}
           placeholder="+996 700 123 456"
           style={{
-            width: "100%", padding: "13px 16px", fontSize: 16,
+            width: "100%", padding: "13px 16px", fontSize: 15,
             background: "rgba(255,255,255,0.08)",
             border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 12, color: "#fff", outline: "none",
+            borderRadius: 14, color: "#fff", outline: "none",
             letterSpacing: 1, boxSizing: "border-box"
           }}
         />
@@ -793,13 +796,14 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           {lang === "ru" ? "ВАШЕ ИМЯ" : "АТЫҢЫЗ"}
         </div>
         <input
+          className="login-input"
           type="text" value={name} onChange={e => { setName(e.target.value); setErr(""); }}
           placeholder={lang === "ru" ? "Введите имя" : "Атыңызды жазыңыз"}
           style={{
-            width: "100%", padding: "13px 16px", fontSize: 16,
+            width: "100%", padding: "13px 16px", fontSize: 15,
             background: "rgba(255,255,255,0.08)",
             border: "1px solid rgba(255,255,255,0.15)",
-            borderRadius: 12, color: "#fff", outline: "none",
+            borderRadius: 14, color: "#fff", outline: "none",
             boxSizing: "border-box"
           }}
         />
@@ -1041,8 +1045,8 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
                     const sizes = (p.sizes || p.variants || []).slice(0, 2);
                     const extra = (p.sizes || p.variants || []).length - 2;
                     return <>
-                      {sizes.map(v => (
-                        <span key={v.id} style={{ fontSize: 10, padding: "2px 8px", background: T.accentPale, color: T.accent, borderRadius: 20, fontWeight: 600 }}>{v.label}</span>
+                      {sizes.map((v, idx) => (
+                        <span key={v.id || v.label || idx} style={{ fontSize: 10, padding: "2px 8px", background: T.accentPale, color: T.accent, borderRadius: 20, fontWeight: 600 }}>{v.label}</span>
                       ))}
                       {extra > 0 && (
                         <span style={{ fontSize: 11, color: T.textMuted, padding: "2px 8px", border: `1px solid ${T.border}`, borderRadius: 20 }}>+{extra}</span>
@@ -1067,7 +1071,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
 }
 // ─── CART SCREEN ───────────────────────────────────────────────────────────────
 function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPercent, settings, showToast }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [comment, setComment] = useState("");
   const [useBonus, setUseBonus] = useState(false);
   const [deliveryType, setDeliveryType] = useState("delivery");
@@ -1139,23 +1143,97 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               <button key={opt.id} onClick={() => setDeliveryType(opt.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1.5px solid ${deliveryType === opt.id ? T.accent : T.border}`, background: deliveryType === opt.id ? T.accentLight : T.card, color: deliveryType === opt.id ? T.accent : T.textSecond, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>{opt.label}</button>
             ))}
           </div>
-          {deliveryType === "delivery" && <input style={inputStyle} placeholder={t.address} value={address} onChange={e => setAddress(e.target.value)} />}
+          {deliveryType === "delivery" && <div style={{ position: "relative", marginBottom: 10 }}>
+            <input
+              style={{ ...inputStyle, paddingRight: 120, marginBottom: 0 }}
+              placeholder="📍 Адрес: ул. Манаса 45, кв. 12"
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!navigator.geolocation) return;
+                navigator.geolocation.getCurrentPosition(async pos => {
+                  const { latitude: lat, longitude: lon } = pos.coords;
+                  try {
+                    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                    const d = await r.json();
+                    setAddress(d.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+                  } catch {
+                    setAddress(`${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+                  }
+                }, () => {}, { enableHighAccuracy: true });
+              }}
+              style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", padding: "7px 12px", background: "#111", border: "none", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="7" r="2.5" stroke="white" strokeWidth="1.5"/><path d="M8 1.5C5 1.5 2.5 4 2.5 7c0 4 5.5 8.5 5.5 8.5S13.5 11 13.5 7c0-3-2.5-5.5-5.5-5.5z" stroke="white" strokeWidth="1.5" fill="none"/></svg>
+              <span style={{ color: "white", fontSize: 12, fontWeight: 500 }}>Локация</span>
+            </button>
+          </div>}
         </div>
       </div>
       {/* Comment */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <textarea style={{ ...inputStyle, minHeight: 72, resize: "vertical" }} placeholder={t.comment} value={comment} onChange={e => setComment(e.target.value)} />
+        <div style={{ background: "#fff", border: "0.5px solid #e5e5e5", borderRadius: 16, padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: "#aaa", marginBottom: 10 }}>Комментарий к заказу</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+            {[
+              { label: "📞 Позвоните перед доставкой", value: "Позвоните перед доставкой" },
+              { label: "🚪 Оставьте у двери", value: "Оставьте у двери" },
+              { label: "💬 Пишите в WhatsApp", value: "Не звоните, пишите в WhatsApp" },
+              { label: "⚡ Побыстрее", value: "Побыстрее пожалуйста" },
+            ].map(chip => {
+              const active = comment.includes(chip.value);
+              return (
+                <button
+                  key={chip.value}
+                  type="button"
+                  onClick={() => {
+                    if (active) {
+                      setComment(c => c.replace(chip.value, "").replace(/\n\n/g, "\n").trim());
+                    } else {
+                      setComment(c => c ? c + "\n" + chip.value : chip.value);
+                    }
+                  }}
+                  style={{ padding: "6px 12px", borderRadius: 50, border: `1.5px solid ${active ? "#111" : "#ddd"}`, background: active ? "#111" : "transparent", color: active ? "#fff" : "#333", fontSize: 13, cursor: "pointer" }}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+          <textarea
+            style={{ ...inputStyle, minHeight: 56, fontSize: 13, resize: "none", marginBottom: 0 }}
+            placeholder="Или напишите сами..."
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+          />
+        </div>
       </div>
       {/* Payment */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
         <div style={{ ...card({ padding: "16px" }) }}>
           <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.paymentMethod}</div>
-          {PAYMENT_METHODS.map(pm => (
-            <button key={pm.id} onClick={() => setPayMethod(pm.id)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === pm.id ? T.accent : T.border}`, background: payMethod === pm.id ? T.accentLight : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left" }}>
-              <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${payMethod === pm.id ? T.accent : T.border}`, background: payMethod === pm.id ? T.accent : "transparent", flexShrink: 0 }} />
-              <span style={{ color: payMethod === pm.id ? T.accent : T.text, fontWeight: 600, fontSize: 14 }}>{pm.label}</span>
-            </button>
-          ))}
+          <button onClick={() => setPayMethod("mbank")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === "mbank" ? "#0E7A6E" : T.border}`, background: payMethod === "mbank" ? "#F0FAFA" : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}>
+            <img src="/frame_4.png" alt="M-Bank" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+            <span style={{ color: payMethod === "mbank" ? "#0E7A6E" : T.text, fontWeight: 600, fontSize: 14 }}>M Bank</span>
+          </button>
+          <button onClick={() => setPayMethod("obank")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === "obank" ? "#E5007E" : T.border}`, background: payMethod === "obank" ? "#FFF0F8" : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}>
+            <img src="/O bank.jpg" alt="O!Bank" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
+            <span style={{ color: payMethod === "obank" ? "#E5007E" : T.text, fontWeight: 600, fontSize: 14 }}>O!Bank</span>
+          </button>
+          <button onClick={() => setPayMethod("cash")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === "cash" ? T.accent : T.border}`, background: payMethod === "cash" ? T.accentLight : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#E8E8E8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+                <rect x="1" y="5" width="24" height="16" rx="3" stroke="#555" strokeWidth="1.8" />
+                <circle cx="13" cy="13" r="3.5" stroke="#555" strokeWidth="1.8" />
+                <line x1="1" y1="9" x2="5" y2="9" stroke="#555" strokeWidth="1.8" strokeLinecap="round" />
+                <line x1="21" y1="17" x2="25" y2="17" stroke="#555" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <span style={{ color: payMethod === "cash" ? T.accent : T.text, fontWeight: 600, fontSize: 14 }}>Наличные / Нак. акча</span>
+          </button>
         </div>
       </div>
       {/* Bonus */}
@@ -1191,15 +1269,6 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
             <span style={{ color: T.accent, fontSize: 20, fontWeight: 900 }}>{formatSum(total)}</span>
           </div>
         </div>
-      </div>
-      <div style={{ padding: "0 16px" }}>
-        <button onClick={() => { if (deliveryType === "delivery" && !address.trim()) { showToast?.(t.enterAddress); return; } onOrder({ comment, useBonus, bonusDiscount, deliveryType, address, payMethod, subtotal, deliveryCost, total }); }} style={{ borderRadius: 50, padding: "6px 6px 6px 18px", background: "#111", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", cursor: "pointer", boxSizing: "border-box" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{t.placeOrder}</span>
-            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{items.reduce((s, i) => s + i.qty, 0)} товар</span>
-          </div>
-          <div style={{ background: "#fff", borderRadius: 50, padding: "10px 20px", color: "#111", fontSize: 16, fontWeight: 700 }}>→</div>
-        </button>
       </div>
     </div>
   );
@@ -1969,8 +2038,10 @@ function AdminBonusScreen({ settings, setSettings }) {
 function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang }) {
   const { t } = useLang();
   const [mbankPhone, setMbankPhone] = React.useState(localStorage.getItem('mbank_phone') || '');
+  const [obankPhone, setObankPhone] = React.useState(localStorage.getItem('obank_phone') || '');
   const [greenToken, setGreenToken] = React.useState(localStorage.getItem('green_token') || '');
   const [greenInstance, setGreenInstance] = React.useState(localStorage.getItem('green_instance') || '');
+  const [whatsappAdmin, setWhatsappAdmin] = React.useState(localStorage.getItem('whatsapp_admin') || '');
   const [welcomeBonus, setWelcomeBonus] = React.useState(Number(localStorage.getItem('bonus_welcome') || settings.welcomeBonus || 50));
   const [welcomeOn, setWelcomeOn] = React.useState(localStorage.getItem('bonus_welcome_on') !== 'false');
   const [orderBonus, setOrderBonus] = React.useState(Number(localStorage.getItem('bonus_order_pct') || settings.bonusPercent || 5));
@@ -1994,8 +2065,10 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
 
   const save = () => {
     localStorage.setItem('mbank_phone', mbankPhone);
+    localStorage.setItem('obank_phone', obankPhone);
     localStorage.setItem('green_token', greenToken);
     localStorage.setItem('green_instance', greenInstance);
+    localStorage.setItem('whatsapp_admin', whatsappAdmin);
     localStorage.setItem('bonus_welcome', welcomeBonus);
     localStorage.setItem('bonus_welcome_on', welcomeOn);
     localStorage.setItem('bonus_order_pct', orderBonus);
@@ -2046,7 +2119,18 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
         </div>
 
         <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>🏦 O!BANK</span></div>
+          <Row label="Номер телефона"><TextInput value={obankPhone} onChange={setObankPhone} placeholder="+996 700 000 000" /></Row>
+          <div style={{ padding: '10px 16px', background: '#FFFBF0' }}>
+            <div style={{ fontSize: 11, color: '#FF6B00' }}>* Клиент платит на этот номер через O!Bank</div>
+          </div>
+        </div>
+
+        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
           <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}><span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>WHATSAPP (GREEN API)</span></div>
+          <Row label="Ваш номер (для уведомлений)">
+            <input value={whatsappAdmin} onChange={e => setWhatsappAdmin(e.target.value)} placeholder="+996 700 000 000" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+          </Row>
           <Row label="Instance ID"><TextInput value={greenInstance} onChange={setGreenInstance} placeholder="1234567890" /></Row>
           <Row label="API Token"><TextInput value={greenToken} onChange={setGreenToken} placeholder="token..." /></Row>
           <div style={{ padding: '10px 16px', background: '#F0FFF4' }}>
@@ -2074,6 +2158,28 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
               <Toggle value={referralOn} onChange={setReferralOn} />
             </div>
           </Row>
+        </div>
+
+        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>📍 О НАС</span>
+          </div>
+          <Row label="Адрес магазина">
+            <input value={settings?.shopAddress || ''} onChange={e => setSettings(p => ({ ...p, shopAddress: e.target.value }))} placeholder="ул. Ленина, 45" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+          </Row>
+          <Row label="Широта (lat)">
+            <input value={settings?.shopLat || ''} onChange={e => setSettings(p => ({ ...p, shopLat: e.target.value }))} placeholder="42.8746" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+          </Row>
+          <Row label="Долгота (lng)">
+            <input value={settings?.shopLng || ''} onChange={e => setSettings(p => ({ ...p, shopLng: e.target.value }))} placeholder="74.5698" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+          </Row>
+          <Row label="Время работы">
+            <input value={settings?.workingHours || ''} onChange={e => setSettings(p => ({ ...p, workingHours: e.target.value }))} placeholder="Пн–Вс: 10:00–21:00" style={{ border: '0.5px solid #eee', borderRadius: 8, padding: '6px 10px', fontSize: 13, outline: 'none', width: 160, textAlign: 'right', background: '#f5f5f5' }} />
+          </Row>
+          <div style={{ padding: '14px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>О нас (описание)</div>
+            <textarea value={settings?.aboutText || ''} onChange={e => setSettings(p => ({ ...p, aboutText: e.target.value }))} placeholder="Расскажите о вашем магазине..." rows={3} style={{ width: '100%', border: '0.5px solid #eee', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none', background: '#f5f5f5', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box' }} />
+          </div>
         </div>
 
         {/* LOGIN ФОНА */}
@@ -2174,6 +2280,54 @@ function MBankPayment({ total, orderId, onConfirm, onCancel }) {
             <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
             <div style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
             <button onClick={() => onConfirm('mbank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+              Готово
+            </button>
+          </div>
+        </>}
+      </div>
+    </div>
+  );
+}
+
+// ─── OBANK PAYMENT ────────────────────────────────────────────────────────────
+function OBankPayment({ total, orderId, onConfirm, onCancel }) {
+  const phone = localStorage.getItem('obank_phone') || '';
+  const cleanPhone = phone.replace(/\D/g, '');
+  const [step, setStep] = React.useState('pay');
+  const openOBank = () => {
+    const deepLink = `obank://transfer?phone=${cleanPhone}&amount=${total}&comment=Kemal_Usman_${orderId}`;
+    window.location.href = deepLink;
+    setTimeout(() => setStep('confirm'), 2000);
+  };
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 430 }}>
+        {step === 'pay' && <>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#111', marginBottom: 4 }}>Оплата O!Bank</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: '#111' }}>{total.toLocaleString()} сом</div>
+            <div style={{ fontSize: 13, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
+          </div>
+          <button onClick={openOBank} style={{ width: '100%', padding: 16, background: '#E5007E', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            Открыть O!Bank · {total.toLocaleString()} сом
+          </button>
+          <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 14, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Нет O!Bank? Переведите вручную:</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>{phone || 'Не указан'}</div>
+            <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
+            <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
+          </div>
+          <button onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
+            ✓ Я оплатил
+          </button>
+          <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
+        </>}
+        {step === 'confirm' && <>
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
+            <button onClick={() => onConfirm('obank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
               Готово
             </button>
           </div>
@@ -2489,6 +2643,7 @@ export default function App() {
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [showMBank, setShowMBank] = useState(false);
+  const [showOBank, setShowOBank] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
   const [referralCode] = useState(() => Math.random().toString(36).substring(2, 8).toUpperCase());
   const [showAdminLogin, setShowAdminLogin] = useState(false);
@@ -2634,6 +2789,11 @@ export default function App() {
       setShowMBank(true);
       return;
     }
+    if (orderData.payMethod === 'obank') {
+      setPendingOrder(newOrder);
+      setShowOBank(true);
+      return;
+    }
     // Save to PocketBase
     try {
       const pbData = {
@@ -2741,6 +2901,17 @@ export default function App() {
             </>
           )}
         </div>
+        {!isAdmin && cartCount > 0 && (
+          <div style={{ position: "fixed", bottom: 76, left: 0, right: 0, padding: "0 16px", zIndex: 45, pointerEvents: "none" }}>
+            <button onClick={() => setScreen("cart")} style={{ width: "100%", background: "#111", borderRadius: 50, padding: "6px 6px 6px 18px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", pointerEvents: "all", boxSizing: "border-box", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", cursor: "pointer" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{t.placeOrder}</span>
+                <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{cartCount} товар</span>
+              </div>
+              <div style={{ background: "#E53935", borderRadius: 50, padding: "10px 22px", color: "#fff", fontSize: 16, fontWeight: 700 }}>→</div>
+            </button>
+          </div>
+        )}
         <NavBar items={isAdmin ? ADMIN_NAV : USER_NAV} active={isAdmin ? adminScreen : screen} onSelect={isAdmin ? setAdminScreen : setScreen} />
         {showAdminLogin && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -2767,8 +2938,40 @@ export default function App() {
               setCart([]); localStorage.removeItem('parfum_cart');
               setShowMBank(false); setPendingOrder(null);
               setScreen('myorders'); showToast('Заказ оформлен! Ожидайте подтверждения.');
+              const clientMsg2 = `Здравствуйте, ${pendingOrder.clientName}!\nВаш заказ принят! ✅\n\nИтого: ${pendingOrder.total} сом\nОплата: M-Bank\nСкоро свяжемся с вами!\n\n— Kemal Usman Parfum`;
+              const adminMsg2 = `💳 Новый заказ (M-Bank)!\n\nКлиент: ${pendingOrder.clientName}\nТел: ${pendingOrder.clientPhone}\n\n${(pendingOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${pendingOrder.total} сом\nСтатус: Ожидает подтверждения`;
+              const inst2 = localStorage.getItem('green_instance');
+              const tok2 = localStorage.getItem('green_token');
+              const adm2 = localStorage.getItem('whatsapp_admin') || localStorage.getItem('mbank_phone') || '';
+              if (inst2 && tok2) {
+                if (pendingOrder.clientPhone) fetch(`https://api.green-api.com/waInstance${inst2}/sendMessage/${tok2}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chatId: pendingOrder.clientPhone.replace(/\D/g,'') + '@c.us', message: clientMsg2 }) }).catch(()=>{});
+                if (adm2) fetch(`https://api.green-api.com/waInstance${inst2}/sendMessage/${tok2}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chatId: adm2.replace(/\D/g,'') + '@c.us', message: adminMsg2 }) }).catch(()=>{});
+              }
             }}
             onCancel={() => { setShowMBank(false); setPendingOrder(null); }}
+          />
+        )}
+        {showOBank && pendingOrder && (
+          <OBankPayment
+            total={pendingOrder.total}
+            orderId={pendingOrder.id}
+            onConfirm={(status) => {
+              const finalOrder = { ...pendingOrder, paymentStatus: status, paymentMethod: 'obank' };
+              setOrders(prev => [...prev, finalOrder]);
+              setCart([]); localStorage.removeItem('parfum_cart');
+              setShowOBank(false); setPendingOrder(null);
+              setScreen('myorders'); showToast('Заказ оформлен! Ожидайте подтверждения.');
+              const inst3 = localStorage.getItem('green_instance');
+              const tok3 = localStorage.getItem('green_token');
+              const adm3 = localStorage.getItem('whatsapp_admin') || localStorage.getItem('mbank_phone') || '';
+              const clientMsg3 = `Здравствуйте, ${pendingOrder.clientName}!\nВаш заказ принят! ✅\n\nИтого: ${pendingOrder.total} сом\nОплата: O!Bank\nСкоро свяжемся с вами!\n\n— Kemal Usman Parfum`;
+              const adminMsg3 = `💳 Новый заказ (O!Bank)!\n\nКлиент: ${pendingOrder.clientName}\nТел: ${pendingOrder.clientPhone}\n\n${(pendingOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${pendingOrder.total} сом\nСтатус: Ожидает подтверждения`;
+              if (inst3 && tok3) {
+                if (pendingOrder.clientPhone) fetch(`https://api.green-api.com/waInstance${inst3}/sendMessage/${tok3}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chatId: pendingOrder.clientPhone.replace(/\D/g,'') + '@c.us', message: clientMsg3 }) }).catch(()=>{});
+                if (adm3) fetch(`https://api.green-api.com/waInstance${inst3}/sendMessage/${tok3}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chatId: adm3.replace(/\D/g,'') + '@c.us', message: adminMsg3 }) }).catch(()=>{});
+              }
+            }}
+            onCancel={() => { setShowOBank(false); setPendingOrder(null); setOrderLoading(false); }}
           />
         )}
       </div>

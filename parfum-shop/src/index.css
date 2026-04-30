@@ -95,7 +95,7 @@ code {
 }
 
 /* Login glassmorphism inputs — placeholder oq */
-input::placeholder {
+.login-input::placeholder {
   color: rgba(255, 255, 255, 0.35);
 }
 input:-webkit-autofill {
