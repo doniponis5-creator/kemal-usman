@@ -662,6 +662,8 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   const [phone, setPhone] = useState("+996");
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
+  const [refCode, setRefCode] = useState("");
+  const [showRefInput, setShowRefInput] = useState(false);
   const [loginHeroIdx, setLoginHeroIdx] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setLoginHeroIdx(i => (i + 1) % 3), 3000);
@@ -681,7 +683,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
     if (name.toLowerCase() === "admin") { onLogin({ isAdminLogin: true, password: phone }); return; }
     const cleanPhone = phone.replace(/\D/g, '');
     if (cleanPhone.length < 11) { setErr(lang === "ru" ? "Введите корректный номер" : "Туура номер жазыңыз"); return; }
-    onLogin({ phone, name, isAdminLogin: false });
+    onLogin({ phone, name, isAdminLogin: false, refCode: refCode.trim().toUpperCase() });
   }
   const setGuestMode = () => onGuest && onGuest();
 
@@ -807,6 +809,21 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             boxSizing: "border-box"
           }}
         />
+      </div>
+
+      {/* Referral code input */}
+      <div style={{ width: "100%", marginBottom: 14 }}>
+        <button onClick={() => setShowRefInput(p => !p)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 12, cursor: "pointer", padding: 0, letterSpacing: 0.5 }}>
+          {lang === "ru" ? "Есть реферальный код? +" : "Реферал код барбы? +"}
+        </button>
+        {showRefInput && (
+          <input
+            type="text" value={refCode}
+            onChange={e => setRefCode(e.target.value.toUpperCase().slice(0, 6))}
+            placeholder={lang === "ru" ? "Введите код (6 символов)" : "Код жазыңыз (6 белги)"}
+            style={{ width: "100%", padding: "11px 16px", fontSize: 14, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 14, color: "#fff", outline: "none", boxSizing: "border-box", marginTop: 8, letterSpacing: 2, textAlign: "center" }}
+          />
+        )}
       </div>
 
       {err && (
@@ -1996,7 +2013,7 @@ function AdminBannersScreen({ banners, setBanners }) {
 }
 
 // ─── ADMIN BONUS ───────────────────────────────────────────────────────────────
-function AdminBonusScreen({ settings, setSettings }) {
+function AdminBonusScreen({ settings, setSettings, showToast }) {
   const { t } = useLang();
   const [local, setLocal] = useState({ ...settings });
   const upd = (f, v) => setLocal(p => ({ ...p, [f]: v }));
@@ -2645,7 +2662,13 @@ export default function App() {
   const [showMBank, setShowMBank] = useState(false);
   const [showOBank, setShowOBank] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
-  const [referralCode] = useState(() => Math.random().toString(36).substring(2, 8).toUpperCase());
+  const [referralCode] = useState(() => {
+    const saved = localStorage.getItem('parfum_ref_code');
+    if (saved) return saved;
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    localStorage.setItem('parfum_ref_code', code);
+    return code;
+  });
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminLoginPass, setAdminLoginPass] = useState("");
   const [adminLoginErr, setAdminLoginErr] = useState("");
@@ -2722,13 +2745,38 @@ export default function App() {
 
   const showToast = (msg, type = "success") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
 
-  const handleLogin = async ({ phone, name, isAdminLogin, password }) => {
+  const handleLogin = async ({ phone, name, isAdminLogin, password, refCode }) => {
     if (isAdminLogin) {
       if (password === (settings.adminPassword || "admin123")) { setIsAdmin(true); setScreen("admin"); showToast(t.welcomeAdmin); }
       else showToast(t.wrongPassword, "error");
       return;
     }
     const now = new Date().toLocaleDateString("ru-RU");
+    // Referral code processing
+    if (refCode && refCode.length === 6) {
+      const myCode = localStorage.getItem('parfum_ref_code') || referralCode;
+      const usedCodes = JSON.parse(localStorage.getItem('parfum_used_ref_codes') || '[]');
+      if (refCode !== myCode && !usedCodes.includes(refCode)) {
+        const friendBonus = settings.referralFriendBonus || 50;
+        const referrerBonus = settings.referralBonus || 100;
+        setBonusBalance(p => p + friendBonus);
+        setBonusHistory(p => [...p, { type: "referral", amount: friendBonus, label: lang === 'kg' ? "Реферал бонусу" : "Реферальный бонус", date: now }]);
+        showToast(`+${friendBonus} ${lang === 'kg' ? 'бонус (реферал)' : 'бонусов (реферал)'}`);
+        const pending = Number(localStorage.getItem(`parfum_ref_pending_${refCode}`) || '0');
+        localStorage.setItem(`parfum_ref_pending_${refCode}`, String(pending + referrerBonus));
+        usedCodes.push(refCode);
+        localStorage.setItem('parfum_used_ref_codes', JSON.stringify(usedCodes));
+      }
+    }
+    // Check own pending referral rewards
+    const myCode = localStorage.getItem('parfum_ref_code') || referralCode;
+    const pendingReward = Number(localStorage.getItem(`parfum_ref_pending_${myCode}`) || '0');
+    if (pendingReward > 0) {
+      setBonusBalance(p => p + pendingReward);
+      setBonusHistory(p => [...p, { type: "referral", amount: pendingReward, label: lang === 'kg' ? "Реферал сыйлыгы" : "Реферальное вознаграждение", date: now }]);
+      localStorage.removeItem(`parfum_ref_pending_${myCode}`);
+      showToast(`+${pendingReward} ${lang === 'kg' ? 'бонус (реферал сыйлыгы)' : 'бонусов (реф. вознаграждение)'}`);
+    }
     setUser({ phone: phone || name, name: name || phone, registrationDate: now });
     // Sync with PocketBase clients
     try {
@@ -2889,7 +2937,7 @@ export default function App() {
               {adminScreen === "products" && <AdminProductsScreen products={products} setProducts={setProducts} showToast={showToast} />}
               {adminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />}
               {adminScreen === "banners" && <AdminBannersScreen banners={banners} setBanners={setBanners} />}
-              {adminScreen === "bonus" && <AdminBonusScreen settings={settings} setSettings={setSettings} />}
+              {adminScreen === "bonus" && <AdminBonusScreen settings={settings} setSettings={setSettings} showToast={showToast} />}
               {adminScreen === "settings" && <AdminSettingsScreen settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
             </>
           ) : (
