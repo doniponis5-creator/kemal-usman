@@ -1,0 +1,94 @@
+# Caddy reverse proxy for PocketBase.
+# Caddy auto-provisions a Let's Encrypt cert for `api.kemalusman.kg`.
+# Replace the domain below before deploying.
+#
+# Place this file at /etc/caddy/Caddyfile on the PocketBase server.
+
+{
+    email admin@kemalusman.kg
+    # Uncomment for staging / testing:
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+    servers {
+        protocols h1 h2
+    }
+}
+
+api.kemalusman.kg {
+    encode zstd gzip
+
+    # Strict transport — opt-in browsers to HTTPS for 1 year.
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(self), microphone=(self)"
+        # Don't leak Caddy version
+        -Server
+    }
+
+    # CORS — allow only your production frontend origins.
+    @cors_preflight method OPTIONS
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "https://kemalusman.kg"
+        header Access-Control-Allow-Methods "GET, POST, PATCH, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Content-Type, Authorization"
+        header Access-Control-Max-Age "86400"
+        respond 204
+    }
+    header Access-Control-Allow-Origin "https://kemalusman.kg"
+    header Access-Control-Allow-Credentials "true"
+
+    # ─── Rate limiting ────────────────────────────────────────────────────
+    # Build Caddy with the ratelimit module on the server BEFORE enabling:
+    #   sudo apt install -y golang
+    #   go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+    #   ~/go/bin/xcaddy build --with github.com/mholt/caddy-ratelimit \
+    #     --output /usr/local/bin/caddy
+    #   systemctl restart caddy
+    #
+    # If the module is NOT installed, comment the block back out — Caddy will
+    # refuse to start with an unknown directive and the API will be DOWN.
+    rate_limit {
+        zone otp_per_ip {
+            key       {remote_host}
+            events    5
+            window    1m
+        }
+        zone otp_per_phone {
+            key       {http.request.body.phone}
+            events    5
+            window    1h
+        }
+        zone admin_login {
+            key       {remote_host}
+            events    10
+            window    5m
+        }
+        zone all_writes {
+            key       {remote_host}
+            events    120
+            window    1m
+        }
+    }
+    @otp        path /api/custom/otp/*
+    @admin_auth path /api/admins/auth-with-password
+    @writes     method POST PATCH DELETE
+    handle @otp        { rate_limit otp_per_ip }
+    handle @admin_auth { rate_limit admin_login }
+    handle @writes     { rate_limit all_writes }
+    # ─────────────────────────────────────────────────────────────────────
+
+    reverse_proxy 127.0.0.1:8090 {
+        header_up X-Real-IP {client_ip}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    log {
+        output file /var/log/caddy/api.access.log {
+            roll_size 10MB
+            roll_keep 7
+        }
+        format json
+    }
+}

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-build-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (production)
+        env:
+          VITE_PB_URL: https://api.kemalusman.kg
+        run: npm run build
+
+      - name: npm audit (high+)
+        run: npm audit --audit-level=high
+        continue-on-error: false
+
+      - name: Check for committed secrets
+        run: |
+          if grep -RnE '(Doniyor123|admin123|pb-open-all|pb-fix-rules)' src/ scripts/ deploy/ pb_hooks/; then
+            echo "::error::Hardcoded secret pattern detected"
+            exit 1
+          fi
+
+      - name: Check for hardcoded Cyrillic in JSX (warn only — migration in progress)
+        run: |
+          set +e
+          COUNT=$(grep -REo '"[^"]*[А-Яа-яЁё][^"]*"' src/screens src/components 2>/dev/null | wc -l)
+          echo "Hardcoded Cyrillic strings found in screens/components: $COUNT"
+          # Block when migration is complete: [ "$COUNT" -eq 0 ] || exit 1

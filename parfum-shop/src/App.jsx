@@ -1,8 +1,38 @@
 import React, { useState, useRef, useEffect, createContext, useContext } from "react";
-import PocketBase from "pocketbase";
-
-const PB_URL = "http://145.223.100.16:8090";
-const pb = new PocketBase(PB_URL);
+// FIX (CRITICAL): PB URL no longer hardcoded. Driven by VITE_PB_URL in .env so
+// production builds can point at HTTPS. The fallback is local-dev only.
+// See src/api/pb.js — it warns in console if PB_URL is not HTTPS in release.
+import { pb, PB_URL } from "./api/pb";
+// FIX: Phone normalization util — fixes the "MyOrders shows 0 orders" bug
+// where '+996 700 123 456' was compared against '996700123456'.
+import { normalizePhone } from "./utils/phone";
+// PRO: Native haptic feedback on cart / buttons (no-op on web).
+import { haptic } from "./utils/haptics";
+// PRO: screen transitions + button micro-animations
+import { MotionScreen } from "./components/MotionScreen";
+// PRO: shimmering placeholder while PocketBase loads
+import { CatalogGridSkeleton } from "./components/Skeleton";
+import { motion, AnimatePresence } from "framer-motion";
+// PRO: iOS-style edge swipe-to-dismiss for product detail
+import { EdgeSwipeBack } from "./components/EdgeSwipeBack";
+// PRO: Domino's-style live order tracker timeline
+import { OrderTimeline } from "./components/OrderTimeline";
+// PRO: animated empty states (cart empty / no orders)
+import { EmptyState } from "./components/EmptyState";
+// PRO: welcome bonus celebration modal with confetti
+import { BonusCelebration } from "./components/BonusCelebration";
+// PRO: count-up number animation
+import { NumberCounter } from "./components/NumberCounter";
+// PRO: iOS-style pull-to-refresh on catalog
+import { PullToRefresh } from "./components/PullToRefresh";
+// PRO: catalog sort bottom-sheet
+import { SortFilterSheet } from "./components/SortFilterSheet";
+// FIX: inline SVG bank logos — replaces /frame_4.png and /O bank.jpg which don't exist in /public.
+import { MBankLogo, OBankLogo, CashLogo } from "./components/BankLogos";
+// FIX: robust deep-link opener for M-Bank / O!Bank — uses Capacitor App.openUrl on native.
+import { openPaymentApp, dialPhone, copyToClipboard } from "./utils/openPayment";
+// PRO: premium iOS-style floating glass navbar with liquid bubble
+import { GlassNavBar } from "./components/GlassNavBar";
 
 // ─── TRANSLATIONS ──────────────────────────────────────────────────────────────
 const TRANSLATIONS = {
@@ -67,6 +97,9 @@ const TRANSLATIONS = {
     todayOrders: "Заказов сегодня", todayRevenue: "Доход сегодня",
     last7days: "Последние 7 дней", recentUsers: "Новые клиенты",
     deleteOrder: "Удалить заказ", confirmDeleteOrder: "Удалить этот заказ?",
+    listenAroma: "Послушай аромат", aromaDesc: "Описание аромата",
+    listenBtn: "Слушать", playingAroma: "Воспроизведение...",
+    pausedAroma: "Пауза", tapToContinue: "Нажмите для продолжения", continueBtn: "Продолжить",
   },
   kg: {
     appName: "Kemal Usman", appSubtitle: "Бишкек · Атир куюп жана упаковка",
@@ -129,6 +162,9 @@ const TRANSLATIONS = {
     todayOrders: "Бүгүнкү заказдар", todayRevenue: "Бүгүнкү киреше",
     last7days: "Акыркы 7 күн", recentUsers: "Жаңы кардарлар",
     deleteOrder: "Заказды өчүрүү", confirmDeleteOrder: "Бул заказды өчүрүлсүнбү?",
+    listenAroma: "Жытын угуп көр", aromaDesc: "Аромат баяны",
+    listenBtn: "Угуу", playingAroma: "Угулууда...",
+    pausedAroma: "Токтотулду", tapToContinue: "Улантуу үчүн басыңыз", continueBtn: "Улантуу",
   },
 };
 
@@ -270,7 +306,8 @@ const api = {
   createProduct: (data) => pb.collection("products").create(data, { requestKey: null }),
   updateProduct: (id, data) => pb.collection("products").update(id, data, { requestKey: null }),
   deleteProduct: (id) => pb.collection("products").delete(id, { requestKey: null }),
-  getImageUrl: (record, filename) => `http://145.223.100.16:8090/api/files/products/${record.id}/${filename}`,
+  // FIX (CRITICAL): use env-driven PB_URL — was hardcoded HTTP, would break on HTTPS migration.
+  getImageUrl: (record, filename) => `${PB_URL}/api/files/products/${record.id}/${filename}`,
 
   // Orders
   getOrders: () => pb.collection("orders").getFullList({ sort: "-created", requestKey: null }),
@@ -299,37 +336,222 @@ const DEFAULT_SETTINGS = {
   loginBg: null,
 };
 
+// Fragrantica CDN fallback images (agar PocketBase da rasm bo'lmasa)
+const FALLBACK_IMAGES = {
+  "Sauvage":            "https://fimgs.net/mdimg/perfume/375x500.25921.jpg",
+  "Miss Dior":          "https://fimgs.net/mdimg/perfume/375x500.22038.jpg",
+  "Bleu de Chanel":     "https://fimgs.net/mdimg/perfume/375x500.17439.jpg",
+  "N°5":                "https://fimgs.net/mdimg/perfume/375x500.1.jpg",
+  "Black Opium":        "https://fimgs.net/mdimg/perfume/375x500.25426.jpg",
+  "Y Eau de Parfum":    "https://fimgs.net/mdimg/perfume/375x500.48617.jpg",
+  "Eros":               "https://fimgs.net/mdimg/perfume/375x500.22392.jpg",
+  "Bright Crystal":     "https://fimgs.net/mdimg/perfume/375x500.7206.jpg",
+  "Acqua di Giò":       "https://fimgs.net/mdimg/perfume/375x500.1174.jpg",
+  "Sì":                 "https://fimgs.net/mdimg/perfume/375x500.24031.jpg",
+  "Sì Passione":        "https://fimgs.net/mdimg/perfume/375x500.40523.jpg",
+  "Light Blue":         "https://fimgs.net/mdimg/perfume/375x500.5676.jpg",
+  "The One":            "https://fimgs.net/mdimg/perfume/375x500.4957.jpg",
+  "Boss Bottled":       "https://fimgs.net/mdimg/perfume/375x500.2017.jpg",
+  "Hugo Man":           "https://fimgs.net/mdimg/perfume/375x500.2020.jpg",
+  "CK One":             "https://fimgs.net/mdimg/perfume/375x500.865.jpg",
+  "Euphoria":           "https://fimgs.net/mdimg/perfume/375x500.3022.jpg",
+  "My Burberry":        "https://fimgs.net/mdimg/perfume/375x500.23629.jpg",
+  "1 Million":          "https://fimgs.net/mdimg/perfume/375x500.7361.jpg",
+  "Lady Million":       "https://fimgs.net/mdimg/perfume/375x500.11604.jpg",
+  "Black Orchid":       "https://fimgs.net/mdimg/perfume/375x500.3669.jpg",
+  "Oud Wood":           "https://fimgs.net/mdimg/perfume/375x500.5071.jpg",
+  "Guilty":             "https://fimgs.net/mdimg/perfume/375x500.11960.jpg",
+  "Bloom":              "https://fimgs.net/mdimg/perfume/375x500.42268.jpg",
+  "L'Interdit":         "https://fimgs.net/mdimg/perfume/375x500.49052.jpg",
+  "Gentleman":          "https://fimgs.net/mdimg/perfume/375x500.45895.jpg",
+  "La Vie Est Belle":   "https://fimgs.net/mdimg/perfume/375x500.17836.jpg",
+  "Cool Water":         "https://fimgs.net/mdimg/perfume/375x500.801.jpg",
+  "Angel":              "https://fimgs.net/mdimg/perfume/375x500.1135.jpg",
+  "Aventus":            "https://fimgs.net/mdimg/perfume/375x500.19439.jpg",
+  "Baccarat Rouge 540": "https://fimgs.net/mdimg/perfume/375x500.38088.jpg",
+};
+
 const INITIAL_PRODUCTS = [
-  { id: 1, name: "Sauvage", brand: "Dior", category: "Мужские", description: "Свежий, дикий и благородный аромат", image: "", variants: [{ id: 1, label: "30 мл", price: 950 }, { id: 2, label: "50 мл", price: 1400 }, { id: 3, label: "100 мл", price: 2100 }] },
-  { id: 2, name: "Miss Dior", brand: "Dior", category: "Женские", description: "Нежный цветочный аромат с нотами пиона", image: "", variants: [{ id: 4, label: "30 мл", price: 1000 }, { id: 5, label: "50 мл", price: 1500 }, { id: 6, label: "100 мл", price: 2200 }] },
-  { id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Мужские", description: "Древесный ароматический аромат", image: "", variants: [{ id: 7, label: "50 мл", price: 1600 }, { id: 8, label: "100 мл", price: 2400 }] },
-  { id: 4, name: "N°5", brand: "Chanel", category: "Женские", description: "Легендарный цветочный альдегидный аромат", image: "", variants: [{ id: 9, label: "35 мл", price: 1200 }, { id: 10, label: "50 мл", price: 1700 }, { id: 11, label: "100 мл", price: 2600 }] },
-  { id: 5, name: "Black Opium", brand: "YSL", category: "Женские", description: "Соблазнительный кофейно-ванильный аромат", image: "", variants: [{ id: 12, label: "30 мл", price: 900 }, { id: 13, label: "50 мл", price: 1350 }, { id: 14, label: "90 мл", price: 2000 }] },
-  { id: 6, name: "Y Eau de Parfum", brand: "YSL", category: "Мужские", description: "Свежий, мужественный и уверенный", image: "", variants: [{ id: 15, label: "60 мл", price: 1300 }, { id: 16, label: "100 мл", price: 1900 }] },
-  { id: 7, name: "Eros", brand: "Versace", category: "Мужские", description: "Свежий восточный аромат с мятой и ванилью", image: "", variants: [{ id: 17, label: "30 мл", price: 850 }, { id: 18, label: "50 мл", price: 1250 }, { id: 19, label: "100 мл", price: 1850 }] },
-  { id: 8, name: "Bright Crystal", brand: "Versace", category: "Женские", description: "Цветочный аромат с нотами граната и пиона", image: "", variants: [{ id: 20, label: "30 мл", price: 800 }, { id: 21, label: "50 мл", price: 1200 }, { id: 22, label: "90 мл", price: 1750 }] },
-  { id: 9, name: "Acqua di Giò", brand: "Armani", category: "Мужские", description: "Свежий морской аромат с бергамотом", image: "", variants: [{ id: 23, label: "40 мл", price: 900 }, { id: 24, label: "75 мл", price: 1400 }, { id: 25, label: "100 мл", price: 1800 }] },
-  { id: 10, name: "Sì Passione", brand: "Armani", category: "Женские", description: "Чувственный цветочно-фруктовый аромат", image: "", variants: [{ id: 26, label: "30 мл", price: 950 }, { id: 27, label: "50 мл", price: 1450 }, { id: 28, label: "100 мл", price: 2100 }] },
-  { id: 11, name: "Light Blue", brand: "Dolce&Gabbana", category: "Унисекс", description: "Лёгкий свежий средиземноморский аромат", image: "", variants: [{ id: 29, label: "25 мл", price: 750 }, { id: 30, label: "50 мл", price: 1200 }, { id: 31, label: "100 мл", price: 1750 }] },
-  { id: 12, name: "The One", brand: "Dolce&Gabbana", category: "Мужские", description: "Восточный пряный аромат с табаком", image: "", variants: [{ id: 32, label: "50 мл", price: 1150 }, { id: 33, label: "100 мл", price: 1700 }] },
-  { id: 13, name: "Boss Bottled", brand: "Hugo Boss", category: "Мужские", description: "Классический мужской древесный аромат", image: "", variants: [{ id: 34, label: "50 мл", price: 1000 }, { id: 35, label: "100 мл", price: 1550 }] },
-  { id: 14, name: "Hugo Man", brand: "Hugo Boss", category: "Мужские", description: "Дерзкий свежий аромат для молодых", image: "", variants: [{ id: 36, label: "40 мл", price: 800 }, { id: 37, label: "75 мл", price: 1250 }] },
-  { id: 15, name: "CK One", brand: "Calvin Klein", category: "Унисекс", description: "Культовый унисекс аромат с цитрусом", image: "", variants: [{ id: 38, label: "50 мл", price: 750 }, { id: 39, label: "100 мл", price: 1100 }, { id: 40, label: "200 мл", price: 1600 }] },
-  { id: 16, name: "Euphoria", brand: "Calvin Klein", category: "Женские", description: "Чувственный восточный цветочный аромат", image: "", variants: [{ id: 41, label: "30 мл", price: 850 }, { id: 42, label: "50 мл", price: 1250 }, { id: 43, label: "100 мл", price: 1800 }] },
-  { id: 17, name: "My Burberry", brand: "Burberry", category: "Женские", description: "Цветочный аромат с нотами садовых цветов", image: "", variants: [{ id: 44, label: "30 мл", price: 900 }, { id: 45, label: "50 мл", price: 1350 }, { id: 46, label: "90 мл", price: 1950 }] },
-  { id: 18, name: "1 Million", brand: "Paco Rabanne", category: "Мужские", description: "Пряный кожаный аромат с корицей", image: "", variants: [{ id: 47, label: "50 мл", price: 1100 }, { id: 48, label: "100 мл", price: 1650 }] },
-  { id: 19, name: "Lady Million", brand: "Paco Rabanne", category: "Женские", description: "Роскошный цветочный аромат с нероли", image: "", variants: [{ id: 49, label: "30 мл", price: 950 }, { id: 50, label: "50 мл", price: 1400 }, { id: 51, label: "80 мл", price: 2000 }] },
-  { id: 20, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс", description: "Роскошный тёмный цветочный ориентал", image: "", variants: [{ id: 52, label: "30 мл", price: 1800 }, { id: 53, label: "50 мл", price: 2600 }, { id: 54, label: "100 мл", price: 4200 }] },
-  { id: 21, name: "Oud Wood", brand: "Tom Ford", category: "Унисекс", description: "Экзотический уд с розовым перцем", image: "", variants: [{ id: 55, label: "30 мл", price: 2000 }, { id: 56, label: "50 мл", price: 3000 }] },
-  { id: 22, name: "Guilty", brand: "Gucci", category: "Унисекс", description: "Чувственный цветочный восточный аромат", image: "", variants: [{ id: 57, label: "50 мл", price: 1200 }, { id: 58, label: "90 мл", price: 1800 }] },
-  { id: 23, name: "Bloom", brand: "Gucci", category: "Женские", description: "Белый цветочный аромат с жасмином", image: "", variants: [{ id: 59, label: "30 мл", price: 1000 }, { id: 60, label: "50 мл", price: 1500 }, { id: 61, label: "100 мл", price: 2200 }] },
-  { id: 24, name: "L'Interdit", brand: "Givenchy", category: "Женские", description: "Белый цветочный аромат с тёмным сердцем", image: "", variants: [{ id: 62, label: "35 мл", price: 950 }, { id: 63, label: "50 мл", price: 1400 }, { id: 64, label: "80 мл", price: 2000 }] },
-  { id: 25, name: "Gentleman", brand: "Givenchy", category: "Мужские", description: "Элегантный ирисово-ванильный аромат", image: "", variants: [{ id: 65, label: "50 мл", price: 1100 }, { id: 66, label: "100 мл", price: 1650 }] },
-  { id: 26, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские", description: "Сладкий цветочно-гурманский аромат", image: "", variants: [{ id: 67, label: "30 мл", price: 900 }, { id: 68, label: "50 мл", price: 1350 }, { id: 69, label: "100 мл", price: 1950 }] },
-  { id: 27, name: "Cool Water", brand: "Davidoff", category: "Мужские", description: "Классический свежий морской аромат", image: "", variants: [{ id: 70, label: "40 мл", price: 700 }, { id: 71, label: "75 мл", price: 1050 }, { id: 72, label: "125 мл", price: 1500 }] },
-  { id: 28, name: "Angel", brand: "Mugler", category: "Женские", description: "Сладкий гурманский аромат с пачули", image: "", variants: [{ id: 73, label: "25 мл", price: 850 }, { id: 74, label: "50 мл", price: 1300 }, { id: 75, label: "100 мл", price: 1900 }] },
-  { id: 29, name: "Aventus", brand: "Creed", category: "Мужские", description: "Фруктово-дымный аромат с ананасом и берёзой", image: "", variants: [{ id: 76, label: "30 мл", price: 2500 }, { id: 77, label: "50 мл", price: 3800 }, { id: 78, label: "100 мл", price: 6500 }] },
-  { id: 30, name: "Baccarat Rouge 540", brand: "Maison Margiela", category: "Унисекс", description: "Культовый янтарно-цветочный аромат", image: "", variants: [{ id: 79, label: "35 мл", price: 3200 }, { id: 80, label: "70 мл", price: 5500 }] },
+  {
+    id: 1, name: "Sauvage", brand: "Dior", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.25921.jpg",
+    desc: "Свежий, дерзкий аромат с нотами бергамота из Калабрии, жасмина и амброксана. Дикий и благородный — как звёздная ночь в пустыне.",
+    variants: [{ id: 1, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 2, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 3, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 301, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
+  },
+  {
+    id: 2, name: "Miss Dior", brand: "Dior", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.22038.jpg",
+    desc: "Нежный цветочный аромат с розой, пионом и белым мускусом. Воплощение женственности, изящества и искренней любви.",
+    variants: [{ id: 4, label: "5 мл", price: 380, type: "ml", inStock: true }, { id: 5, label: "10 мл", price: 650, type: "ml", inStock: true }, { id: 6, label: "20 мл", price: 1200, type: "ml", inStock: true }, { id: 302, label: "Упаковка 50 мл", price: 2300, type: "pkg", inStock: true }],
+  },
+  {
+    id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.17439.jpg",
+    desc: "Древесный ароматический аромат с цитрусовыми нотами, ладаном и сандалом. Элегантный, уверенный, безвременный.",
+    variants: [{ id: 7, label: "5 мл", price: 420, type: "ml", inStock: true }, { id: 8, label: "10 мл", price: 750, type: "ml", inStock: true }, { id: 9, label: "20 мл", price: 1350, type: "ml", inStock: true }, { id: 303, label: "Упаковка 50 мл", price: 2600, type: "pkg", inStock: true }],
+  },
+  {
+    id: 4, name: "N°5", brand: "Chanel", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.1.jpg",
+    desc: "Легендарный цветочный альдегидный аромат с розой, жасмином и ветивером. Символ роскоши и женственности с 1921 года.",
+    variants: [{ id: 10, label: "5 мл", price: 450, type: "ml", inStock: true }, { id: 11, label: "10 мл", price: 800, type: "ml", inStock: true }, { id: 12, label: "20 мл", price: 1450, type: "ml", inStock: true }, { id: 304, label: "Упаковка 50 мл", price: 2800, type: "pkg", inStock: true }],
+  },
+  {
+    id: 5, name: "Black Opium", brand: "YSL", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.25426.jpg",
+    desc: "Соблазнительный кофейно-ванильный аромат с жасмином и белым чаем. Для смелых, уверенных и ярких женщин.",
+    variants: [{ id: 13, label: "5 мл", price: 360, type: "ml", inStock: true }, { id: 14, label: "10 мл", price: 620, type: "ml", inStock: true }, { id: 15, label: "20 мл", price: 1150, type: "ml", inStock: true }, { id: 305, label: "Упаковка 50 мл", price: 2200, type: "pkg", inStock: true }],
+  },
+  {
+    id: 6, name: "Y Eau de Parfum", brand: "YSL", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.48617.jpg",
+    desc: "Мужественный аромат с яблоком, имбирём, шалфеем и амброксаном. Свежий, современный, уверенный в себе.",
+    variants: [{ id: 16, label: "5 мл", price: 390, type: "ml", inStock: true }, { id: 17, label: "10 мл", price: 680, type: "ml", inStock: true }, { id: 18, label: "20 мл", price: 1250, type: "ml", inStock: true }, { id: 306, label: "Упаковка 60 мл", price: 2400, type: "pkg", inStock: true }],
+  },
+  {
+    id: 7, name: "Eros", brand: "Versace", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.22392.jpg",
+    desc: "Страстный восточный аромат с мятой, зелёным яблоком, ванилью и ветивером. Вдохновлён греческим богом любви.",
+    variants: [{ id: 19, label: "5 мл", price: 320, type: "ml", inStock: true }, { id: 20, label: "10 мл", price: 560, type: "ml", inStock: true }, { id: 21, label: "20 мл", price: 1000, type: "ml", inStock: true }, { id: 307, label: "Упаковка 50 мл", price: 1950, type: "pkg", inStock: true }],
+  },
+  {
+    id: 8, name: "Bright Crystal", brand: "Versace", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.7206.jpg",
+    desc: "Нежный цветочный аромат с гранатом, нарциссом, магнолией и мускусом. Прозрачный как хрусталь, чистый как роса.",
+    variants: [{ id: 22, label: "5 мл", price: 300, type: "ml", inStock: true }, { id: 23, label: "10 мл", price: 520, type: "ml", inStock: true }, { id: 24, label: "20 мл", price: 950, type: "ml", inStock: true }, { id: 308, label: "Упаковка 50 мл", price: 1850, type: "pkg", inStock: true }],
+  },
+  {
+    id: 9, name: "Acqua di Giò", brand: "Armani", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.1174.jpg",
+    desc: "Свежий морской аромат с бергамотом, персиком и нотами океана. Вдохновлён морем острова Пантеллерия.",
+    variants: [{ id: 25, label: "5 мл", price: 340, type: "ml", inStock: true }, { id: 26, label: "10 мл", price: 590, type: "ml", inStock: true }, { id: 27, label: "20 мл", price: 1080, type: "ml", inStock: true }, { id: 309, label: "Упаковка 50 мл", price: 2050, type: "pkg", inStock: true }],
+  },
+  {
+    id: 10, name: "Sì", brand: "Armani", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.24031.jpg",
+    desc: "Чувственный женственный аромат с чёрной смородиной, нероли, розой и ванилью. Современная элегантность.",
+    variants: [{ id: 28, label: "5 мл", price: 370, type: "ml", inStock: true }, { id: 29, label: "10 мл", price: 640, type: "ml", inStock: true }, { id: 30, label: "20 мл", price: 1180, type: "ml", inStock: true }, { id: 310, label: "Упаковка 50 мл", price: 2250, type: "pkg", inStock: true }],
+  },
+  {
+    id: 11, name: "Light Blue", brand: "Dolce&Gabbana", category: "Унисекс",
+    img: "https://fimgs.net/mdimg/perfume/375x500.5676.jpg",
+    desc: "Лёгкий свежий средиземноморский аромат с сицилийским лимоном, яблоком и бамбуком. Летнее настроение круглый год.",
+    variants: [{ id: 31, label: "5 мл", price: 280, type: "ml", inStock: true }, { id: 32, label: "10 мл", price: 490, type: "ml", inStock: true }, { id: 33, label: "20 мл", price: 900, type: "ml", inStock: true }, { id: 311, label: "Упаковка 50 мл", price: 1750, type: "pkg", inStock: true }],
+  },
+  {
+    id: 12, name: "The One", brand: "Dolce&Gabbana", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.4957.jpg",
+    desc: "Восточный пряный аромат с табаком, имбирём, кардамоном и янтарём. Тёплый, обволакивающий, роскошный.",
+    variants: [{ id: 34, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 35, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 36, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 312, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
+  },
+  {
+    id: 13, name: "Boss Bottled", brand: "Hugo Boss", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.2017.jpg",
+    desc: "Классический мужской аромат с яблоком, корицей, сандалом и кедром. Для уверенного, целеустремлённого мужчины.",
+    variants: [{ id: 37, label: "5 мл", price: 290, type: "ml", inStock: true }, { id: 38, label: "10 мл", price: 500, type: "ml", inStock: true }, { id: 39, label: "20 мл", price: 920, type: "ml", inStock: true }, { id: 313, label: "Упаковка 50 мл", price: 1780, type: "pkg", inStock: true }],
+  },
+  {
+    id: 14, name: "Hugo Man", brand: "Hugo Boss", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.801.jpg",
+    desc: "Дерзкий свежий аромат с мятой, зелёным яблоком и кедром. Для свободного, современного и независимого.",
+    variants: [{ id: 40, label: "5 мл", price: 260, type: "ml", inStock: true }, { id: 41, label: "10 мл", price: 450, type: "ml", inStock: true }, { id: 42, label: "20 мл", price: 830, type: "ml", inStock: true }, { id: 314, label: "Упаковка 40 мл", price: 1600, type: "pkg", inStock: true }],
+  },
+  {
+    id: 15, name: "CK One", brand: "Calvin Klein", category: "Унисекс",
+    img: "https://fimgs.net/mdimg/perfume/375x500.865.jpg",
+    desc: "Культовый унисекс аромат с зелёным чаем, бергамотом, кардамоном и мускусом. Свежесть, свобода и единство.",
+    variants: [{ id: 43, label: "5 мл", price: 240, type: "ml", inStock: true }, { id: 44, label: "10 мл", price: 420, type: "ml", inStock: true }, { id: 45, label: "20 мл", price: 780, type: "ml", inStock: true }, { id: 315, label: "Упаковка 100 мл", price: 2000, type: "pkg", inStock: true }],
+  },
+  {
+    id: 16, name: "Euphoria", brand: "Calvin Klein", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.3022.jpg",
+    desc: "Чувственный восточный аромат с гранатом, лотосом, чёрной орхидеей и красным деревом. Таинственный и соблазнительный.",
+    variants: [{ id: 46, label: "5 мл", price: 310, type: "ml", inStock: true }, { id: 47, label: "10 мл", price: 540, type: "ml", inStock: true }, { id: 48, label: "20 мл", price: 980, type: "ml", inStock: true }, { id: 316, label: "Упаковка 50 мл", price: 1900, type: "pkg", inStock: true }],
+  },
+  {
+    id: 17, name: "My Burberry", brand: "Burberry", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.23629.jpg",
+    desc: "Цветочный аромат с нотами садовых цветов, персика, сладкого горошка и патчули. Вдохновлён лондонским садом после дождя.",
+    variants: [{ id: 49, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 50, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 51, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 317, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
+  },
+  {
+    id: 18, name: "1 Million", brand: "Paco Rabanne", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.7361.jpg",
+    desc: "Пряный кожаный аромат с кровавым апельсином, розой, корицей и патчули. Роскошь, соблазн и уверенность.",
+    variants: [{ id: 52, label: "5 мл", price: 330, type: "ml", inStock: true }, { id: 53, label: "10 мл", price: 580, type: "ml", inStock: true }, { id: 54, label: "20 мл", price: 1060, type: "ml", inStock: true }, { id: 318, label: "Упаковка 50 мл", price: 2050, type: "pkg", inStock: true }],
+  },
+  {
+    id: 19, name: "Lady Million", brand: "Paco Rabanne", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.11604.jpg",
+    desc: "Роскошный цветочный аромат с нероли, жасмином, белой розой и мёдом. Для женщины, которая знает себе цену.",
+    variants: [{ id: 55, label: "5 мл", price: 360, type: "ml", inStock: true }, { id: 56, label: "10 мл", price: 620, type: "ml", inStock: true }, { id: 57, label: "20 мл", price: 1150, type: "ml", inStock: true }, { id: 319, label: "Упаковка 50 мл", price: 2200, type: "pkg", inStock: true }],
+  },
+  {
+    id: 20, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс",
+    img: "https://fimgs.net/mdimg/perfume/375x500.3669.jpg",
+    desc: "Тёмный роскошный аромат с трюфелем, чёрной орхидеей, сандалом и ладаном. Таинственный, обольстительный, незабываемый.",
+    variants: [{ id: 58, label: "5 мл", price: 700, type: "ml", inStock: true }, { id: 59, label: "10 мл", price: 1300, type: "ml", inStock: true }, { id: 60, label: "20 мл", price: 2400, type: "ml", inStock: true }, { id: 320, label: "Упаковка 50 мл", price: 5500, type: "pkg", inStock: true }],
+  },
+  {
+    id: 21, name: "Oud Wood", brand: "Tom Ford", category: "Унисекс",
+    img: "https://fimgs.net/mdimg/perfume/375x500.5071.jpg",
+    desc: "Экзотический уд с розовым перцем, сандалом, кардамоном и ванилью. Согревающий восточный шедевр для ценителей.",
+    variants: [{ id: 61, label: "5 мл", price: 800, type: "ml", inStock: true }, { id: 62, label: "10 мл", price: 1500, type: "ml", inStock: true }, { id: 63, label: "20 мл", price: 2800, type: "ml", inStock: true }, { id: 321, label: "Упаковка 50 мл", price: 6200, type: "pkg", inStock: true }],
+  },
+  {
+    id: 22, name: "Guilty", brand: "Gucci", category: "Унисекс",
+    img: "https://fimgs.net/mdimg/perfume/375x500.11960.jpg",
+    desc: "Чувственный восточный аромат с лавандой, розовым перцем, геранью и амброй. Для тех, кто живёт по своим правилам.",
+    variants: [{ id: 64, label: "5 мл", price: 380, type: "ml", inStock: true }, { id: 65, label: "10 мл", price: 660, type: "ml", inStock: true }, { id: 66, label: "20 мл", price: 1200, type: "ml", inStock: true }, { id: 322, label: "Упаковка 50 мл", price: 2300, type: "pkg", inStock: true }],
+  },
+  {
+    id: 23, name: "Bloom", brand: "Gucci", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.42268.jpg",
+    desc: "Белый цветочный аромат с жасмином, туберозой, нероли и ранункулюсом. Богатый, насыщенный, по-женски сильный.",
+    variants: [{ id: 67, label: "5 мл", price: 400, type: "ml", inStock: true }, { id: 68, label: "10 мл", price: 700, type: "ml", inStock: true }, { id: 69, label: "20 мл", price: 1280, type: "ml", inStock: true }, { id: 323, label: "Упаковка 50 мл", price: 2450, type: "pkg", inStock: true }],
+  },
+  {
+    id: 24, name: "L'Interdit", brand: "Givenchy", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.49052.jpg",
+    desc: "Белый цветочный аромат с тёмным сердцем из ветивера, пачули и белых цветов. Запретный и невыразимо притягательный.",
+    variants: [{ id: 70, label: "5 мл", price: 360, type: "ml", inStock: true }, { id: 71, label: "10 мл", price: 620, type: "ml", inStock: true }, { id: 72, label: "20 мл", price: 1150, type: "ml", inStock: true }, { id: 324, label: "Упаковка 50 мл", price: 2200, type: "pkg", inStock: true }],
+  },
+  {
+    id: 25, name: "Gentleman", brand: "Givenchy", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.45895.jpg",
+    desc: "Элегантный ирисово-ванильный аромат с виски, пачули и бергамотом. Для современного джентльмена с характером.",
+    variants: [{ id: 73, label: "5 мл", price: 370, type: "ml", inStock: true }, { id: 74, label: "10 мл", price: 640, type: "ml", inStock: true }, { id: 75, label: "20 мл", price: 1180, type: "ml", inStock: true }, { id: 325, label: "Упаковка 60 мл", price: 2250, type: "pkg", inStock: true }],
+  },
+  {
+    id: 26, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.17836.jpg",
+    desc: "Сладкий гурманский аромат с ирисом, жасмином, пралине и ванилью. Жизнь прекрасна — и этот аромат напоминает об этом.",
+    variants: [{ id: 76, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 77, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 78, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 326, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
+  },
+  {
+    id: 27, name: "Cool Water", brand: "Davidoff", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.801.jpg",
+    desc: "Классический свежий морской аромат с мятой, лавандой, геранью и океанской солью. Культовый аромат с 1988 года.",
+    variants: [{ id: 79, label: "5 мл", price: 220, type: "ml", inStock: true }, { id: 80, label: "10 мл", price: 380, type: "ml", inStock: true }, { id: 81, label: "20 мл", price: 700, type: "ml", inStock: true }, { id: 327, label: "Упаковка 75 мл", price: 1650, type: "pkg", inStock: true }],
+  },
+  {
+    id: 28, name: "Angel", brand: "Mugler", category: "Женские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.1135.jpg",
+    desc: "Сладкий гурманский аромат с хлопком, ванилью, шоколадом и пачули. Первый «съедобный» аромат, ставший иконой моды.",
+    variants: [{ id: 82, label: "5 мл", price: 340, type: "ml", inStock: true }, { id: 83, label: "10 мл", price: 590, type: "ml", inStock: true }, { id: 84, label: "20 мл", price: 1080, type: "ml", inStock: true }, { id: 328, label: "Упаковка 50 мл", price: 2050, type: "pkg", inStock: true }],
+  },
+  {
+    id: 29, name: "Aventus", brand: "Creed", category: "Мужские",
+    img: "https://fimgs.net/mdimg/perfume/375x500.19439.jpg",
+    desc: "Фруктово-дымный аромат с ананасом, берёзой, розой и мускусом. Символ силы, успеха и роскоши для настоящих лидеров.",
+    variants: [{ id: 85, label: "5 мл", price: 950, type: "ml", inStock: true }, { id: 86, label: "10 мл", price: 1800, type: "ml", inStock: true }, { id: 87, label: "20 мл", price: 3400, type: "ml", inStock: true }, { id: 329, label: "Упаковка 50 мл", price: 8500, type: "pkg", inStock: true }],
+  },
+  {
+    id: 30, name: "Baccarat Rouge 540", brand: "Maison Francis Kurkdjian", category: "Унисекс",
+    img: "https://fimgs.net/mdimg/perfume/375x500.38088.jpg",
+    desc: "Культовый янтарно-цветочный аромат с жасмином, шафраном, амброксаном и берёзой. Для тех, кто ценит истинное совершенство.",
+    variants: [{ id: 88, label: "5 мл", price: 1200, type: "ml", inStock: true }, { id: 89, label: "10 мл", price: 2200, type: "ml", inStock: true }, { id: 90, label: "20 мл", price: 4200, type: "ml", inStock: true }, { id: 330, label: "Упаковка 70 мл", price: 12000, type: "pkg", inStock: true }],
+  },
 ];
 
 const DEFAULT_BANNERS = [
@@ -342,11 +564,37 @@ function formatSum(n) { return Number(n).toLocaleString() + " сом"; }
 function generateReferralCode(name) { return (name.slice(0, 4).toUpperCase() + Math.floor(1000 + Math.random() * 9000)); }
 // ─── UI PRIMITIVES ─────────────────────────────────────────────────────────────
 function Toast({ toast }) {
-  if (!toast) return null;
+  // PRO: spring entrance from above, soft scale + fade. Auto-dismisses via parent setTimeout.
   return (
-    <div style={{ position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: "#111111", color: "#F5F5F5", padding: "12px 24px", borderRadius: 30, fontSize: 14, fontWeight: 700, boxShadow: T.shadowLg, whiteSpace: "nowrap" }}>
-      {toast.msg}
-    </div>
+    <AnimatePresence>
+      {toast && (
+        <motion.div
+          initial={{ opacity: 0, y: -24, scale: 0.94 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -16, scale: 0.94 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 26 }}
+          style={{
+            position: "fixed",
+            top: "calc(env(safe-area-inset-top, 12px) + 12px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 9999,
+            background: toast.type === 'error' ? T.danger : "#111111",
+            color: "#F5F5F5",
+            padding: "12px 24px",
+            borderRadius: 30,
+            fontSize: 14,
+            fontWeight: 700,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+            whiteSpace: "nowrap",
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+          }}
+        >
+          {toast.msg}
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -371,25 +619,61 @@ function LangToggle() {
 }
 
 function NavBar({ items, active, onSelect }) {
+  // PRO: each tab tap fires a light haptic; the active indicator slides
+  // between tabs via Framer Motion's layoutId magic.
+  const handleSelect = (id) => {
+    if (id !== active) haptic('light');
+    onSelect(id);
+  };
   return (
-    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "#FFFFFF", borderTop: "0.5px solid #EEEEEE", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
-      {items.map((item, i) => {
+    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "rgba(255,255,255,0.85)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)", borderTop: "0.5px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
+      {items.map((item) => {
         const isActive = item.id === active;
         const isCenter = item.center;
         if (isCenter) return (
-          <button key={item.id} onClick={() => onSelect(item.id)} style={{ width: 52, height: 52, borderRadius: "50%", background: "#111111", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transform: "translateY(-12px)" }}>
+          <motion.button
+            key={item.id}
+            onClick={() => handleSelect(item.id)}
+            whileTap={{ scale: 0.92 }}
+            transition={{ duration: 0.18 }}
+            style={{ width: 52, height: 52, borderRadius: "50%", background: "#111111", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transform: "translateY(-12px)" }}>
             {React.cloneElement(item.icon, { style: { width: 24, height: 24 } })}
-          </button>
+          </motion.button>
         );
         return (
-          <button key={item.id} onClick={() => onSelect(item.id)} style={{ flex: 1, minHeight: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? "#111111" : T.textMuted, position: "relative", paddingBottom: 4, fontSize: 11 }}>
-            <div style={{ position: "relative" }}>
+          <motion.button
+            key={item.id}
+            onClick={() => handleSelect(item.id)}
+            whileTap={{ scale: 0.94 }}
+            transition={{ duration: 0.18 }}
+            style={{ flex: 1, minHeight: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? "#111111" : T.textMuted, position: "relative", paddingBottom: 4, fontSize: 11 }}>
+            <motion.div
+              animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+              style={{ position: "relative" }}
+            >
               {React.cloneElement(item.icon, { style: { width: 22, height: 22 } })}
-              {item.badge > 0 && <div style={{ position: "absolute", top: -4, right: -6, background: T.danger, color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>{item.badge}</div>}
-            </div>
-            <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 400 }}>{item.label}</span>
-            {isActive && <div style={{ position: "absolute", bottom: 0, width: 20, height: 3, background: T.accent, borderRadius: 2 }} />}
-          </button>
+              {item.badge > 0 && (
+                <motion.div
+                  // PRO: re-animate on every count change → pops when an item is added.
+                  key={item.badge}
+                  initial={{ scale: 0.4, opacity: 0 }}
+                  animate={{ scale: [0.4, 1.35, 1], opacity: 1 }}
+                  transition={{ duration: 0.42, times: [0, 0.55, 1], ease: [0.32, 0.72, 0, 1] }}
+                  style={{ position: "absolute", top: -4, right: -6, background: T.danger, color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
+                  {item.badge}
+                </motion.div>
+              )}
+            </motion.div>
+            <span style={{ fontSize: 10, fontWeight: isActive ? 700 : 400, transition: 'font-weight 0.15s' }}>{item.label}</span>
+            {isActive && (
+              <motion.div
+                layoutId="navbar-indicator"
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                style={{ position: "absolute", bottom: 0, width: 20, height: 3, background: T.accent, borderRadius: 2 }}
+              />
+            )}
+          </motion.button>
         );
       })}
     </div>
@@ -689,19 +973,33 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
   return (
     <div style={{
-      minHeight: "100svh",
-      position: "relative",
+      position: "fixed",
+      top: 0, left: 0, right: 0, bottom: 0,
+      width: "100vw",
+      height: "100vh",
+      overflow: "hidden",
       display: "flex",
       flexDirection: "column",
-      justifyContent: "flex-end",
-      overflow: "hidden"
+      justifyContent: "flex-end"
     }}>
-      {/* Full-screen background photo */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 0 }}>
+      {/* Full-screen background photo — PRO: Ken Burns slow zoom + pan */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 0, overflow: "hidden" }}>
+        <style>{`
+          @keyframes kenBurns {
+            0%   { transform: scale(1.06) translate(0, 0); }
+            50%  { transform: scale(1.14) translate(-1.5%, -1%); }
+            100% { transform: scale(1.06) translate(0, 0); }
+          }
+        `}</style>
         <img
           src={loginBg || "/login-bg.jpeg"}
           alt=""
-          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }}
+          style={{
+            width: "100%", height: "100%",
+            objectFit: "cover", objectPosition: "center top",
+            animation: "kenBurns 22s ease-in-out infinite",
+            willChange: "transform",
+          }}
         />
       </div>
       {/* Dark gradient overlay */}
@@ -857,7 +1155,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   );
 }
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
-function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }) {
+function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, onRefresh }) {
   const { lang, setLang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
@@ -868,6 +1166,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
   const [scrolled, setScrolled] = useState(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [touchStartX, setTouchStartX] = React.useState(null);
+  const [detailScrollY, setDetailScrollY] = useState(0);
 
   useEffect(() => {
     const el = document.getElementById("catalog-scroll");
@@ -891,11 +1190,22 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
   };
 
   const cats = ["all", ...Array.from(new Set(products.map(p => p.category)))];
-  const filteredProducts = products.filter(p => {
+  // PRO: sort state + bottom-sheet
+  const [sort, setSort] = useState('default');
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  let filteredProducts = products.filter(p => {
     const matchCat = cat === "all" || p.category === cat;
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.brand.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
+  // Apply sort
+  const minPriceFor = (p) => {
+    const inStock = (p.variants || []).filter(v => v.inStock).map(v => v.price);
+    return inStock.length ? Math.min(...inStock) : Infinity;
+  };
+  if (sort === 'price_asc')  filteredProducts = [...filteredProducts].sort((a, b) => minPriceFor(a) - minPriceFor(b));
+  if (sort === 'price_desc') filteredProducts = [...filteredProducts].sort((a, b) => minPriceFor(b) - minPriceFor(a));
+  if (sort === 'name_asc')   filteredProducts = [...filteredProducts].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   const minPrice = (p) => {
     const inStock = (p.variants || []).filter(v => v.inStock).map(v => v.price);
@@ -908,100 +1218,128 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
 
   if (detail) {
     const allImages = (detail.images && detail.images.length > 0) ? detail.images : (detail.img ? [detail.img] : []);
+    // PRO: iOS-style swipe-from-left-edge to dismiss + slide-up entrance handled by wrapper
     return (
-      <div style={{ minHeight: "100vh", background: "#fff", paddingBottom: 100 }}>
-        {/* Hero */}
+      <EdgeSwipeBack onDismiss={() => { setDetail(null); setDetailScrollY(0); }}>
+
+        {/* Scrollable body */}
         <div
-          style={{ position: "relative", width: "100%", background: "#fff", overflow: "hidden" }}
-          onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
-          onTouchEnd={(e) => {
-            if (touchStartX === null || allImages.length <= 1) return;
-            const diff = touchStartX - e.changedTouches[0].clientX;
-            if (Math.abs(diff) > 40) {
-              if (diff > 0) setImgIndex(i => (i + 1) % allImages.length);
-              else setImgIndex(i => (i - 1 + allImages.length) % allImages.length);
-            }
-            setTouchStartX(null);
-          }}
+          style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}
+          onScroll={(e) => setDetailScrollY(e.target.scrollTop)}
         >
-          {allImages.length > 0 ? (
-            <div style={{ background: "#fff", width: "100%", display: "flex", justifyContent: "center", alignItems: "center" }}>
-              <img
-                src={allImages[imgIndex]}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "70vh",
-                  display: "block",
-                  objectFit: "contain",
-                  background: "#fff"
+          {/* Image hero — shrinks on scroll */}
+          {(() => {
+            const imgBaseH = Math.round(window.innerHeight * 0.44);
+            const imgH = Math.max(140, imgBaseH - detailScrollY * 0.55);
+            const imgOpacity = Math.max(0.25, 1 - detailScrollY / 260);
+            const imgScale = Math.max(0.88, 1 - detailScrollY / 1200);
+            return (
+              <div
+                style={{ position: "relative", background: "#f8f8f8", overflow: "hidden", transition: "height 0.05s linear" }}
+                onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
+                onTouchEnd={(e) => {
+                  if (touchStartX === null || allImages.length <= 1) return;
+                  const diff = touchStartX - e.changedTouches[0].clientX;
+                  if (Math.abs(diff) > 40) {
+                    if (diff > 0) setImgIndex(i => (i + 1) % allImages.length);
+                    else setImgIndex(i => (i - 1 + allImages.length) % allImages.length);
+                  }
+                  setTouchStartX(null);
                 }}
-              />
-              {allImages.length > 1 && (
-                <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 6 }}>
-                  {allImages.map((_, i) => (
-                    <div
-                      key={i}
-                      onClick={() => setImgIndex(i)}
-                      style={{
-                        width: i === imgIndex ? 20 : 7,
-                        height: 7,
-                        borderRadius: 4,
-                        background: i === imgIndex ? T.accent : "rgba(180,180,180,0.7)",
-                        transition: "width 0.25s",
-                        cursor: "pointer",
-                        boxShadow: "0 1px 3px rgba(0,0,0,0.15)"
-                      }}
+              >
+                {allImages.length > 0 ? (
+                  <div style={{ height: imgH, display: "flex", justifyContent: "center", alignItems: "center", paddingTop: 56, paddingBottom: 16, transition: "height 0.08s ease-out" }}>
+                    <img
+                      src={allImages[imgIndex]}
+                      style={{ maxWidth: "90%", maxHeight: imgH - 72, display: "block", objectFit: "contain", opacity: imgOpacity, transform: `scale(${imgScale})`, transformOrigin: "center center", transition: "opacity 0.08s, transform 0.08s" }}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div style={{ height: 260, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {React.cloneElement(IC.bottle, { style: { width: 100, height: 100, color: T.accent, opacity: 0.3 } })}
-            </div>
-          )}
-          <button onClick={() => setDetail(null)} style={{ position: "absolute", top: 16, left: 16, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.9)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, boxShadow: T.shadowSm }}>
-            {IC.back}
-          </button>
-        </div>
-        <div style={{ padding: "20px 16px" }}>
-          <div style={{ color: T.textMuted, fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>{detail.brand}</div>
-          <div style={{ color: T.text, fontSize: 22, fontWeight: 800, marginBottom: 8 }}>{detail.name}</div>
-          <div style={{ color: T.textSecond, fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>{detail.desc}</div>
-          {/* Variants */}
-          <div style={{ color: T.text, fontSize: 15, fontWeight: 700, marginBottom: 10 }}>{t.chooseSize}</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
-            {detail.variants.map(v => {
-              const isSel = selVariant?.id === v.id;
-              return (
-                <button key={v.id} onClick={() => v.inStock && setSelVariant(v)} style={{ padding: "10px 16px", borderRadius: 14, border: isSel ? `2px solid ${T.accent}` : `1.5px solid ${T.border}`, background: isSel ? T.accentLight : T.card, cursor: v.inStock ? "pointer" : "default", opacity: v.inStock ? 1 : 0.4 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? T.accent : T.text }}>{v.label}</div>
-                  <div style={{ fontSize: 12, color: isSel ? T.accent : T.textSecond, marginTop: 2 }}>{formatSum(v.price)}</div>
-                  {!v.inStock && <div style={{ fontSize: 10, color: T.danger }}>{t.outOfStock}</div>}
+                    {allImages.length > 1 && (
+                      <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, display: "flex", justifyContent: "center", gap: 6 }}>
+                        {allImages.map((_, i) => (
+                          <div key={i} onClick={() => setImgIndex(i)} style={{ width: i === imgIndex ? 20 : 6, height: 6, borderRadius: 3, background: i === imgIndex ? T.accent : "rgba(180,180,180,0.6)", transition: "width 0.25s", cursor: "pointer" }} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ height: imgH, paddingTop: 56, display: "flex", alignItems: "center", justifyContent: "center", opacity: imgOpacity, transition: "height 0.08s ease-out, opacity 0.08s" }}>
+                    {React.cloneElement(IC.bottle, { style: { width: 80, height: 80, color: "#ccc" } })}
+                  </div>
+                )}
+                {/* Back button */}
+                <button onClick={() => { setDetail(null); setDetailScrollY(0); }} style={{ position: "absolute", top: 16, left: 16, width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.95)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: T.text, boxShadow: "0 2px 12px rgba(0,0,0,0.12)", zIndex: 10 }}>
+                  {IC.back}
                 </button>
-              );
-            })}
-          </div>
-          {selVariant && (
-            <div style={{ ...card({ padding: "16px 18px", marginBottom: 16 }), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ color: T.textSecond, fontSize: 13 }}>{t.total}</div>
-              <div style={{ color: T.accent, fontSize: 22, fontWeight: 900 }}>{formatSum(selVariant.price)}</div>
+              </div>
+            );
+          })()}
+
+          {/* Content */}
+          <div style={{ padding: "24px 20px 32px", display: "flex", flexDirection: "column", gap: 0 }}>
+
+            {/* Brand + Name + Desc */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ color: "#aaa", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
+              <div style={{ color: "#111", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 10 }}>{detail.name}</div>
+              {detail.desc ? <div style={{ color: "#777", fontSize: 14, lineHeight: 1.7 }}>{detail.desc}</div> : null}
             </div>
-          )}
-          <button onClick={() => { if (!selVariant) return; addToCart(detail.id, selVariant.id); setDetail(null); }} disabled={!selVariant?.inStock} style={{ ...btnGreen({ opacity: selVariant?.inStock ? 1 : 0.5 }) }}>
+
+            {/* Divider */}
+            <div style={{ height: 1, background: "#f0f0f0", marginBottom: 24 }} />
+
+            {/* Variants */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ color: "#111", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 8 }}>
+                {detail.variants.map(v => {
+                  const isSel = selVariant?.id === v.id;
+                  return (
+                    <button key={v.id} onClick={() => v.inStock && setSelVariant(v)}
+                      style={{ padding: "12px 8px", borderRadius: 14, border: isSel ? `2px solid #111` : `1.5px solid #ebebeb`, background: isSel ? "#111" : "#fafafa", cursor: v.inStock ? "pointer" : "default", opacity: v.inStock ? 1 : 0.38, textAlign: "center", transition: "all 0.18s" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? "#fff" : "#111", lineHeight: 1.2 }}>{v.label}</div>
+                      <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : "#999", marginTop: 4 }}>{formatSum(v.price)}</div>
+                      {!v.inStock && <div style={{ fontSize: 10, color: T.danger, marginTop: 2 }}>{t.outOfStock}</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Total */}
+            {selVariant && (
+              <div style={{ background: "#f6f6f6", borderRadius: 16, padding: "16px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <div style={{ color: "#999", fontSize: 13 }}>{t.total}</div>
+                <div style={{ color: "#111", fontSize: 24, fontWeight: 900, letterSpacing: -0.5 }}>{formatSum(selVariant.price)}</div>
+              </div>
+            )}
+
+            {/* Audio */}
+            <ClientAudioBtn productId={detail.id} />
+
+          </div>
+        </div>
+
+        {/* Sticky bottom CTA — sits above NavBar (≈68px) */}
+        <div style={{ padding: "12px 20px", paddingBottom: "calc(72px + env(safe-area-inset-bottom, 0px))", background: "#fff", borderTop: "1px solid #f0f0f0", flexShrink: 0 }}>
+          <button onClick={() => { if (!selVariant) return; addToCart(detail.id, selVariant.id); setDetail(null); setDetailScrollY(0); }} disabled={!selVariant?.inStock}
+            style={{ ...btnGreen({ opacity: selVariant?.inStock ? 1 : 0.4 }) }}>
             {React.cloneElement(IC.cart, { style: { width: 18, height: 18, display: "inline", marginRight: 8 } })}
             {t.addToCart}
           </button>
         </div>
-      </div>
+      </EdgeSwipeBack>
     );
   }
 
+  // PRO: wrap the catalog in PullToRefresh; the wrapper IS the scroll container.
+  const Outer = onRefresh ? PullToRefresh : 'div';
+  const outerProps = onRefresh
+    ? { onRefresh, style: { background: T.bg, minHeight: "100vh" } }
+    : { id: "catalog-scroll", style: { background: T.bg, minHeight: "100vh" } };
   return (
-    <div id="catalog-scroll" style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100, overflowY: "auto", height: "100vh" }}>
+    <Outer {...outerProps}><div id="catalog-scroll" style={{ display: 'contents' }}>
       {/* Header */}
-      <div style={{ background: "#fff", paddingTop: 44, paddingBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", position: "sticky", top: 0, zIndex: 50 }}>
+      <div style={{ background: "#fff", paddingTop: "max(44px, env(safe-area-inset-top, 44px))", paddingBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", position: "relative" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px 12px" }}>
           <div>
             <div style={{ fontSize: 11, color: "#aaa", letterSpacing: 0.5 }}>{lang === "ru" ? "Добро пожаловать" : "Кош келиңиз"}</div>
@@ -1024,16 +1362,54 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
       </div>
       {/* Banner */}
       {banners.length > 0 && <div style={{ marginTop: 14, marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
-      {/* Categories */}
-      <div className="no-scrollbar" style={{ padding: "8px 16px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          {cats.map(c => (
-            <button key={c} onClick={() => setCat(c)} style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: cat === c ? "none" : "0.5px solid #EEEEEE", background: cat === c ? "#111111" : "transparent", color: cat === c ? "#fff" : T.textSecond, fontSize: 13, fontWeight: cat === c ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-              {c === "all" ? t.allCategories : c}
-            </button>
-          ))}
+      {/* Categories + sort button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' }}>
+        <div className="no-scrollbar" style={{ flex: 1, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {cats.map(c => (
+              <motion.button
+                key={c}
+                onClick={() => { haptic('light'); setCat(c); }}
+                whileTap={{ scale: 0.94 }}
+                animate={{
+                  background: cat === c ? "#111111" : 'rgba(0,0,0,0)',
+                  color: cat === c ? '#fff' : T.textSecond,
+                }}
+                transition={{ duration: 0.18 }}
+                style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: cat === c ? "none" : "0.5px solid #EEEEEE", fontSize: 13, fontWeight: cat === c ? 600 : 400, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+              >
+                {c === "all" ? t.allCategories : c}
+              </motion.button>
+            ))}
+          </div>
         </div>
+        <motion.button
+          onClick={() => { haptic('light'); setSortSheetOpen(true); }}
+          whileTap={{ scale: 0.92 }}
+          aria-label={lang === 'kg' ? 'Иргөө' : 'Сортировка'}
+          style={{
+            width: 36, height: 36, borderRadius: 18,
+            background: sort !== 'default' ? '#111' : 'transparent',
+            border: '0.5px solid #EEE',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: sort !== 'default' ? '#fff' : '#111',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="6" y1="12" x2="18" y2="12" />
+            <line x1="10" y1="18" x2="14" y2="18" />
+          </svg>
+        </motion.button>
       </div>
+      <SortFilterSheet
+        open={sortSheetOpen}
+        onClose={() => setSortSheetOpen(false)}
+        sort={sort}
+        onSortChange={setSort}
+        lang={lang}
+      />
       {/* Products grid */}
       <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         {filteredProducts.length === 0 && (
@@ -1043,16 +1419,24 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
             <div style={{ fontSize: 13 }}>Попробуйте изменить запрос</div>
           </div>
         )}
-        {filteredProducts.map(p => {
+        {filteredProducts.map((p, idx) => {
           const stk = hasStock(p);
+          // PRO: subtle stagger fade-in (only first 12 cards staggered to avoid jank).
+          const delay = idx < 12 ? idx * 0.035 : 0;
           return (
-            <div key={p.id} onClick={() => openDetail(p)} style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: "pointer", minHeight: 220 }) }}>
-              <div style={{ width: "100%", height: 140, background: "#EEEEEE", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <motion.div
+              key={p.id}
+              onClick={() => openDetail(p)}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay, ease: [0.32, 0.72, 0, 1] }}
+              whileTap={{ scale: 0.97 }}
+              style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: "pointer", minHeight: 220 }) }}>
+              <div style={{ width: "100%", height: 150, background: "#f8f8f8", display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
                 {p.img
-                  ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : React.cloneElement(IC.bottle, { style: { width: 60, height: 60, color: T.accent, opacity: 0.5 } })}
-                {!stk && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.7)", color: "#E53935", borderRadius: 8, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{t.outOfStock}</div>}
-                {(p.variants || []).every(v => !v.inStock) && <div style={{ position: "absolute", top: 8, right: 8, background: "rgba(0,0,0,0.7)", color: "#E53935", fontSize: 10, padding: "2px 8px", borderRadius: 10 }}>Нет в наличии</div>}
+                  ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "contain", padding: "12px 16px", boxSizing: "border-box" }} />
+                  : React.cloneElement(IC.bottle, { style: { width: 56, height: 56, color: "#ccc" } })}
+                {!stk && <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,0,0,0.65)", color: "#fff", borderRadius: 8, padding: "2px 8px", fontSize: 10, fontWeight: 700 }}>{t.outOfStock}</div>}
               </div>
               <div style={{ padding: "10px 12px" }}>
                 <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", marginBottom: 2, fontWeight: 300 }}>{p.brand}</div>
@@ -1077,13 +1461,13 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin }
                     {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
                   </div>
                 </div>
-                <ClientAudioBtn productId={p.id} />
+                <ClientAudioBtn productId={p.id} compact />
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>
-    </div>
+    </div></Outer>
   );
 }
 // ─── CART SCREEN ───────────────────────────────────────────────────────────────
@@ -1114,42 +1498,47 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
   const updateQty = (ci, d) => setCart(prev => { const next = prev.map(i => i.productId === ci.productId && i.variantId === ci.variantId ? { ...i, qty: Math.max(1, i.qty + d) } : i); localStorage.setItem('parfum_cart', JSON.stringify(next)); return next; });
   const remove = (ci) => setCart(prev => { const next = prev.filter(i => !(i.productId === ci.productId && i.variantId === ci.variantId)); localStorage.setItem('parfum_cart', JSON.stringify(next)); return next; });
 
-  if (!items.length) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", padding: 32, gap: 16 }}>
-      <div style={{ width: 80, height: 80, borderRadius: 24, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {React.cloneElement(IC.cart, { style: { width: 36, height: 36, color: T.accent } })}
-      </div>
-      <div style={{ color: T.text, fontSize: 18, fontWeight: 700 }}>{t.cartEmpty}</div>
-      <div style={{ color: T.textMuted, fontSize: 14, textAlign: "center" }}>{t.cartEmptyHint}</div>
-    </div>
-  );
+  if (!items.length) {
+    // PRO: spring-animated empty state
+    return <EmptyState icon={IC.cart} title={t.cartEmpty} hint={t.cartEmptyHint} />;
+  }
 
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 120 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "calc(var(--nav-height) + 100px)" /* navbar + sticky checkout button + breathing room */ }}>
       <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "#111", background: "#f5f5f5" }}>{t.cart}</div>
-      {/* Items */}
+      {/* Items — PRO: AnimatePresence makes adds spring in, removes swipe out */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-        {items.map((item, i) => (
-          <div key={i} style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center" }}>
-            <div style={{ width: 60, height: 60, borderRadius: 14, background: T.accentPale, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.accent, opacity: 0.5 } })}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{item.prod.brand}</div>
-              <div style={{ color: T.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{item.prod.name}</div>
-              <div style={{ color: T.accent, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-              <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 2 }}>{IC.close}</button>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => updateQty(item, -1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 16, fontWeight: 700, color: T.text }}>−</button>
-                <span style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text }}>{item.qty}</span>
-                <button onClick={() => updateQty(item, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.accent, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#fff" }}>+</button>
+        <AnimatePresence initial={false}>
+          {items.map((item) => (
+            <motion.div
+              key={`${item.productId}-${item.variantId}`}
+              layout
+              initial={{ opacity: 0, x: -16, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 120, scale: 0.85, transition: { duration: 0.22 } }}
+              transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+              style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center" }}
+            >
+              <div style={{ width: 60, height: 60, borderRadius: 14, background: T.accentPale, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.accent, opacity: 0.5 } })}
               </div>
-              <div style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{formatSum(item.variant.price * item.qty)}</div>
-            </div>
-          </div>
-        ))}
+              <div style={{ flex: 1 }}>
+                <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{item.prod.brand}</div>
+                <div style={{ color: T.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{item.prod.name}</div>
+                <div style={{ color: T.accent, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 2 }}>{IC.close}</button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => updateQty(item, -1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 16, fontWeight: 700, color: T.text }}>−</button>
+                  <motion.span key={item.qty} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 460, damping: 22 }} style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text, display: 'inline-block' }}>{item.qty}</motion.span>
+                  <button onClick={() => updateQty(item, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.accent, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#fff" }}>+</button>
+                </div>
+                <motion.div key={item.variant.price * item.qty} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{formatSum(item.variant.price * item.qty)}</motion.div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
       {/* Delivery */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
@@ -1157,7 +1546,19 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.deliveryType}</div>
           <div style={{ display: "flex", gap: 8, marginBottom: deliveryType === "delivery" ? 12 : 0 }}>
             {[{ id: "delivery", label: t.delivery }, { id: "pickup", label: t.pickup }].map(opt => (
-              <button key={opt.id} onClick={() => setDeliveryType(opt.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: `1.5px solid ${deliveryType === opt.id ? T.accent : T.border}`, background: deliveryType === opt.id ? T.accentLight : T.card, color: deliveryType === opt.id ? T.accent : T.textSecond, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>{opt.label}</button>
+              <motion.button
+                key={opt.id}
+                onClick={() => { haptic('light'); setDeliveryType(opt.id); }}
+                whileTap={{ scale: 0.97 }}
+                animate={{
+                  background: deliveryType === opt.id ? T.accentLight : T.card,
+                  borderColor: deliveryType === opt.id ? T.accent : T.border,
+                  color: deliveryType === opt.id ? T.accent : T.textSecond,
+                }}
+                transition={{ duration: 0.2 }}
+                style={{ flex: 1, padding: "10px", borderRadius: 12, border: '1.5px solid', fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                {opt.label}
+              </motion.button>
             ))}
           </div>
           {deliveryType === "delivery" && <div style={{ position: "relative", marginBottom: 10 }}>
@@ -1228,29 +1629,62 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           />
         </div>
       </div>
-      {/* Payment */}
+      {/* Payment — PRO: spring tap, animated check icon, smooth border morph */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
         <div style={{ ...card({ padding: "16px" }) }}>
           <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.paymentMethod}</div>
-          <button onClick={() => setPayMethod("mbank")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === "mbank" ? "#0E7A6E" : T.border}`, background: payMethod === "mbank" ? "#F0FAFA" : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}>
-            <img src="/frame_4.png" alt="M-Bank" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
-            <span style={{ color: payMethod === "mbank" ? "#0E7A6E" : T.text, fontWeight: 600, fontSize: 14 }}>M Bank</span>
-          </button>
-          <button onClick={() => setPayMethod("obank")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === "obank" ? "#E5007E" : T.border}`, background: payMethod === "obank" ? "#FFF0F8" : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}>
-            <img src="/O bank.jpg" alt="O!Bank" style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", flexShrink: 0 }} />
-            <span style={{ color: payMethod === "obank" ? "#E5007E" : T.text, fontWeight: 600, fontSize: 14 }}>O!Bank</span>
-          </button>
-          <button onClick={() => setPayMethod("cash")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: `1.5px solid ${payMethod === "cash" ? T.accent : T.border}`, background: payMethod === "cash" ? T.accentLight : T.bg, cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 10, background: "#E8E8E8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
-                <rect x="1" y="5" width="24" height="16" rx="3" stroke="#555" strokeWidth="1.8" />
-                <circle cx="13" cy="13" r="3.5" stroke="#555" strokeWidth="1.8" />
-                <line x1="1" y1="9" x2="5" y2="9" stroke="#555" strokeWidth="1.8" strokeLinecap="round" />
-                <line x1="21" y1="17" x2="25" y2="17" stroke="#555" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span style={{ color: payMethod === "cash" ? T.accent : T.text, fontWeight: 600, fontSize: 14 }}>Наличные / Нак. акча</span>
-          </button>
+          {[
+            // FIX: inline SVG logos — guaranteed to render. The previous
+            //   <img src="/frame_4.png" /> referenced files that don't ship
+            //   in /public, so they 404'd silently on iOS WebView.
+            { id: 'mbank', label: 'M Bank', accent: '#0E7A6E', accentBg: '#F0FAFA', logo: <MBankLogo /> },
+            { id: 'obank', label: 'O!Bank', accent: '#E5007E', accentBg: '#FFF0F8', logo: <OBankLogo /> },
+            { id: 'cash',  label: 'Наличные / Нак. акча', accent: T.accent, accentBg: T.accentLight, logo: <CashLogo /> },
+          ].map(opt => {
+            const selected = payMethod === opt.id;
+            return (
+              <motion.button
+                key={opt.id}
+                onClick={() => { haptic('light'); setPayMethod(opt.id); }}
+                whileTap={{ scale: 0.985 }}
+                animate={{
+                  borderColor: selected ? opt.accent : T.border,
+                  background: selected ? opt.accentBg : T.bg,
+                }}
+                transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px", borderRadius: 12, border: '1.5px solid', cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}
+              >
+                {opt.logo}
+                <motion.span
+                  animate={{ color: selected ? opt.accent : T.text }}
+                  transition={{ duration: 0.22 }}
+                  style={{ fontWeight: 600, fontSize: 14, flex: 1 }}
+                >
+                  {opt.label}
+                </motion.span>
+                <AnimatePresence>
+                  {selected && (
+                    <motion.div
+                      initial={{ scale: 0, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{ type: 'spring', stiffness: 460, damping: 22 }}
+                      style={{
+                        width: 22, height: 22, borderRadius: '50%',
+                        background: opt.accent,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.button>
+            );
+          })}
         </div>
       </div>
       {/* Bonus */}
@@ -1283,9 +1717,38 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           <div style={{ height: 1, background: T.border, margin: "8px 0 12px" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: T.text, fontSize: 16, fontWeight: 800 }}>{t.total}</span>
-            <span style={{ color: T.accent, fontSize: 20, fontWeight: 900 }}>{formatSum(total)}</span>
+            {/* PRO: total morphs in fresh on every change */}
+            <motion.span
+              key={total}
+              initial={{ y: -6, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+              style={{ color: T.accent, fontSize: 20, fontWeight: 900 }}
+            >
+              {formatSum(total)}
+            </motion.span>
           </div>
         </div>
+      </div>
+      {/* PRO: sticky checkout CTA — uses universal --sticky-bottom token */}
+      <div style={{ position: "fixed", bottom: "var(--sticky-bottom)", left: 0, right: 0, padding: "0 16px", zIndex: 40 }}>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={() => onOrder?.({ comment, useBonus, deliveryType, address, payMethod, total, bonusDiscount, subtotal })}
+          style={{
+            width: '100%', padding: '16px',
+            background: '#111', color: '#fff',
+            border: 'none', borderRadius: 16,
+            fontSize: 15, fontWeight: 700,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            cursor: 'pointer',
+            letterSpacing: 0.4,
+          }}
+        >
+          <span>{t.placeOrder}</span>
+          <span style={{ background: 'rgba(255,255,255,0.16)', padding: '5px 12px', borderRadius: 20, fontSize: 14, fontWeight: 800 }}>{formatSum(total)}</span>
+        </motion.button>
       </div>
     </div>
   );
@@ -1293,37 +1756,60 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 
 // ─── MY ORDERS SCREEN ──────────────────────────────────────────────────────────
 function MyOrdersScreen({ orders }) {
-  const { t } = useLang();
-  if (!orders?.length) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: 16 }}>
-      <div style={{ width: 80, height: 80, borderRadius: 24, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {React.cloneElement(IC.orders, { style: { width: 36, height: 36, color: T.accent } })}
-      </div>
-      <div style={{ color: T.text, fontSize: 18, fontWeight: 700 }}>{t.noOrders}</div>
-    </div>
-  );
+  const { t, lang } = useLang();
+  if (!orders?.length) {
+    // PRO: animated empty state
+    return (
+      <EmptyState
+        icon={IC.orders}
+        title={t.noOrders}
+        hint={lang === 'kg' ? 'Биринчи заказыңызды каталогдон бериңиз' : 'Сделайте первый заказ из каталога'}
+      />
+    );
+  }
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ padding: "52px 16px 14px", fontSize: 26, fontWeight: 800, color: "#111" }}>{t.myOrders}</div>
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
-        {orders.slice().reverse().map(order => (
-          <div key={order.id} style={{ ...card({ padding: "16px" }) }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <div>
-                <div style={{ color: T.textMuted, fontSize: 11 }}>#{order.id}</div>
-                <div style={{ color: T.text, fontWeight: 800, fontSize: 16 }}>{formatSum(order.total)}</div>
+        <AnimatePresence initial={false}>
+          {orders.slice().reverse().map((order, i) => (
+            <motion.div
+              key={order.id}
+              layout
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: Math.min(i, 6) * 0.04, ease: [0.32, 0.72, 0, 1] }}
+              style={{ ...card({ padding: "16px" }) }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <div>
+                  <div style={{ color: T.textMuted, fontSize: 11 }}>#{order.id}</div>
+                  <motion.div
+                    key={order.total}
+                    initial={{ y: -4, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.25 }}
+                    style={{ color: T.text, fontWeight: 800, fontSize: 16 }}
+                  >
+                    {formatSum(order.total)}
+                  </motion.div>
+                </div>
+                <StatusChip status={order.status} />
               </div>
-              <StatusChip status={order.status} />
-            </div>
-            {(order.items || []).map((item, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ color: T.textSecond, fontSize: 13 }}>{item.name} × {item.qty}</span>
-                <span style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{formatSum(item.price * item.qty)}</span>
+              {/* PRO: live status timeline */}
+              <div style={{ marginBottom: 14 }}>
+                <OrderTimeline status={order.status} lang={lang} />
               </div>
-            ))}
-            <div style={{ color: T.textMuted, fontSize: 11, marginTop: 8 }}>{order.date}</div>
-          </div>
-        ))}
+              {(order.items || []).map((item, idx) => (
+                <div key={idx} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ color: T.textSecond, fontSize: 13 }}>{item.name} × {item.qty}</span>
+                  <span style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{formatSum(item.price * item.qty)}</span>
+                </div>
+              ))}
+              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 10, paddingTop: 10, borderTop: '0.5px solid #f0f0f0' }}>{order.date}</div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -1337,12 +1823,13 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
   const [adminErr, setAdminErr] = useState("");
   const [copied, setCopied] = useState(false);
   const handleCopyReferralLocal = () => {
+    haptic('light'); // PRO: native vibration on copy
     onCopyReferral();
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ background: "linear-gradient(160deg, #111111 0%, #000000 100%)", padding: "48px 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
         {/* Lang toggle row */}
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
@@ -1364,13 +1851,26 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
           </div>
           <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
         </div>
-        <div style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+          style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
           <div>
             <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 300, letterSpacing: 1, textTransform: "uppercase" }}>{t.bonusBalance}</div>
-            <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>{formatSum(bonusBalance)}</div>
+            {/* PRO: count-up from 0 to current balance on mount */}
+            <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>
+              <NumberCounter value={bonusBalance} duration={1.0} format={(v) => Math.round(v).toLocaleString() + ' сом'} />
+            </div>
           </div>
-          {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
-        </div>
+          <motion.div
+            animate={{ rotate: [0, -8, 8, -4, 0] }}
+            transition={{ duration: 1.4, delay: 0.6, ease: [0.32, 0.72, 0, 1] }}
+          >
+            {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
+          </motion.div>
+        </motion.div>
       </div>
       {referralCode && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
@@ -1441,7 +1941,13 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
           {!bonusHistory.length
             ? <div style={{ color: T.textMuted, textAlign: "center", padding: 40 }}>{t.noBonusHistory}</div>
             : bonusHistory.slice().reverse().map((h, i) => (
-              <div key={i} style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14 }}>
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.32, delay: Math.min(i, 8) * 0.04, ease: [0.32, 0.72, 0, 1] }}
+                style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14 }}
+              >
                 <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "rgba(224,85,85,0.10)" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   {React.cloneElement(h.type === "spent" ? IC.cart : IC.gift, { style: { width: 18, height: 18, color: h.type === "spent" ? T.danger : T.accent } })}
                 </div>
@@ -1452,7 +1958,7 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
                 <div style={{ color: h.type === "spent" ? T.danger : T.accent, fontWeight: 800, fontSize: 15 }}>
                   {h.type === "spent" ? "−" : "+"}{formatSum(Math.abs(h.amount))}
                 </div>
-              </div>
+              </motion.div>
             ))}
         </div>
       ) : (
@@ -1487,16 +1993,16 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
 
 // ─── ADMIN ORDERS ──────────────────────────────────────────────────────────────
 function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp, onConfirmMBankPayment }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [filter, setFilter] = useState("all");
   const [statusMap, setStatusMap] = useState({});
   const [open, setOpen] = useState(null);
   const orders = allOrders.map(o => ({ ...o, status: statusMap[o.id] || o.status }));
   const filtered = filter === "all" ? orders : orders.filter(o => o.status === filter);
   const statuses = ["all", "new", "confirmed", "preparing", "delivering", "delivered", "cancelled"];
-  const handleStatus = (id, st) => { setStatusMap(p => ({ ...p, [id]: st })); onStatusChange?.(id, st); };
+  const handleStatus = (id, st) => { haptic('medium'); setStatusMap(p => ({ ...p, [id]: st })); onStatusChange?.(id, st); };
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ padding: "52px 16px 14px", fontSize: 18, fontWeight: 700, letterSpacing: 1, color: T.text }}>{t.orders}</div>
       <div style={{ padding: "0 16px 14px", overflowX: "auto" }}>
         <div style={{ display: "flex", gap: 8, width: "max-content" }}>
@@ -1526,7 +2032,17 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp
               </div>
             </div>
             {open === order.id && (
-              <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+                style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}`, overflow: 'hidden' }}
+              >
+                {/* PRO: live order tracker timeline visible to admin too */}
+                <div style={{ marginBottom: 14 }}>
+                  <OrderTimeline status={order.status} lang={lang} />
+                </div>
                 {(order.items || []).map((item, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                     <span style={{ color: T.textSecond, fontSize: 13 }}>{item.name} × {item.qty}</span>
@@ -1554,7 +2070,7 @@ function AdminOrdersScreen({ allOrders, onStatusChange, onDelete, onSendWhatsApp
                   </div>
                 )}
                 {order.clientPhone && <button onClick={() => onSendWhatsApp?.(order)} style={{ ...btnOutline({ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 0", fontSize: 13 }) }}>{React.cloneElement(IC.chat, { style: { width: 16, height: 16 } })}{t.sendWhatsApp}</button>}
-              </div>
+              </motion.div>
             )}
           </div>
         ))}
@@ -1612,7 +2128,7 @@ function AdminProductsScreen({ products, setProducts, showToast }) {
   const addVar = (pId) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: [...p.variants, { id: Date.now(), label: "", price: 0, type: "ml", inStock: true }] } : p));
   const delVar = (pId, vId) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.filter(v => v.id !== vId) } : p));
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.products}</div>
         <button onClick={addProd} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
@@ -1730,20 +2246,32 @@ function AdminStatsScreen({ orders, products, registeredUsers = [], visitCount =
   const recentUsers = registeredUsers.slice(-5).reverse();
 
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ padding: "20px 16px 16px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.stats}</div>
 
-      {/* Top 4 cards */}
+      {/* Top 4 cards — PRO: spring entrance + count-up where numeric */}
       <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ ...card({ padding: "16px" }) }}>
-            <div style={{ width: 36, height: 36, borderRadius: 12, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-              {React.cloneElement(IC.stats, { style: { width: 18, height: 18, color: s.color } })}
-            </div>
-            <div style={{ color: s.color, fontSize: 20, fontWeight: 900 }}>{s.val}</div>
-            <div style={{ color: T.textMuted, fontSize: 11, marginTop: 4 }}>{s.label}</div>
-          </div>
-        ))}
+        {stats.map((s, i) => {
+          // s.val may be string ("123 456 сом") or number — count up only when number
+          const numericVal = typeof s.val === 'number' ? s.val : null;
+          return (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, delay: i * 0.06, ease: [0.32, 0.72, 0, 1] }}
+              style={{ ...card({ padding: "16px" }) }}
+            >
+              <div style={{ width: 36, height: 36, borderRadius: 12, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                {React.cloneElement(IC.stats, { style: { width: 18, height: 18, color: s.color } })}
+              </div>
+              <div style={{ color: s.color, fontSize: 20, fontWeight: 900 }}>
+                {numericVal !== null ? <NumberCounter value={numericVal} duration={1.0} /> : s.val}
+              </div>
+              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 4 }}>{s.label}</div>
+            </motion.div>
+          );
+        })}
       </div>
 
       {/* Today stats */}
@@ -1845,7 +2373,7 @@ function AdminBannersScreen({ banners, setBanners }) {
   const del = (id) => { setBanners(p => p.filter(b => b.id !== id)); if (editing === id) setEditing(null); };
   const editB = banners.find(b => b.id === editing);
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.banners}</div>
         <button onClick={addBanner} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
@@ -2027,7 +2555,7 @@ function AdminBonusScreen({ settings, setSettings, showToast }) {
     { f: "minOrderForFreeDelivery", label: t.minOrderForFreeDelivery, suf: "сом" },
   ];
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: 100 }}>
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
       <div style={{ padding: "20px 16px 16px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.bonusSettings}</div>
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         {rows.map(row => (
@@ -2051,21 +2579,169 @@ function AdminBonusScreen({ settings, setSettings, showToast }) {
   );
 }
 
-// ─── ADMIN SETTINGS ────────────────────────────────────────────────────────────
-function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang }) {
+// ─── ADMIN SETTINGS — iOS Settings style ───────────────────────────────────────
+// Grouped sections with rounded white cards, colored icon squares, chevrons,
+// and right-pushing sub-screens for editors. Banners and Bonus are sub-screens
+// here (no longer separate admin tabs).
+const SETTINGS_PAGE_BG  = '#F2F2F7';
+const SETTINGS_CARD_BG  = '#FFFFFF';
+const SETTINGS_SEPARATOR = 'rgba(60, 60, 67, 0.18)';
+const SETTINGS_SECTION_HEADER = '#6E6E73';
+const SETTINGS_LABEL_COLOR = '#000000';
+const SETTINGS_VALUE_COLOR = '#8E8E93';
+const SETTINGS_DANGER = '#FF3B30';
+const SETTINGS_FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Helvetica Neue',sans-serif";
+
+const SET_ICON = {
+  photo: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5" /><circle cx="8.5" cy="8.5" r="1.5" fill="#fff" stroke="none" /><path d="M21 15l-5-5L5 21" /></svg>,
+  gift:  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" rx="1" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" /></svg>,
+  chat:  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>,
+  card:  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2.5" /><line x1="2" y1="10" x2="22" y2="10" /></svg>,
+  store: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l1.5-5h15L21 9" /><path d="M4 9v11a1 1 0 001 1h14a1 1 0 001-1V9" /><path d="M3 9c0 1.5 1.5 3 3 3s3-1.5 3-3c0 1.5 1.5 3 3 3s3-1.5 3-3c0 1.5 1.5 3 3 3s3-1.5 3-3" /></svg>,
+  pin:   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z" /><circle cx="12" cy="10" r="3" /></svg>,
+  clock: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" /></svg>,
+  info:  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="11" x2="12" y2="17" /><circle cx="12" cy="7.5" r="0.6" fill="#fff" stroke="none" /></svg>,
+  lock:  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>,
+  logout:<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>,
+  loginBg: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2.5" /><path d="M3 16l5-5 4 4 3-3 6 6" /></svg>,
+};
+
+function SettingsIcon({ children, color }) {
+  return (
+    <div style={{
+      width: 29, height: 29, borderRadius: 7,
+      background: color, display: 'flex',
+      alignItems: 'center', justifyContent: 'center',
+      flexShrink: 0,
+    }}>{children}</div>
+  );
+}
+
+function SettingsRow({ icon, color, label, value, onClick, last, danger, isToggle, toggleValue, onToggle }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '8px 16px', minHeight: 44,
+        cursor: onClick ? 'pointer' : 'default',
+        background: SETTINGS_CARD_BG,
+        position: 'relative',
+      }}
+    >
+      {icon && <SettingsIcon color={color}>{icon}</SettingsIcon>}
+      <div style={{
+        flex: 1, fontSize: 17,
+        color: danger ? SETTINGS_DANGER : SETTINGS_LABEL_COLOR,
+        fontWeight: danger ? 500 : 400,
+        fontFamily: SETTINGS_FONT,
+      }}>{label}</div>
+      {value !== undefined && value !== null && value !== '' && (
+        <div style={{ fontSize: 17, color: SETTINGS_VALUE_COLOR, fontFamily: SETTINGS_FONT, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
+      )}
+      {isToggle && (
+        <div onClick={(e) => { e.stopPropagation(); onToggle?.(!toggleValue); }} style={{ width: 51, height: 31, borderRadius: 16, background: toggleValue ? '#34C759' : '#E9E9EA', position: 'relative', transition: 'background 0.2s', flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: 2, left: toggleValue ? 22 : 2, width: 27, height: 27, borderRadius: '50%', background: '#fff', boxShadow: '0 3px 8px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.06)', transition: 'left 0.2s' }} />
+        </div>
+      )}
+      {onClick && !isToggle && (
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#C7C7CC" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="9 18 15 12 9 6" /></svg>
+      )}
+      {!last && (
+        <div style={{ position: 'absolute', left: icon ? 57 : 16, right: 0, bottom: 0, height: 0.5, background: SETTINGS_SEPARATOR }} />
+      )}
+    </div>
+  );
+}
+
+function SettingsSection({ header, footer, children }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      {header && (
+        <div style={{
+          padding: '0 16px 6px', fontSize: 13,
+          color: SETTINGS_SECTION_HEADER, textTransform: 'uppercase',
+          fontFamily: SETTINGS_FONT, letterSpacing: -0.08,
+        }}>{header}</div>
+      )}
+      <div style={{ background: SETTINGS_CARD_BG, borderRadius: 10, overflow: 'hidden', marginInline: 16 }}>{children}</div>
+      {footer && (
+        <div style={{ padding: '6px 16px 0', fontSize: 13, color: SETTINGS_SECTION_HEADER, fontFamily: SETTINGS_FONT, lineHeight: 1.35 }}>{footer}</div>
+      )}
+    </div>
+  );
+}
+
+function SettingsSubScreen({ title, onBack, children }) {
+  return (
+    <div style={{ background: SETTINGS_PAGE_BG, minHeight: '100vh' }}>
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 10,
+        background: 'rgba(247,247,247,0.92)', backdropFilter: 'saturate(180%) blur(20px)', WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+        borderBottom: '0.5px solid ' + SETTINGS_SEPARATOR,
+        padding: '52px 8px 10px',
+        display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8,
+      }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: '#007AFF', fontSize: 17, fontFamily: SETTINGS_FONT, padding: '4px 10px', justifySelf: 'start' }}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#007AFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          Настройки
+        </button>
+        <div style={{ fontSize: 17, fontWeight: 600, color: '#000', fontFamily: SETTINGS_FONT }}>{title}</div>
+        <div />
+      </div>
+      <div style={{ paddingTop: 16, paddingBottom: 'var(--nav-height)' }}>{children}</div>
+    </div>
+  );
+}
+
+function SettingsTextField({ label, value, onChange, placeholder, type = 'text' }) {
+  return (
+    <div style={{ padding: '8px 16px', minHeight: 44, display: 'flex', alignItems: 'center', gap: 12, background: SETTINGS_CARD_BG, position: 'relative' }}>
+      {label && <div style={{ fontSize: 17, color: SETTINGS_LABEL_COLOR, fontFamily: SETTINGS_FONT, minWidth: 110 }}>{label}</div>}
+      <input
+        type={type}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          flex: 1, border: 'none', outline: 'none',
+          background: 'transparent', fontSize: 17, fontFamily: SETTINGS_FONT,
+          color: SETTINGS_LABEL_COLOR, textAlign: label ? 'right' : 'left',
+          padding: 0, minWidth: 0,
+        }}
+      />
+    </div>
+  );
+}
+
+function AdminSettingsScreen({ banners, setBanners, settings, setSettings, onLogout, showToast, lang }) {
   const { t } = useLang();
-  const [mbankPhone, setMbankPhone] = React.useState(localStorage.getItem('mbank_phone') || '');
-  const [obankPhone, setObankPhone] = React.useState(localStorage.getItem('obank_phone') || '');
-  const [greenToken, setGreenToken] = React.useState(localStorage.getItem('green_token') || '');
-  const [greenInstance, setGreenInstance] = React.useState(localStorage.getItem('green_instance') || '');
-  const [whatsappAdmin, setWhatsappAdmin] = React.useState(localStorage.getItem('whatsapp_admin') || '');
-  const [welcomeBonus, setWelcomeBonus] = React.useState(Number(localStorage.getItem('bonus_welcome') || settings.welcomeBonus || 50));
-  const [welcomeOn, setWelcomeOn] = React.useState(localStorage.getItem('bonus_welcome_on') !== 'false');
-  const [orderBonus, setOrderBonus] = React.useState(Number(localStorage.getItem('bonus_order_pct') || settings.bonusPercent || 5));
-  const [orderBonusOn, setOrderBonusOn] = React.useState(localStorage.getItem('bonus_order_on') !== 'false');
-  const [referralBonus, setReferralBonus] = React.useState(Number(localStorage.getItem('bonus_referral') || settings.referralBonus || 100));
-  const [referralOn, setReferralOn] = React.useState(localStorage.getItem('bonus_referral_on') !== 'false');
-  const loginBgRef = React.useRef();
+  const [sub, setSub] = useState(null); // null | 'banners' | 'bonus' | 'whatsapp' | 'mbank' | 'obank' | 'shop' | 'password' | 'loginBg'
+
+  // localStorage-backed credentials
+  const [mbankPhone, setMbankPhone]         = useState(() => localStorage.getItem('mbank_phone')     || '');
+  const [obankPhone, setObankPhone]         = useState(() => localStorage.getItem('obank_phone')     || '');
+  const [whatsappAdmin, setWhatsappAdmin]   = useState(() => localStorage.getItem('whatsapp_admin')  || '');
+  const [greenInstance, setGreenInstance]   = useState(() => localStorage.getItem('green_instance')  || '');
+  const [greenToken, setGreenToken]         = useState(() => localStorage.getItem('green_token')     || '');
+  const [adminPassword, setAdminPassword]   = useState(() => settings?.adminPassword || 'admin123');
+
+  const loginBgRef = useRef();
+
+  const saveAndPop = (saver, msg = 'Сохранено') => {
+    saver();
+    showToast?.(msg);
+    setSub(null);
+  };
+
+  const saveWhatsapp = () => {
+    localStorage.setItem('whatsapp_admin',  whatsappAdmin);
+    localStorage.setItem('green_instance',  greenInstance);
+    localStorage.setItem('green_token',     greenToken);
+  };
+  const saveMbank = () => localStorage.setItem('mbank_phone', mbankPhone);
+  const saveObank = () => localStorage.setItem('obank_phone', obankPhone);
+  const savePassword = () => setSettings(p => ({ ...p, adminPassword }));
 
   const handleLoginBgUpload = (e) => {
     const file = e.target.files[0];
@@ -2075,284 +2751,407 @@ function AdminSettingsScreen({ settings, setSettings, onLogout, showToast, lang 
       const dataUrl = ev.target.result;
       setSettings(p => ({ ...p, loginBg: dataUrl }));
       localStorage.setItem('parfum_login_bg', dataUrl);
-      showToast('Фон сохранён!');
+      showToast?.('Фон сохранён');
     };
     reader.readAsDataURL(file);
   };
 
-  const save = () => {
-    localStorage.setItem('mbank_phone', mbankPhone);
-    localStorage.setItem('obank_phone', obankPhone);
-    localStorage.setItem('green_token', greenToken);
-    localStorage.setItem('green_instance', greenInstance);
-    localStorage.setItem('whatsapp_admin', whatsappAdmin);
-    localStorage.setItem('bonus_welcome', welcomeBonus);
-    localStorage.setItem('bonus_welcome_on', welcomeOn);
-    localStorage.setItem('bonus_order_pct', orderBonus);
-    localStorage.setItem('bonus_order_on', orderBonusOn);
-    localStorage.setItem('bonus_referral', referralBonus);
-    localStorage.setItem('bonus_referral_on', referralOn);
-    setSettings(p => ({ ...p, welcomeBonus, bonusPercent: orderBonus, referralBonus }));
-    showToast('Сохранено');
-  };
+  // Sub-screen renderers ────────────────────────────────────────────────────────
 
-  const S = {
-    page: { background: '#f7f7f7', minHeight: '100vh', paddingBottom: 100 },
-    header: { background: '#111', padding: '52px 16px 16px' },
-    headerTitle: { fontSize: 17, fontWeight: 700, color: '#fff' },
-    section: { background: '#fff', borderRadius: 16, overflow: 'hidden', marginBottom: 12, border: '0.5px solid #ebebeb' },
-    sectionTitle: { padding: '13px 16px', borderBottom: '0.5px solid #f0f0f0', fontSize: 11, fontWeight: 700, color: '#999', letterSpacing: 1.5 },
-    hint: { padding: '10px 16px', fontSize: 11, color: '#aaa', borderTop: '0.5px solid #f0f0f0' },
-    input: { border: '0.5px solid #e8e8e8', borderRadius: 10, padding: '8px 12px', fontSize: 13, outline: 'none', background: '#f7f7f7', textAlign: 'right', color: '#111' },
-  };
-
-  const Row = ({ label, children, last }) => (
-    <div style={{ padding: '13px 16px', borderBottom: last ? 'none' : '0.5px solid #f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-      <span style={{ fontSize: 14, color: '#444', flexShrink: 0 }}>{label}</span>
-      {children}
-    </div>
+  const renderBanners = () => (
+    <SettingsSubScreen title="Баннеры" onBack={() => setSub(null)}>
+      <AdminBannersScreen banners={banners} setBanners={setBanners} />
+    </SettingsSubScreen>
   );
 
-  const Toggle = ({ value, onChange }) => (
-    <div onClick={() => onChange(!value)} style={{ width: 44, height: 26, borderRadius: 13, background: value ? '#111' : '#ddd', cursor: 'pointer', position: 'relative', transition: 'all 0.2s', flexShrink: 0 }}>
-      <div style={{ width: 22, height: 22, borderRadius: 11, background: '#fff', position: 'absolute', top: 2, left: value ? 20 : 2, transition: 'all 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.2)' }} />
-    </div>
+  const renderBonus = () => (
+    <SettingsSubScreen title="Бонусы" onBack={() => setSub(null)}>
+      <AdminBonusScreen settings={settings} setSettings={setSettings} showToast={showToast} />
+    </SettingsSubScreen>
   );
 
-  const NumInput = ({ value, onChange, suffix }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <input type="number" value={value} onChange={e => onChange(Number(e.target.value))} style={{ ...S.input, width: 72, textAlign: 'center', fontWeight: 600, fontSize: 14 }} />
-      {suffix && <span style={{ fontSize: 12, color: '#bbb' }}>{suffix}</span>}
-    </div>
+  const renderWhatsapp = () => (
+    <SettingsSubScreen title="WhatsApp" onBack={() => setSub(null)}>
+      <SettingsSection
+        header="Green API"
+        footer="Получите Instance ID и Token на сайте green-api.com. Этот номер используется для отправки уведомлений о заказах."
+      >
+        <SettingsTextField label="Ваш номер"   value={whatsappAdmin} onChange={setWhatsappAdmin} placeholder="+996 700 000 000" />
+        <SettingsTextField label="Instance ID" value={greenInstance} onChange={setGreenInstance} placeholder="1234567890" />
+        <SettingsTextField label="API Token"   value={greenToken}    onChange={setGreenToken}    placeholder="token..." />
+      </SettingsSection>
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => saveAndPop(saveWhatsapp)} style={primarySaveBtn}>Сохранить</button>
+      </div>
+    </SettingsSubScreen>
   );
 
-  const TextInput = ({ value, onChange, placeholder }) => (
-    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ ...S.input, width: 164 }} />
+  const renderMbank = () => (
+    <SettingsSubScreen title="M-Bank" onBack={() => setSub(null)}>
+      <SettingsSection
+        header="Реквизиты"
+        footer="Клиенты переводят оплату на этот номер через M-Bank. Введите номер с кодом страны."
+      >
+        <SettingsTextField label="Телефон" value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" />
+      </SettingsSection>
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => saveAndPop(saveMbank)} style={primarySaveBtn}>Сохранить</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  const renderObank = () => (
+    <SettingsSubScreen title="O!Bank" onBack={() => setSub(null)}>
+      <SettingsSection
+        header="Реквизиты"
+        footer="Клиенты переводят оплату на этот номер через O!Bank."
+      >
+        <SettingsTextField label="Телефон" value={obankPhone} onChange={setObankPhone} placeholder="+996 700 000 000" />
+      </SettingsSection>
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => saveAndPop(saveObank)} style={primarySaveBtn}>Сохранить</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  const renderShop = () => (
+    <SettingsSubScreen title="Магазин" onBack={() => setSub(null)}>
+      <SettingsSection header="Информация">
+        <SettingsTextField label="Название" value={settings?.shopName || ''} onChange={v => setSettings(p => ({ ...p, shopName: v }))} placeholder="Kemal Usman" />
+        <SettingsTextField label="Адрес"    value={settings?.shopAddress || ''} onChange={v => setSettings(p => ({ ...p, shopAddress: v }))} placeholder="ул. Ленина, 45" />
+        <SettingsTextField label="Часы"     value={settings?.workingHours || ''} onChange={v => setSettings(p => ({ ...p, workingHours: v }))} placeholder="Пн–Вс: 10:00–21:00" />
+      </SettingsSection>
+      <SettingsSection header="Карта" footer="Координаты используются для отображения магазина на карте.">
+        <SettingsTextField label="Широта"  value={settings?.shopLat || ''} onChange={v => setSettings(p => ({ ...p, shopLat: v }))} placeholder="42.8746" />
+        <SettingsTextField label="Долгота" value={settings?.shopLng || ''} onChange={v => setSettings(p => ({ ...p, shopLng: v }))} placeholder="74.5698" />
+      </SettingsSection>
+      <SettingsSection header="О нас">
+        <div style={{ padding: '12px 16px', background: SETTINGS_CARD_BG }}>
+          <textarea
+            value={settings?.aboutText || ''}
+            onChange={e => setSettings(p => ({ ...p, aboutText: e.target.value }))}
+            placeholder="Расскажите о магазине..."
+            rows={4}
+            style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', background: 'transparent', fontSize: 17, fontFamily: SETTINGS_FONT, color: SETTINGS_LABEL_COLOR, padding: 0, boxSizing: 'border-box' }}
+          />
+        </div>
+      </SettingsSection>
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => { showToast?.('Сохранено'); setSub(null); }} style={primarySaveBtn}>Готово</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  const renderPassword = () => (
+    <SettingsSubScreen title="Пароль" onBack={() => setSub(null)}>
+      <SettingsSection
+        header="Пароль администратора"
+        footer="Этот пароль запрашивается при входе в админ-панель из профиля клиента."
+      >
+        <SettingsTextField label="Пароль" value={adminPassword} onChange={setAdminPassword} placeholder="admin123" type="password" />
+      </SettingsSection>
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => saveAndPop(savePassword, 'Пароль обновлён')} style={primarySaveBtn}>Сохранить</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  const renderLoginBg = () => (
+    <SettingsSubScreen title="Фон входа" onBack={() => setSub(null)}>
+      <div style={{ padding: '0 16px' }}>
+        <div style={{ width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', background: '#111', position: 'relative', marginBottom: 16, border: '0.5px solid ' + SETTINGS_SEPARATOR }}>
+          <img src={settings?.loginBg || '/login-bg.jpeg'} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} onError={e => { e.target.style.display = 'none'; }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', padding: 16 }}>
+            <div style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontSize: 24, color: '#f5f0e8' }}>Kemal Usman</div>
+            <div style={{ fontSize: 11, color: '#c9a96e', letterSpacing: 3, marginTop: 4 }}>PARFUM</div>
+          </div>
+        </div>
+        <input ref={loginBgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLoginBgUpload} />
+        <button onClick={() => loginBgRef.current?.click()} style={primarySaveBtn}>Заменить фото</button>
+        {settings?.loginBg && (
+          <button onClick={() => { setSettings(p => ({ ...p, loginBg: null })); localStorage.removeItem('parfum_login_bg'); showToast?.('Сброшено'); }} style={{ ...primarySaveBtn, background: 'transparent', color: SETTINGS_DANGER, marginTop: 10 }}>
+            Сбросить к стандартному
+          </button>
+        )}
+      </div>
+    </SettingsSubScreen>
+  );
+
+  // Root view ────────────────────────────────────────────────────────────────────
+
+  const renderRoot = () => (
+    <div style={{ background: SETTINGS_PAGE_BG, minHeight: '100vh', paddingBottom: 'var(--nav-height)' }}>
+      <div style={{ padding: '52px 16px 12px', background: SETTINGS_PAGE_BG }}>
+        <div style={{ fontSize: 34, fontWeight: 700, color: '#000', fontFamily: SETTINGS_FONT, letterSpacing: 0.4 }}>Настройки</div>
+      </div>
+
+      <SettingsSection header="Контент">
+        <SettingsRow icon={SET_ICON.photo} color="#FF9500" label="Баннеры" onClick={() => setSub('banners')} />
+        <SettingsRow icon={SET_ICON.gift}  color="#AF52DE" label="Бонусы"  onClick={() => setSub('bonus')} last />
+      </SettingsSection>
+
+      <SettingsSection header="Интеграции">
+        <SettingsRow icon={SET_ICON.chat}  color="#34C759" label="WhatsApp" value={whatsappAdmin ? '✓' : ''} onClick={() => setSub('whatsapp')} />
+        <SettingsRow icon={SET_ICON.card}  color="#FF3B30" label="M-Bank"   value={mbankPhone || ''}        onClick={() => setSub('mbank')} />
+        <SettingsRow icon={SET_ICON.card}  color="#AF52DE" label="O!Bank"   value={obankPhone || ''}        onClick={() => setSub('obank')} last />
+      </SettingsSection>
+
+      <SettingsSection header="Магазин">
+        <SettingsRow icon={SET_ICON.store}   color="#007AFF" label="О магазине" onClick={() => setSub('shop')} />
+        <SettingsRow icon={SET_ICON.loginBg} color="#5AC8FA" label="Фон экрана входа" onClick={() => setSub('loginBg')} last />
+      </SettingsSection>
+
+      <SettingsSection header="Безопасность">
+        <SettingsRow icon={SET_ICON.lock} color="#FF3B30" label="Пароль администратора" onClick={() => setSub('password')} last />
+      </SettingsSection>
+
+      <SettingsSection header="Аккаунт">
+        <SettingsRow icon={SET_ICON.logout} color="#FF3B30" label={t.logout} onClick={onLogout} danger last />
+      </SettingsSection>
+    </div>
   );
 
   return (
-    <div style={S.page}>
-      <div style={S.header}>
-        <span style={S.headerTitle}>Настройки</span>
-      </div>
-
-      <div style={{ padding: '12px 16px' }}>
-
-        <div style={S.section}>
-          <div style={S.sectionTitle}>💳 M-BANK</div>
-          <Row label="Номер телефона" last><TextInput value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" /></Row>
-          <div style={S.hint}>Клиент переводит на этот номер через M-Bank</div>
-        </div>
-
-        <div style={S.section}>
-          <div style={S.sectionTitle}>🏦 O!BANK</div>
-          <Row label="Номер телефона" last><TextInput value={obankPhone} onChange={setObankPhone} placeholder="+996 700 000 000" /></Row>
-          <div style={S.hint}>Клиент переводит на этот номер через O!Bank</div>
-        </div>
-
-        <div style={S.section}>
-          <div style={S.sectionTitle}>💬 WHATSAPP (GREEN API)</div>
-          <Row label="Ваш номер">
-            <input value={whatsappAdmin} onChange={e => setWhatsappAdmin(e.target.value)} placeholder="+996 700 000 000" style={{ ...S.input, width: 164 }} />
-          </Row>
-          <Row label="Instance ID"><TextInput value={greenInstance} onChange={setGreenInstance} placeholder="1234567890" /></Row>
-          <Row label="API Token" last><TextInput value={greenToken} onChange={setGreenToken} placeholder="token..." /></Row>
-          <div style={S.hint}>Получите на сайте green-api.com</div>
-        </div>
-
-        <div style={S.section}>
-          <div style={S.sectionTitle}>🎁 БОНУСЫ</div>
-          <Row label="Приветственный бонус">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <NumInput value={welcomeBonus} onChange={setWelcomeBonus} suffix="сом" />
-              <Toggle value={welcomeOn} onChange={setWelcomeOn} />
-            </div>
-          </Row>
-          <Row label="С каждого заказа">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <NumInput value={orderBonus} onChange={setOrderBonus} suffix="%" />
-              <Toggle value={orderBonusOn} onChange={setOrderBonusOn} />
-            </div>
-          </Row>
-          <Row label="Реферальный бонус" last>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <NumInput value={referralBonus} onChange={setReferralBonus} suffix="сом" />
-              <Toggle value={referralOn} onChange={setReferralOn} />
-            </div>
-          </Row>
-        </div>
-
-        <div style={S.section}>
-          <div style={S.sectionTitle}>📍 О НАС</div>
-          <Row label="Адрес магазина">
-            <input value={settings?.shopAddress || ''} onChange={e => setSettings(p => ({ ...p, shopAddress: e.target.value }))} placeholder="ул. Ленина, 45" style={{ ...S.input, width: 164 }} />
-          </Row>
-          <Row label="Широта (lat)">
-            <input value={settings?.shopLat || ''} onChange={e => setSettings(p => ({ ...p, shopLat: e.target.value }))} placeholder="42.8746" style={{ ...S.input, width: 164 }} />
-          </Row>
-          <Row label="Долгота (lng)">
-            <input value={settings?.shopLng || ''} onChange={e => setSettings(p => ({ ...p, shopLng: e.target.value }))} placeholder="74.5698" style={{ ...S.input, width: 164 }} />
-          </Row>
-          <Row label="Время работы" last>
-            <input value={settings?.workingHours || ''} onChange={e => setSettings(p => ({ ...p, workingHours: e.target.value }))} placeholder="Пн–Вс: 10:00–21:00" style={{ ...S.input, width: 164 }} />
-          </Row>
-          <div style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 8 }}>О нас (описание)</div>
-            <textarea value={settings?.aboutText || ''} onChange={e => setSettings(p => ({ ...p, aboutText: e.target.value }))} placeholder="Расскажите о вашем магазине..." rows={3} style={{ width: '100%', border: '0.5px solid #e8e8e8', borderRadius: 10, padding: '10px 12px', fontSize: 13, outline: 'none', background: '#f7f7f7', resize: 'none', fontFamily: 'inherit', boxSizing: 'border-box', color: '#111' }} />
-          </div>
-        </div>
-
-        {/* LOGIN ФОНА */}
-        <div style={{ background: '#fff', borderRadius: 14, overflow: 'hidden', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '0.5px solid #f5f5f5' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#aaa', letterSpacing: 1 }}>🖼 ФОТО ЭКРАНА ВХОДА</span>
-          </div>
-          <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {/* Preview */}
-            <div style={{
-              width: '100%', height: 180, borderRadius: 12, overflow: 'hidden',
-              background: '#111', position: 'relative',
-              border: '1px solid #eee'
-            }}>
-              <img
-                src={settings.loginBg || '/login-bg.jpeg'}
-                style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }}
-                onError={e => { e.target.style.display = 'none'; }}
-              />
-              <div style={{
-                position: 'absolute', inset: 0,
-                background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.75) 100%)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
-                padding: 14
-              }}>
-                <div style={{ fontFamily: "'Playfair Display', serif", fontStyle: 'italic', fontSize: 22, color: '#f5f0e8' }}>Kemal Usman</div>
-                <div style={{ fontSize: 10, color: '#c9a96e', letterSpacing: 3, marginTop: 4 }}>PARFUM</div>
-              </div>
-            </div>
-            {/* Upload button */}
-            <input ref={loginBgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleLoginBgUpload} />
-            <button onClick={() => loginBgRef.current?.click()} style={{
-              width: '100%', padding: '12px', background: '#111', color: '#fff',
-              border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer'
-            }}>
-              📷 Заменить фото
-            </button>
-            {settings.loginBg && (
-              <button onClick={() => { setSettings(p => ({ ...p, loginBg: null })); localStorage.removeItem('parfum_login_bg'); showToast('Сброшено'); }} style={{
-                width: '100%', padding: '10px', background: 'none',
-                border: '1px solid #eee', borderRadius: 10, fontSize: 13, color: '#999', cursor: 'pointer'
-              }}>
-                Сбросить к стандартному
-              </button>
-            )}
-            <div style={{ fontSize: 11, color: '#bbb', textAlign: 'center' }}>
-              Рекомендуется: вертикальное фото (портрет). Обрезка происходит автоматически.
-            </div>
-          </div>
-        </div>
-
-        <button onClick={save} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 12 }}>
-          Сохранить
-        </button>
-        <button onClick={onLogout} style={{ width: '100%', padding: 14, background: 'none', border: '1.5px solid #E53935', borderRadius: 14, color: '#E53935', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>{t.logout}</button>
-      </div>
+    <div style={{ background: SETTINGS_PAGE_BG, minHeight: '100vh', position: 'relative', overflow: 'hidden' }}>
+      <AnimatePresence mode="wait" initial={false}>
+        {sub === null && (
+          <motion.div
+            key="root"
+            initial={{ x: -40, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -40, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+          >
+            {renderRoot()}
+          </motion.div>
+        )}
+        {sub !== null && (
+          <motion.div
+            key={sub}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+            style={{ position: 'absolute', inset: 0 }}
+          >
+            {sub === 'banners'  && renderBanners()}
+            {sub === 'bonus'    && renderBonus()}
+            {sub === 'whatsapp' && renderWhatsapp()}
+            {sub === 'mbank'    && renderMbank()}
+            {sub === 'obank'    && renderObank()}
+            {sub === 'shop'     && renderShop()}
+            {sub === 'password' && renderPassword()}
+            {sub === 'loginBg'  && renderLoginBg()}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+const primarySaveBtn = {
+  width: '100%', padding: 16, marginTop: 8,
+  background: '#007AFF', color: '#fff',
+  border: 'none', borderRadius: 12,
+  fontSize: 17, fontWeight: 600,
+  cursor: 'pointer', fontFamily: SETTINGS_FONT,
+};
 // ─── MBANK PAYMENT ────────────────────────────────────────────────────────────
+// FIX (CRITICAL): the original used `window.location.href = 'mbank://...'` which
+// silently fails inside Capacitor's WKWebView on iOS for non-http URL schemes.
+// Now uses Capacitor App.openUrl via the openPaymentApp helper, with proper
+// fallbacks (copy details / dial admin).
 function MBankPayment({ total, orderId, onConfirm, onCancel }) {
   const phone = localStorage.getItem('mbank_phone') || '';
   const cleanPhone = phone.replace(/\D/g, '');
   const [step, setStep] = React.useState('pay');
+  const [opening, setOpening] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
 
-  const openMBank = () => {
-    const deepLink = `mbank://transfer?phone=${cleanPhone}&amount=${total}&comment=Kemal_Usman_${orderId}`;
-    window.location.href = deepLink;
-    setTimeout(() => setStep('confirm'), 2000);
+  const openMBank = async () => {
+    if (!cleanPhone) {
+      // Admin hasn't configured a payment phone yet — show details step.
+      setStep('confirm');
+      return;
+    }
+    setOpening(true);
+    haptic('light');
+    const result = await openPaymentApp('mbank', {
+      phone: cleanPhone,
+      amount: total,
+      comment: `Kemal Usman ${orderId}`,
+    });
+    setOpening(false);
+    // Whether the OS reported success or not, advance to the confirm step
+    // so the user can mark the payment as done.
+    setTimeout(() => setStep('confirm'), result.ok ? 1800 : 400);
+  };
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(`${phone}\n${total.toLocaleString()} сом\nKemal Usman #${orderId}`);
+    if (ok) {
+      haptic('success');
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    }
+  };
+
+  const handleDial = async () => {
+    haptic('light');
+    await dialPhone(cleanPhone);
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 430 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}>
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+        style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
+      >
+        {/* drag handle */}
+        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5E5', margin: '0 auto 16px' }} />
+
         {step === 'pay' && <>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#111', marginBottom: 4 }}>Оплата M-Bank</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#111' }}>{total.toLocaleString()} сом</div>
-            <div style={{ fontSize: 13, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
+            <MBankLogo size={36} />
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#111' }}>Оплата M-Bank</div>
           </div>
-          <button onClick={openMBank} style={{ width: '100%', padding: 16, background: '#00AEEF', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            Открыть M-Bank · {total.toLocaleString()} сом
-          </button>
-          <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Нет M-Bank? Переведите вручную:</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>{phone || 'Не указан'}</div>
-            <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
+          <div style={{ textAlign: 'center', marginBottom: 22 }}>
+            <div style={{ fontSize: 30, fontWeight: 900, color: '#111', letterSpacing: -0.5 }}>{total.toLocaleString()} сом</div>
+            <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
+          </div>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={openMBank}
+            disabled={opening}
+            style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #00B0AA 0%, #0E7A6E 100%)', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: opening ? 0.7 : 1, boxShadow: '0 8px 20px rgba(14,122,110,0.3)' }}>
+            {opening ? 'Открываем M-Bank…' : `Открыть M-Bank · ${total.toLocaleString()} сом`}
+          </motion.button>
+          <div style={{ background: '#f5f5f5', borderRadius: 14, padding: '14px 16px', marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Нет M-Bank? Переведите вручную:</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: 0.5 }}>{phone || 'Не указан'}</div>
+              {phone && <button onClick={handleCopy} style={{ padding: '6px 12px', borderRadius: 8, background: copied ? '#34C759' : '#111', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '✓ Скопир.' : 'Копировать'}</button>}
+            </div>
+            <div style={{ fontSize: 13, color: '#666' }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
             <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
+            {phone && (
+              <button onClick={handleDial} style={{ width: '100%', marginTop: 10, padding: '10px', borderRadius: 10, background: 'transparent', color: '#0E7A6E', border: '1.5px solid #0E7A6E', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                📞 Позвонить администратору
+              </button>
+            )}
           </div>
-          <button onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
-            + Я оплатил
-          </button>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setStep('confirm')}
+            style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}>
+            ✓ Я оплатил
+          </motion.button>
           <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
         </>}
         {step === 'confirm' && <>
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
-            <button onClick={() => onConfirm('mbank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+          <div style={{ textAlign: 'center', padding: '12px 0 0' }}>
+            <motion.div initial={{ scale: 0.6, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+              style={{ width: 72, height: 72, margin: '0 auto 16px', borderRadius: 22, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 38 }}>⏳</div>
+            </motion.div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 24, lineHeight: 1.5 }}>Администратор проверит оплату и подтвердит заказ. Вы получите уведомление в WhatsApp.</div>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={() => onConfirm('mbank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
               Готово
-            </button>
+            </motion.button>
           </div>
         </>}
-      </div>
+      </motion.div>
     </div>
   );
 }
 
 // ─── OBANK PAYMENT ────────────────────────────────────────────────────────────
+// Same robust deep-link handling as MBankPayment (Capacitor App.openUrl + fallbacks).
 function OBankPayment({ total, orderId, onConfirm, onCancel }) {
   const phone = localStorage.getItem('obank_phone') || '';
   const cleanPhone = phone.replace(/\D/g, '');
   const [step, setStep] = React.useState('pay');
-  const openOBank = () => {
-    const deepLink = `obank://transfer?phone=${cleanPhone}&amount=${total}&comment=Kemal_Usman_${orderId}`;
-    window.location.href = deepLink;
-    setTimeout(() => setStep('confirm'), 2000);
+  const [opening, setOpening] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
+
+  const openOBank = async () => {
+    if (!cleanPhone) { setStep('confirm'); return; }
+    setOpening(true);
+    haptic('light');
+    const result = await openPaymentApp('obank', {
+      phone: cleanPhone,
+      amount: total,
+      comment: `Kemal Usman ${orderId}`,
+    });
+    setOpening(false);
+    setTimeout(() => setStep('confirm'), result.ok ? 1800 : 400);
   };
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(`${phone}\n${total.toLocaleString()} сом\nKemal Usman #${orderId}`);
+    if (ok) { haptic('success'); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+  };
+
+  const handleDial = async () => { haptic('light'); await dialPhone(cleanPhone); };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px 40px', width: '100%', maxWidth: 430 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}>
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 30 }}
+        style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
+      >
+        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5E5', margin: '0 auto 16px' }} />
         {step === 'pay' && <>
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#111', marginBottom: 4 }}>Оплата O!Bank</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: '#111' }}>{total.toLocaleString()} сом</div>
-            <div style={{ fontSize: 13, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
+            <OBankLogo size={36} />
+            <div style={{ fontSize: 18, fontWeight: 800, color: '#111' }}>Оплата O!Bank</div>
           </div>
-          <button onClick={openOBank} style={{ width: '100%', padding: 16, background: '#E5007E', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            Открыть O!Bank · {total.toLocaleString()} сом
-          </button>
-          <div style={{ background: '#f5f5f5', borderRadius: 12, padding: 14, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>Нет O!Bank? Переведите вручную:</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>{phone || 'Не указан'}</div>
-            <div style={{ fontSize: 13, color: '#666', marginTop: 4 }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
+          <div style={{ textAlign: 'center', marginBottom: 22 }}>
+            <div style={{ fontSize: 30, fontWeight: 900, color: '#111', letterSpacing: -0.5 }}>{total.toLocaleString()} сом</div>
+            <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
+          </div>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={openOBank} disabled={opening}
+            style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #FF5BAA 0%, #E5007E 100%)', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: opening ? 0.7 : 1, boxShadow: '0 8px 20px rgba(229,0,126,0.3)' }}>
+            {opening ? 'Открываем O!Bank…' : `Открыть O!Bank · ${total.toLocaleString()} сом`}
+          </motion.button>
+          <div style={{ background: '#f5f5f5', borderRadius: 14, padding: '14px 16px', marginBottom: 12 }}>
+            <div style={{ fontSize: 11, color: '#888', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Нет O!Bank? Переведите вручную:</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: 0.5 }}>{phone || 'Не указан'}</div>
+              {phone && <button onClick={handleCopy} style={{ padding: '6px 12px', borderRadius: 8, background: copied ? '#34C759' : '#111', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '✓ Скопир.' : 'Копировать'}</button>}
+            </div>
+            <div style={{ fontSize: 13, color: '#666' }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
             <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
+            {phone && (
+              <button onClick={handleDial} style={{ width: '100%', marginTop: 10, padding: '10px', borderRadius: 10, background: 'transparent', color: '#E5007E', border: '1.5px solid #E5007E', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                📞 Позвонить администратору
+              </button>
+            )}
           </div>
-          <button onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 10 }}>
+          <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}>
             ✓ Я оплатил
-          </button>
+          </motion.button>
           <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
         </>}
         {step === 'confirm' && <>
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 24 }}>Администратор проверит оплату и подтвердит заказ</div>
-            <button onClick={() => onConfirm('obank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+          <div style={{ textAlign: 'center', padding: '12px 0 0' }}>
+            <motion.div initial={{ scale: 0.6, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+              style={{ width: 72, height: 72, margin: '0 auto 16px', borderRadius: 22, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ fontSize: 38 }}>⏳</div>
+            </motion.div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 24, lineHeight: 1.5 }}>Администратор проверит оплату и подтвердит заказ. Вы получите уведомление в WhatsApp.</div>
+            <motion.button whileTap={{ scale: 0.97 }} onClick={() => onConfirm('obank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
               Готово
-            </button>
+            </motion.button>
           </div>
         </>}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -2585,7 +3384,8 @@ function AudioRecordBtn({ productId }) {
   );
 }
 
-function ClientAudioBtn({ productId }) {
+function ClientAudioBtn({ productId, compact = false }) {
+  const { t } = useLang();
   const key = 'parfum_audio_' + productId;
   const [hasAudio, setHasAudio] = React.useState(!!localStorage.getItem(key));
   const [playing, setPlaying] = React.useState(false);
@@ -2618,23 +3418,146 @@ function ClientAudioBtn({ productId }) {
     setPlaying(true); setPaused(false);
   };
 
+  const isActive = playing || paused;
+
+  // ── Compact pill (catalog card) ──────────────────────────────────────────────
+  if (compact) {
+    return (
+      <div onClick={e => { e.stopPropagation(); if (playing) handlePause(); else if (paused) handleResume(); else handlePlay(); }}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          padding: '5px 10px 5px 7px',
+          borderRadius: 20,
+          background: isActive ? '#111' : 'rgba(0,0,0,0.06)',
+          cursor: 'pointer',
+          transition: 'background 0.2s',
+          marginTop: 8,
+          userSelect: 'none',
+          alignSelf: 'flex-start',
+        }}
+      >
+        {/* tiny play/pause */}
+        <div style={{
+          width: 22, height: 22, borderRadius: '50%',
+          background: isActive ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.08)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: isActive ? '#fff' : '#555', flexShrink: 0,
+        }}>
+          {playing
+            ? <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            : <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          }
+        </div>
+        {/* label or wave */}
+        {playing ? (
+          <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 12 }}>
+            <style>{`@keyframes audioBar{0%,100%{height:3px}50%{height:10px}}`}</style>
+            {[0,1,2].map(i => (
+              <div key={i} style={{ width: 2.5, borderRadius: 1.5, background: 'rgba(255,255,255,0.75)', animation: 'audioBar 0.7s ease-in-out infinite', animationDelay: `${i*0.13}s`, height: 3 }}/>
+            ))}
+          </div>
+        ) : (
+          <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#fff' : '#555', whiteSpace: 'nowrap' }}>
+            {paused ? t.continueBtn : t.listenBtn}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  // ── Full player (detail screen) ──────────────────────────────────────────────
+  const icHeadphone = (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 18v-6a9 9 0 0118 0v6"/>
+      <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3z"/>
+      <path d="M3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/>
+    </svg>
+  );
+  const icPlay = (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="5 3 19 12 5 21 5 3"/>
+    </svg>
+  );
+  const icPause = (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6" y="4" width="4" height="16" rx="1"/>
+      <rect x="14" y="4" width="4" height="16" rx="1"/>
+    </svg>
+  );
+
+  const handleToggle = () => {
+    if (playing) handlePause();
+    else if (paused) handleResume();
+    else handlePlay();
+  };
+
   return (
-    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-      {!playing && !paused && (
-        <button onClick={handlePlay} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 12px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
-          Слушать аромат
-        </button>
-      )}
-      {playing && (
-        <button onClick={handlePause} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #F59E0B', background: 'none', fontSize: 12, color: '#F59E0B', cursor: 'pointer' }}>
-          Пауза
-        </button>
-      )}
-      {paused && (
-        <button onClick={handleResume} style={{ flex: 1, padding: '6px 12px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
-          Продолжить
-        </button>
-      )}
+    <div onClick={e => e.stopPropagation()} style={{ marginBottom: 16 }}>
+      <style>{`
+        @keyframes audioBar {
+          0%, 100% { height: 4px; }
+          50% { height: 16px; }
+        }
+      `}</style>
+      <div
+        onClick={handleToggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: isActive ? '#111' : '#f6f6f6',
+          borderRadius: 16, padding: '14px 16px',
+          cursor: 'pointer',
+          transition: 'background 0.25s, box-shadow 0.2s',
+          boxShadow: isActive ? '0 4px 20px rgba(0,0,0,0.18)' : 'none',
+          userSelect: 'none',
+        }}
+      >
+        {/* Icon circle */}
+        <div style={{
+          width: 40, height: 40, borderRadius: '50%',
+          background: isActive ? 'rgba(255,255,255,0.12)' : '#ebebeb',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, color: isActive ? '#fff' : '#555',
+          transition: 'background 0.25s, color 0.25s'
+        }}>
+          {icHeadphone}
+        </div>
+
+        {/* Label + waveform */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: isActive ? '#fff' : '#111', transition: 'color 0.25s', marginBottom: 4 }}>
+            {playing ? t.playingAroma : paused ? t.pausedAroma : t.listenAroma}
+          </div>
+          {playing ? (
+            <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 18 }}>
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} style={{
+                  width: 3, borderRadius: 2,
+                  background: 'rgba(255,255,255,0.65)',
+                  animation: `audioBar 0.75s ease-in-out infinite`,
+                  animationDelay: `${i * 0.11}s`,
+                  height: 4,
+                }}/>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: isActive ? 'rgba(255,255,255,0.45)' : '#bbb', transition: 'color 0.25s' }}>
+              {paused ? t.tapToContinue : t.aromaDesc}
+            </div>
+          )}
+        </div>
+
+        {/* Play / Pause button */}
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%',
+          background: isActive ? '#fff' : '#111',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, color: isActive ? '#111' : '#fff',
+          transition: 'background 0.25s, color 0.25s',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        }}>
+          {playing ? icPause : icPlay}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2675,9 +3598,51 @@ export default function App() {
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [adminLoginPass, setAdminLoginPass] = useState("");
   const [adminLoginErr, setAdminLoginErr] = useState("");
+  // PRO: welcome bonus celebration modal — shown once, after login awards welcome bonus
+  const [welcomeCelebration, setWelcomeCelebration] = useState(null);
 
   const t = TRANSLATIONS[lang];
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
+
+  // Detect native iOS (Capacitor) — hides web tab bar, uses native glass bar instead
+  const isNative = typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.();
+
+  // Native tab bar → React: listen for tab changes dispatched from Swift
+  useEffect(() => {
+    const userHandler = (e) => {
+      const tab = e.detail;
+      if (tab === 'catalog')  setScreen('catalog');
+      else if (tab === 'cart')     setScreen('cart');
+      else if (tab === 'myorders') setScreen('myorders');
+      else if (tab === 'profile')  setScreen('profile');
+    };
+    const adminHandler = (e) => {
+      const tab = e.detail;
+      if (typeof tab === 'string' && tab.length > 0) setAdminScreen(tab);
+    };
+    window.addEventListener('__nativeTabChange', userHandler);
+    window.addEventListener('__nativeAdminTabChange', adminHandler);
+    return () => {
+      window.removeEventListener('__nativeTabChange', userHandler);
+      window.removeEventListener('__nativeAdminTabChange', adminHandler);
+    };
+  }, []);
+
+  // React → Native: sync cart badge whenever cartCount changes
+  useEffect(() => {
+    if (isNative && window.__setCartBadge) window.__setCartBadge(cartCount);
+  }, [cartCount, isNative]);
+
+  // React → Native: sync active tab when screen changes from inside the web app.
+  // Sends "login" when the LoginScreen is up, "admin"/"admin-…" while in the
+  // admin panel, or the actual screen name otherwise. Swift uses these
+  // strings to hide/show the floating Liquid Glass bar.
+  useEffect(() => {
+    if (!isNative || !window.__syncTab) return;
+    const isLoggedOut = !user && !isAdmin && !guestMode;
+    const tag = isLoggedOut ? 'login' : (isAdmin ? `admin-${adminScreen}` : screen);
+    window.__syncTab(tag);
+  }, [screen, adminScreen, user, isAdmin, guestMode, isNative]);
 
   // Clear stale localStorage banner data and ensure correct accent/bg colors
   useEffect(() => {
@@ -2696,36 +3661,38 @@ export default function App() {
     } catch { /* ignore */ }
   }, []);
 
-  // Load data from PocketBase on startup
-  useEffect(() => {
-    const loadAll = async () => {
-      try {
-        const [pbProducts, pbOrders, pbClients] = await Promise.all([
-          api.getProducts(),
-          api.getOrders(),
-          api.getClients(),
-        ]);
-        if (pbProducts.length > 0) {
-          setProducts(pbProducts.map(p => ({
-            ...p,
-            img: p.images?.[0] ? api.getImageUrl(p, p.images[0]) : null,
-            images: (p.images || []).map(img => api.getImageUrl(p, img)),
-            variants: Array.isArray(p.variants) ? p.variants : (p.variants ? JSON.parse(p.variants) : []),
-          })));
-        }
-        if (pbOrders.length > 0) setOrders(pbOrders.map(o => ({
-          ...o,
-          items: Array.isArray(o.items) ? o.items : (o.items ? (() => { try { return JSON.parse(o.items); } catch { return []; } })() : []),
+  // Load data from PocketBase. Extracted so PullToRefresh can call it.
+  const loadAll = React.useCallback(async () => {
+    try {
+      const [pbProducts, pbOrders, pbClients] = await Promise.all([
+        api.getProducts(),
+        api.getOrders(),
+        api.getClients(),
+      ]);
+      if (pbProducts.length > 0) {
+        setProducts(pbProducts.map(p => ({
+          ...p,
+          img: p.images?.[0] ? api.getImageUrl(p, p.images[0]) : (FALLBACK_IMAGES[p.name] || null),
+          images: (p.images || []).length > 0 ? (p.images || []).map(img => api.getImageUrl(p, img)) : (FALLBACK_IMAGES[p.name] ? [FALLBACK_IMAGES[p.name]] : []),
+          variants: Array.isArray(p.variants) ? p.variants : (p.variants ? JSON.parse(p.variants) : []),
         })));
-        if (pbClients.length > 0) setRegisteredUsers(pbClients);
-      } catch (e) {
-        console.warn("PocketBase load error:", e);
-      } finally {
-        setPbLoading(false);
       }
-    };
-    loadAll();
+      if (pbOrders.length > 0) setOrders(pbOrders.map(o => ({
+        ...o,
+        items: Array.isArray(o.items) ? o.items : (o.items ? (() => { try { return JSON.parse(o.items); } catch { return []; } })() : []),
+      })));
+      if (pbClients.length > 0) setRegisteredUsers(pbClients);
+    } catch (e) {
+      console.warn("PocketBase load error:", e);
+    } finally {
+      setPbLoading(false);
+    }
   }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
+  // Pull-to-refresh handler exposed to CatalogScreen via prop
+  const handleRefresh = React.useCallback(async () => {
+    await loadAll();
+  }, [loadAll]);
 
   // Persist bonus balance and history
   useEffect(() => {
@@ -2806,7 +3773,8 @@ export default function App() {
       setBonusBalance(p => p + settings.welcomeBonus);
       setBonusHistory(p => [...p, { type: "welcome", amount: settings.welcomeBonus, label: t.welcomeBonus || "Приветственный бонус", date: now }]);
       setWelcomeBonusUsed(true);
-      showToast(`+${formatSum(settings.welcomeBonus)} ${t.bonusAccrued}`);
+      // PRO: trigger the celebration modal instead of a tiny toast.
+      setWelcomeCelebration({ amount: settings.welcomeBonus });
     }
     setScreen("catalog");
   };
@@ -2814,6 +3782,8 @@ export default function App() {
   const handleLogout = () => { setUser(null); setIsAdmin(false); setScreen("catalog"); setCart([]); };
 
   const addToCart = (productId, variantId) => {
+    // PRO: native haptic feedback on iOS / Android (no-op on web).
+    haptic('light');
     setCart(prev => {
       const ex = prev.find(i => i.productId === productId && i.variantId === variantId);
       const next = ex
@@ -2868,7 +3838,9 @@ export default function App() {
     const earned = Math.floor((orderData.total || 0) * (settings.bonusPercent || 0) / 100);
     if (earned > 0) { setBonusBalance(p => p - (orderData.bonusDiscount || 0) + earned); setBonusHistory(p => [...p, ...(orderData.bonusDiscount ? [{ type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }] : []), { type: "earned", amount: earned, label: "Бонус за заказ", date: now }]); }
     else if (orderData.bonusDiscount) { setBonusBalance(p => p - orderData.bonusDiscount); setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]); }
-    setCart([]); localStorage.removeItem('parfum_cart'); setScreen("myorders"); showToast(t.orderPlaced);
+    setCart([]); localStorage.removeItem('parfum_cart'); setScreen("myorders");
+    haptic('success'); // PRO: success haptic on order placement
+    showToast(t.orderPlaced);
     const clientMsg = `Здравствуйте, ${newOrder.clientName}!\nВаш заказ принят!\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${newOrder.total} сом\nСкоро свяжемся с вами!\n\n— Kemal Usman Parfum`;
     const adminPhone = localStorage.getItem('mbank_phone') || '';
     const adminMsg = `Новый заказ!\n\nКлиент: ${newOrder.clientName}\nТел: ${newOrder.clientPhone}\n\n${(newOrder.items || []).map(i => `• ${i.name} — ${i.price} сом`).join('\n')}\n\nИтого: ${newOrder.total} сом\nОплата: ${orderData.payMethod === 'mbank' ? 'M-Bank' : 'Наличные'}\nАдрес: ${orderData.address || 'Самовывоз'}`;
@@ -2908,62 +3880,110 @@ export default function App() {
   ];
 
   const ADMIN_NAV = [
-    { id: "orders", icon: IC.orders, label: t.orders },
-    { id: "products", icon: IC.bottle, label: t.products },
-    { id: "stats", icon: IC.stats, label: t.stats },
-    { id: "banners", icon: IC.image, label: t.banners },
-    { id: "bonus", icon: IC.gift, label: t.bonus },
+    { id: "orders",   icon: IC.orders,   label: t.orders },
+    { id: "products", icon: IC.bottle,   label: t.products },
+    { id: "stats",    icon: IC.stats,    label: t.stats },
     { id: "settings", icon: IC.settings, label: t.settings },
   ];
 
   if (!user && !isAdmin && !guestMode) return (
     <LangContext.Provider value={t_ctx}>
-      <div style={{ maxWidth: 480, margin: "0 auto", minHeight: "100vh", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
+      <div style={{ width: "100vw", maxWidth: "100vw", minHeight: "100vh", overflow: "hidden", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
         <Toast toast={toast} />
         <LoginScreen onLogin={handleLogin} welcomeConfig={{ enabled: settings.welcomeBonusEnabled, amount: settings.welcomeBonus, expireDays: 30 }} onGuest={() => setGuestMode(true)} loginBg={settings.loginBg} />
+        {welcomeCelebration && (
+          <BonusCelebration
+            amount={welcomeCelebration.amount}
+            lang={lang}
+            onClose={() => setWelcomeCelebration(null)}
+          />
+        )}
       </div>
     </LangContext.Provider>
   );
 
   return (
     <LangContext.Provider value={t_ctx}>
-      <div style={{ width: "100%", minHeight: "100vh", background: "#fff", position: "relative", overflow: "hidden", color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
+      <div style={{ width: "100%", minHeight: "100vh", background: "#fff", position: "relative", overflowX: "hidden", color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
         <Toast toast={toast} />
-        <div style={{ paddingBottom: T.navH + 16 }}>
+        {welcomeCelebration && (
+          <BonusCelebration
+            amount={welcomeCelebration.amount}
+            lang={lang}
+            onClose={() => setWelcomeCelebration(null)}
+          />
+        )}
+        <div style={{ paddingBottom: 'calc(var(--nav-height) + 16px)' }}>
           {isAdmin ? (
             <>
-              <div style={{ padding: "16px 16px 0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#000000", borderBottom: "0.5px solid rgba(255,255,255,0.15)", paddingBottom: 12 }}>
+              <div style={{ padding: "16px 16px 0", paddingTop: "max(52px, calc(env(safe-area-inset-top, 44px) + 8px))", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#000000", borderBottom: "0.5px solid rgba(255,255,255,0.15)", paddingBottom: 12 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: 2, textTransform: "uppercase" }}>{t.adminPanel}</div>
                 <LangToggle />
               </div>
-              {adminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onStatusChange={async (id, st) => { setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o)); try { await api.updateOrder(id, { status: st }); } catch (e) { console.warn("Status update error:", e); } }} onDelete={async (id) => { setOrders(p => p.filter(o => o.id !== id)); try { await api.deleteOrder(id); } catch (e) { console.warn("Delete order error:", e); } }} onSendWhatsApp={handleSendWhatsApp} onConfirmMBankPayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast(t.orderPlaced); }} />}
-              {adminScreen === "products" && <AdminProductsScreen products={products} setProducts={setProducts} showToast={showToast} />}
-              {adminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />}
-              {adminScreen === "banners" && <AdminBannersScreen banners={banners} setBanners={setBanners} />}
-              {adminScreen === "bonus" && <AdminBonusScreen settings={settings} setSettings={setSettings} showToast={showToast} />}
-              {adminScreen === "settings" && <AdminSettingsScreen settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
+              {/* PRO: animate admin tab transitions — fade-up between tabs */}
+              <MotionScreen screenKey={adminScreen}>
+                {adminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onStatusChange={async (id, st) => { setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o)); try { await api.updateOrder(id, { status: st }); } catch (e) { console.warn("Status update error:", e); } }} onDelete={async (id) => { setOrders(p => p.filter(o => o.id !== id)); try { await api.deleteOrder(id); } catch (e) { console.warn("Delete order error:", e); } }} onSendWhatsApp={handleSendWhatsApp} onConfirmMBankPayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast(t.orderPlaced); }} />}
+                {adminScreen === "products" && <AdminProductsScreen products={products} setProducts={setProducts} showToast={showToast} />}
+                {adminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />}
+                {adminScreen === "settings" && <AdminSettingsScreen banners={banners} setBanners={setBanners} settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
+              </MotionScreen>
             </>
           ) : (
-            <>
-              {screen === "catalog" && <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} />}
+            // PRO: animate user tab transitions; show shimmer skeleton while PB initially loads.
+            <MotionScreen screenKey={pbLoading && screen === 'catalog' ? 'catalog-loading' : screen}>
+              {pbLoading && screen === "catalog" && (
+                <div style={{ paddingTop: 100 }}><CatalogGridSkeleton count={6} /></div>
+              )}
+              {!pbLoading && screen === "catalog" && <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} />}
               {screen === "cart" && <CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} />}
-              {screen === "myorders" && <MyOrdersScreen orders={orders.filter(o => o.clientPhone === user?.phone)} />}
+              {/* FIX: normalize both sides so '+996 700 123 456' matches '996700123456' */}
+              {screen === "myorders" && <MyOrdersScreen orders={orders.filter(o => normalizePhone(o.clientPhone) === normalizePhone(user?.phone))} />}
               {screen === "profile" && <ProfileScreen user={user} onLogout={handleLogout} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); setAdminScreen("orders"); }} />}
-            </>
+            </MotionScreen>
           )}
         </div>
-        {!isAdmin && cartCount > 0 && (
-          <div style={{ position: "fixed", bottom: 76, left: 0, right: 0, padding: "0 16px", zIndex: 45, pointerEvents: "none" }}>
-            <button onClick={() => setScreen("cart")} style={{ width: "100%", background: "#111", borderRadius: 50, padding: "6px 6px 6px 18px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", pointerEvents: "all", boxSizing: "border-box", boxShadow: "0 8px 32px rgba(0,0,0,0.22)", cursor: "pointer" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{t.placeOrder}</span>
-                <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{cartCount} товар</span>
-              </div>
-              <div style={{ background: "#E53935", borderRadius: 50, padding: "10px 22px", color: "#fff", fontSize: 16, fontWeight: 700 }}>→</div>
-            </button>
-          </div>
-        )}
-        <NavBar items={isAdmin ? ADMIN_NAV : USER_NAV} active={isAdmin ? adminScreen : screen} onSelect={isAdmin ? setAdminScreen : setScreen} />
+        <AnimatePresence>
+          {!isAdmin && cartCount > 0 && screen !== "cart" && (
+            <motion.div
+              key="floating-cart-cta"
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+              // FIX: was bottom: 76 — overlapped navbar on iPhones with notch
+              // (safe-area-inset-bottom = 34px). Now uses --sticky-bottom which
+              // adapts to every iPhone size (SE → Pro Max).
+              style={{ position: "fixed", bottom: "var(--sticky-bottom)", left: 0, right: 0, padding: "0 16px", zIndex: 45, pointerEvents: "none" }}
+            >
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => { haptic('light'); setScreen("cart"); }}
+                style={{ width: "100%", background: "#111", borderRadius: 50, padding: "6px 6px 6px 18px", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", pointerEvents: "all", boxSizing: "border-box", boxShadow: "0 8px 32px rgba(0,0,0,0.32)", cursor: "pointer" }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: 'flex-start' }}>
+                  <span style={{ color: "#fff", fontSize: 14, fontWeight: 600 }}>{t.placeOrder}</span>
+                  <motion.span
+                    key={cartCount}
+                    initial={{ y: -3, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                    style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}
+                  >
+                    {cartCount} {lang === 'kg' ? 'товар' : (cartCount === 1 ? 'товар' : 'товара')}
+                  </motion.span>
+                </div>
+                <div style={{ background: "#E53935", borderRadius: 50, padding: "10px 22px", color: "#fff", fontSize: 16, fontWeight: 700 }}>→</div>
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {/* Web navbar — hidden on native iOS (native glass bar used instead) */}
+        {/* On native iOS the SwiftUI Liquid Glass bar is shown for the user
+            tabs (4 fixed cases). The admin panel has 6 items so it doesn't
+            fit the native bar — we render the same iOS 26 styled
+            GlassNavBar in React for admin even on native. On web we always
+            render GlassNavBar. */}
+        {!isNative && <GlassNavBar items={isAdmin ? ADMIN_NAV : USER_NAV} active={isAdmin ? adminScreen : screen} onSelect={isAdmin ? setAdminScreen : setScreen} />}
         {showAdminLogin && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
             <div style={{ background: "#fff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }}>
@@ -3022,7 +4042,7 @@ export default function App() {
                 if (adm3) fetch(`https://api.green-api.com/waInstance${inst3}/sendMessage/${tok3}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chatId: adm3.replace(/\D/g,'') + '@c.us', message: adminMsg3 }) }).catch(()=>{});
               }
             }}
-            onCancel={() => { setShowOBank(false); setPendingOrder(null); setOrderLoading(false); }}
+            onCancel={() => { setShowOBank(false); setPendingOrder(null); /* FIX: removed call to undefined setOrderLoading */ }}
           />
         )}
       </div>

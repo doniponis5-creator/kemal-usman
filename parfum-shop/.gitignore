@@ -12,6 +12,50 @@ dist
 dist-ssr
 *.local
 
+# ─── Secrets & env ─────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+*.pem
+*.key
+*.crt
+secrets/
+
+# ─── PocketBase data ───────────────────────────────────────────────────────────
+pb_data/
+pb_backup/
+*.db
+*.db-shm
+*.db-wal
+
+# ─── Capacitor / iOS ───────────────────────────────────────────────────────────
+ios/App/Pods/
+ios/App/build/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+
+# ─── Capacitor / Android ───────────────────────────────────────────────────────
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/google-services.json
+android/key.properties
+android/keystore/
+
+# ─── Old leaked-secret scripts (DO NOT use; superseded by pb-secure-rules.js) ─
+pb-setup.js
+pb-fix-rules.js
+pb-open-all.js
+
+# ─── Misc ──────────────────────────────────────────────────────────────────────
+coverage/
+.vite/
+*.broken
+*.bak
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

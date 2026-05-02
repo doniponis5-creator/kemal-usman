@@ -47,5 +47,28 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- ─── App Transport Security ─────────────────────────────────────────── -->
+	<!-- INTENTIONALLY OMITTED: no NSAllowsArbitraryLoads. Backend MUST be HTTPS -->
+	<!-- (Caddy + Let's Encrypt). Adding an exception here = App Store rejection. -->
+	<!-- ─── Permission usage strings (REQUIRED by Apple) ───────────────────── -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Микрофон используется только администратором для записи аудио-описания товара. Обычные пользователи доступ не предоставляют.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Геолокация используется для автоматического определения адреса доставки. Координаты не сохраняются на сервере.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Камера используется в админ-панели для съёмки фотографии товара или баннера.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Доступ к фото нужен для выбора изображения товара или баннера.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Доступ к фото нужен для сохранения изображений товаров.</string>
+	<!-- ─── Deep link schemes ──────────────────────────────────────────────── -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>mbank</string>
+		<string>obank</string>
+		<string>whatsapp</string>
+		<string>tel</string>
+		<string>https</string>
+	</array>
 </dict>
 </plist>
