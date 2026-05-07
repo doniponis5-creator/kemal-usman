@@ -1,0 +1,39 @@
+{
+  "" : {
+    "diagnostics" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/App-primary.dia",
+    "emit-module-dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/App-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/App-primary-emit-module.dia",
+    "pch" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/App-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/App-primary.swiftdeps"
+  },
+  "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/App/App/AppDelegate.swift" : {
+    "const-values" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.swiftconstvalues",
+    "dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.d",
+    "diagnostics" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.dia",
+    "index-unit-output-path" : "/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.o",
+    "llvm-bc" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.bc",
+    "object" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.o",
+    "swift-dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate.swiftdeps",
+    "swiftmodule" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/AppDelegate~partial.swiftmodule"
+  },
+  "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/App/App/LiquidGlassTabView.swift" : {
+    "const-values" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.swiftconstvalues",
+    "dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.d",
+    "diagnostics" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.dia",
+    "index-unit-output-path" : "/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.o",
+    "llvm-bc" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.bc",
+    "object" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.o",
+    "swift-dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView.swiftdeps",
+    "swiftmodule" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/LiquidGlassTabView~partial.swiftmodule"
+  },
+  "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/doniyorabduganiev/kemal-usman/parfum-shop/ios/build/Build/Intermediates.noindex/App.build/Debug-iphonesimulator/App.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  }
+}

@@ -1,0 +1,36 @@
+# systemd unit for PocketBase. Place at /etc/systemd/system/pocketbase.service
+# then: sudo systemctl daemon-reload && sudo systemctl enable --now pocketbase
+#
+# IMPORTANT: PocketBase MUST bind to 127.0.0.1 (loopback only). Caddy is the
+# only thing exposed to the public internet — that gives us TLS + rate limit +
+# logging "for free".
+
+[Unit]
+Description=PocketBase backend
+After=network.target
+
+[Service]
+Type=simple
+User=pocketbase
+Group=pocketbase
+WorkingDirectory=/opt/pocketbase
+ExecStart=/opt/pocketbase/pocketbase serve --http=127.0.0.1:8090
+Restart=always
+RestartSec=5
+LimitNOFILE=65536
+
+# Hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/pocketbase/pb_data /opt/pocketbase/pb_hooks
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+# Env file — populated with PB_ADMIN_*, SMS_*, GREEN_API_*, etc.
+EnvironmentFile=/etc/pocketbase/env
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,238 @@
+:root {
+  --text: #6b6375;
+  --text-h: #08060d;
+  --bg: #fff;
+  --border: #e5e4e7;
+  --code-bg: #f4f3ec;
+  --accent: #aa3bff;
+  --accent-bg: rgba(170, 59, 255, 0.1);
+  --accent-border: rgba(170, 59, 255, 0.5);
+  --social-bg: rgba(244, 243, 236, 0.5);
+  --shadow:
+    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  --sans: system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  --heading: var(--sans);
+  --mono: ui-monospace, Consolas, monospace;
+
+  /* ─── Adaptive layout tokens — use these instead of magic numbers ───── */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /* Status bar offset that works on every iPhone (notch, Dynamic Island, SE) */
+  --header-top: max(20px, var(--safe-top));
+
+  /* Bottom-bar clearance budget. Sized for the native iOS 26 system TabView
+     used inside Capacitor (~83 pt bar + 34 pt home-indicator safe area on
+     iPhone 17 Pro Max). The 34 px fallback matches the home-indicator
+     height for devices/simulators that don't surface env() — without it
+     the bar would clip content on the simulator.
+     Use this ANYWHERE you need to position above the bottom navigation bar. */
+  --nav-height: calc(83px + env(safe-area-inset-bottom, 34px));
+
+  /* Sticky CTAs (cart checkout etc.) — sits just above the navbar */
+  --sticky-bottom: calc(124px + env(safe-area-inset-bottom, 34px));
+
+  /* App width cap — prevents the app from stretching on iPad */
+  --app-max: 480px;
+
+  /* Set by Keyboard plugin JS; used to nudge content above keyboard */
+  --keyboard-height: 0px;
+
+  /* Fluid type — 14px on iPhone SE, 16px on Pro Max, smooth in between */
+  font-size: clamp(14px, 3.8vw, 16px);
+
+  letter-spacing: 0.18px;
+  color-scheme: light;
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body, html {
+  background: #000;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  /* Native feel: no rubber-band bounce, no horizontal swipe-to-go-back hint. */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+body {
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* Smoother text rendering on retina */
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+}
+
+/* Inputs and editable areas keep selection so users can edit text. */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOS WKWebView zooms the viewport whenever a focused input has font-size < 16px.
+   Force 16px as the floor — prevents the zoom/shift entirely without viewport meta hacks.
+   Visual sizing is handled separately via transform or letter-spacing if needed. */
+input, textarea, select {
+  font-size: 16px !important;
+  /* Prevent any browser-injected transform on focus */
+  transform: none !important;
+  /* Smooth caret appearance; no jarring color flash */
+  caret-color: #111;
+}
+
+/* Prevent iOS rubber-band bounce on the scroll container — keeps layout stable
+   when keyboard appears and the viewport height shrinks. */
+html {
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  text-align: left;
+  min-height: 100svh;
+  min-height: -webkit-fill-available;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* ─── Universal native-feel button press ───────────────────────────────────── */
+/* Every <button> now scales down on press, no library required. */
+button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.12s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+button:active:not(:disabled) {
+  transform: scale(0.965);
+}
+
+/* Lazy fade-in for images so they don't pop in. */
+img {
+  transition: opacity 0.25s ease;
+}
+img[data-loading="true"] {
+  opacity: 0;
+}
+
+/* Hide scrollbars on horizontally-scrolling elements but keep momentum. */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Opt-in GPU compositor hint. Add this class only to elements whose transform
+   actually changes during animation (parallaxed hero, drag handles, etc).
+   Don't slap it on a whole list — every layer costs VRAM. */
+.motion-safe {
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Faster touch response across the app: skip the 300ms double-tap delay
+   and the gray tap highlight. body already sets these — extending to all
+   tappable elements so motion.button / motion.div press feedback feels
+   instant on iPhone 17 Pro's 120Hz panel. */
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Respect reduced-motion preference for everyone. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  font-weight: 500;
+  color: var(--text-h);
+}
+
+h1 {
+  font-size: 56px;
+  letter-spacing: -1.68px;
+  margin: 32px 0;
+  @media (max-width: 1024px) {
+    font-size: 36px;
+    margin: 20px 0;
+  }
+}
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+  @media (max-width: 1024px) {
+    font-size: 20px;
+  }
+}
+p {
+  margin: 0;
+}
+
+code,
+.counter {
+  font-family: var(--mono);
+  display: inline-flex;
+  border-radius: 4px;
+  color: var(--text-h);
+}
+
+code {
+  font-size: 15px;
+  line-height: 135%;
+  padding: 4px 8px;
+  background: var(--code-bg);
+}
+
+/* Skeleton shimmer animation */
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Login glassmorphism inputs — placeholder oq */
+.login-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 100px rgba(255,255,255,0.08) inset;
+  -webkit-text-fill-color: #fff;
+}
+
+/* PRO: input focus glow */
+.login-input {
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.25s ease;
+}
+.login-input:focus {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
+}

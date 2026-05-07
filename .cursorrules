@@ -1,0 +1,45 @@
+# CURSOR RULES — MANDATORY FOR EVERY TASK
+# Project: Kemal Usman Parfum Shop (React 19 + PocketBase + Capacitor)
+
+## 1. POCKETBASE SCHEMA SAFETY (MOST IMPORTANT)
+- NEVER delete or rename existing PocketBase collection fields — live user data exists
+- After ANY collection field change, update `pb-setup.js` to match
+- Only ADD new fields; never remove old ones
+- If renaming is needed, keep the old field AND add the new one
+- NEVER change field types on existing collections without explicit instruction
+
+## 2. API CONTRACT — NO BREAKING CHANGES
+- NEVER rename or remove existing `api.*` methods in App.jsx
+- NEVER change the shape/keys of objects returned by `api.*` methods
+- Only ADD new methods; never restructure existing ones
+- `products.variants` is a JSON array — never flatten it to separate price fields
+
+## 3. APP.JSX — ONE FILE RULE
+- NEVER split App.jsx into multiple files unless the user explicitly asks
+- NEVER remove existing components, hooks, or helper functions
+- NEVER change PB_URL (`http://145.223.100.16:8090`) without updating pb-setup.js
+- NEVER hardcode phone numbers, prices, or passwords — always read from `settings`
+- All styles are inline JS objects — no Tailwind, no CSS modules, no styled-components
+- All colors come from the `T` object — never hardcode hex values directly in JSX
+
+## 4. STATE & LOCALSTORAGE SAFETY
+- Cart is persisted in `localStorage` key `parfum_cart`
+- Every cart mutation (add/remove/qty change) MUST call `localStorage.setItem('parfum_cart', JSON.stringify(next))`
+- `settings` object is the single source of truth for config values
+- NEVER clear localStorage without explicit user action
+
+## 5. DESKTOP / MOBILE SPLIT
+- Desktop layout (≥ 1024px): `DesktopLayout` component
+- Mobile layout (< 1024px): original mobile screens — DO NOT touch these when working on desktop features
+- Admin panel on desktop: separate desktop admin wrapper (not the mobile shell)
+- isDesktop check: `windowWidth >= 1024 && !isAdmin` → DesktopLayout
+
+## 6. DEPLOY CHECKLIST
+Before every `npm run build`:
+- [ ] `npm run build` completes with 0 errors and 0 warnings?
+- [ ] Changed any `api.*` method? → All callers in App.jsx updated?
+- [ ] Changed PocketBase fields? → `pb-setup.js` updated?
+- [ ] Changed component props? → All usages updated?
+- [ ] Mobile layout (< 1024px) still works unchanged?
+- [ ] Admin login flow works on both desktop and mobile?
+- [ ] Cart syncs to localStorage on every mutation?
