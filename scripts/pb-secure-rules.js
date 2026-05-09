@@ -114,6 +114,15 @@ const RULES = {
     deleteRule: '@request.auth.collectionName = "_superusers"',
   },
 
+  // ─── SITE_MEDIA (shared images — instagram screenshot etc.) ──
+  site_media: {
+    listRule:   '',        // anyone can see shared media
+    viewRule:   '',
+    createRule: '@request.auth.collectionName = "_superusers"',
+    updateRule: '@request.auth.collectionName = "_superusers"',
+    deleteRule: '@request.auth.collectionName = "_superusers"',
+  },
+
   // ─── REVIEWS ─────────────────────────────────────────────────
   reviews: {
     listRule:   '',

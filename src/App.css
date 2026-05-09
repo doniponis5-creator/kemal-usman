@@ -1,3 +1,8 @@
+@keyframes salePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;

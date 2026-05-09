@@ -149,9 +149,12 @@ onRecordBeforeUpdateRequest((e) => {
     referrerBonus = Number(s.get('referralBonus') || 0);
   } catch (_) { /* defaults */ }
 
-  let balance = Number(client.get('bonusBalance') || 0);
+  // NOTE: PocketBase schema uses snake_case: bonus_balance, bonus_history,
+  //       referral_code, referred_by. Always use these in get/set calls.
+  let balance = Number(client.get('bonus_balance') || 0);
   let history = [];
-  try { history = JSON.parse(client.get('bonusHistory') || '[]'); } catch (_) { history = []; }
+  try { history = JSON.parse(client.get('bonus_history') || '[]'); } catch (_) { history = []; }
+  if (!Array.isArray(history)) history = [];
 
   // Is this the client's first delivery? (Excludes the order being delivered now.)
   let isFirstDelivery = false;
@@ -165,55 +168,52 @@ onRecordBeforeUpdateRequest((e) => {
     isFirstDelivery = prev.length === 0;
   } catch (_) { isFirstDelivery = false; }
 
-  // 1. Earn bonus from order percentage — every delivery (unchanged behavior).
+  // 1. Earn bonus from order percentage — every delivery.
   const earned = Math.floor(Number(e.record.get('total') || 0) * pct / 100);
   if (earned > 0) {
     balance += earned;
     history.push({ type: 'earned', amount: earned, label: 'Bonus for order ' + e.record.id, date: new Date().toISOString() });
   }
 
-  // 2. RULE 1 — welcome bonus on first delivery only.
-  if (isFirstDelivery && welcomeOn && welcomeAmount > 0) {
+  // 2. Welcome bonus on first delivery — skip if already given at registration.
+  const hasWelcomeInHistory = history.some(function(h) { return h && h.type === 'welcome'; });
+  if (isFirstDelivery && welcomeOn && welcomeAmount > 0 && !hasWelcomeInHistory) {
     balance += welcomeAmount;
     history.push({ type: 'welcome', amount: welcomeAmount, label: 'Welcome bonus', date: new Date().toISOString() });
     $app.logger().info('bonus: welcome credited on first delivery', 'phone', phone, 'amount', welcomeAmount);
   }
 
-  // 3. RULE 3 — referral payout on first delivery only, with anti-fraud guards.
-  const usedRef = client.get('referredBy');
-  const alreadyPaid = client.get('referralBonusPaid') === true;
-  if (isFirstDelivery && usedRef && !alreadyPaid) {
-    const ownCode = client.get('referralCode');
+  // 3. Referral payout on first delivery — skip if already given at registration.
+  const usedRef = client.get('referred_by');
+  const hasReferralInHistory = history.some(function(h) { return h && h.type === 'referral'; });
+  if (isFirstDelivery && usedRef && !hasReferralInHistory) {
+    const ownCode = client.get('referral_code');
     if (ownCode && String(usedRef) === String(ownCode)) {
       $app.logger().info('referral: self-referral blocked', 'phone', phone);
     } else {
-      // Friend (this client) gets the friend bonus.
       if (friendBonus > 0) {
         balance += friendBonus;
         history.push({ type: 'referral', amount: friendBonus, label: 'Referral friend bonus', date: new Date().toISOString() });
       }
-      // Referrer (owner of the code) gets the referrer bonus.
       if (referrerBonus > 0) {
         let referrer;
-        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referralCode = {:c}', { c: usedRef }); } catch (_) {}
+        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referral_code = {:c}', { c: usedRef }); } catch (_) {}
         if (referrer && referrer.id !== client.id) {
-          const refBal = Number(referrer.get('bonusBalance') || 0) + referrerBonus;
+          const refBal = Number(referrer.get('bonus_balance') || 0) + referrerBonus;
           let refHistory = [];
-          try { refHistory = JSON.parse(referrer.get('bonusHistory') || '[]'); } catch (_) { refHistory = []; }
+          try { refHistory = JSON.parse(referrer.get('bonus_history') || '[]'); } catch (_) { refHistory = []; }
           refHistory.push({ type: 'referral', amount: referrerBonus, label: 'Referral payout for ' + phone, date: new Date().toISOString() });
-          referrer.set('bonusBalance', refBal);
-          referrer.set('bonusHistory', JSON.stringify(refHistory));
+          referrer.set('bonus_balance', refBal);
+          referrer.set('bonus_history', JSON.stringify(refHistory));
           $app.dao().saveRecord(referrer);
           $app.logger().info('referral: payout credited', 'referrerId', referrer.id, 'amount', referrerBonus);
         }
       }
-      // Mark paid so a second delivery never triggers another payout.
-      client.set('referralBonusPaid', true);
     }
   }
 
-  client.set('bonusBalance', balance);
-  client.set('bonusHistory', JSON.stringify(history));
+  client.set('bonus_balance', balance);
+  client.set('bonus_history', JSON.stringify(history));
   $app.dao().saveRecord(client);
 }, 'orders');
 

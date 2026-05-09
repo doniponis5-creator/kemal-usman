@@ -70,7 +70,7 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
       {/* Dark backdrop fades out as user drags */}
       <motion.div
         style={{
-          position: 'fixed', inset: 0, zIndex: 998,
+          position: 'fixed', inset: 0, zIndex: 1001,
           background: '#000',
           opacity: backdropOpacity,
           pointerEvents: 'none',
@@ -83,7 +83,7 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
         exit={{ y: '100%', opacity: 0 }}
         transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
         style={{
-          position: 'fixed', inset: 0, zIndex: 999,
+          position: 'fixed', inset: 0, zIndex: 1002,
           background: '#fff',
           display: 'flex', flexDirection: 'column',
           x,
