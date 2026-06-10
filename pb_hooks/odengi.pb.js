@@ -67,8 +67,8 @@ routerAdd('POST', '/api/custom/odengi/create-invoice', function(c) {
     var apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
     var testMode = 0;
     var resultBaseUrl = 'https://api.kemalusman.kg';
-    try { sid = $os.getenv('ODENGI_SID') || ''; } catch (_) {}
-    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    sid = '5084412514';
+    password = 'ER@L6H&KMGH@P9X';
     if (!sid || !password) {
       try {
         var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
@@ -211,8 +211,8 @@ routerAdd('POST', '/api/custom/odengi/check-status', function(c) {
     var apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
     var testMode = 0;
     var resultBaseUrl = 'https://api.kemalusman.kg';
-    try { sid = $os.getenv('ODENGI_SID') || ''; } catch (_) {}
-    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    sid = '5084412514';
+    password = 'ER@L6H&KMGH@P9X';
     if (!sid || !password) {
       try {
         var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
@@ -296,7 +296,7 @@ routerAdd('POST', '/api/custom/odengi/result', function(c) {
 
     // ── Config: env → pb_data fayl fallback (PB 0.22 fix) ──
     var password = '';
-    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    password = 'ER@L6H&KMGH@P9X';
     if (!password) {
       try {
         var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
@@ -422,8 +422,8 @@ routerAdd('POST', '/api/custom/odengi/cancel', function(c) {
     var apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
     var testMode = 0;
     var resultBaseUrl = 'https://api.kemalusman.kg';
-    try { sid = $os.getenv('ODENGI_SID') || ''; } catch (_) {}
-    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    sid = '5084412514';
+    password = 'ER@L6H&KMGH@P9X';
     if (!sid || !password) {
       try {
         var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
