@@ -1,8 +1,18 @@
 /// <reference path="../pb_data/types.d.ts" />
 // OTP authentication — WhatsApp delivery via green-api.
-// PocketBase schema uses snake_case field names:
-//   bonus_balance, bonus_history, referral_code, referred_by
-// Always use snake_case in record.get() / record.set() calls.
+//
+// v2 (2026-06-10) — FIELD NAME FIX + security hardening:
+//   • The clients schema uses camelCase: bonusBalance, bonusHistory,
+//     referralCode, referredBy (verified against main.pb.js after-create hook,
+//     the frontend, scripts/pb-verify-orders.js and FIXES_APPLIED.md).
+//     The previous version wrote snake_case (bonus_balance, referred_by) —
+//     those writes were silently IGNORED by PocketBase, which meant the
+//     referral system never recorded who invited whom.
+//   • Welcome / referral bonuses are NOT credited here. By design (see
+//     main.pb.js RULE 1 + RULE 3) they fire on the FIRST DELIVERED order —
+//     this prevents fake-account farming. This hook only records referredBy.
+//   • OTP code is generated with a cryptographically secure RNG
+//     ($security.randomStringWithAlphabet) instead of Math.random().
 
 routerAdd('POST', '/api/custom/otp/request', function(c) {
   var REQUEST_LIMIT = 5;
@@ -22,7 +32,16 @@ routerAdd('POST', '/api/custom/otp/request', function(c) {
   );
   if (recent.length >= REQUEST_LIMIT) return c.json(429, { error: 'too_many_requests' });
 
-  var code      = String(Math.floor(100000 + Math.random() * 900000));
+  // Cryptographically secure 6-digit code (P1.2). Falls back to Math.random
+  // only if the PB build lacks $security.randomStringWithAlphabet.
+  var code;
+  try {
+    code = $security.randomStringWithAlphabet(6, '0123456789');
+    if (!code || String(code).length !== 6) throw new Error('bad code');
+    code = String(code);
+  } catch (_) {
+    code = String(Math.floor(100000 + Math.random() * 900000));
+  }
   var codeHash  = crypto.sha256(code + ':' + phone);
   var expiresAt = new Date(Date.now() + TTL_SECONDS * 1000).toISOString();
 
@@ -77,59 +96,20 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
   otpRec.set('used', true);
   $app.dao().saveRecord(otpRec);
 
-  // ── Read bonus settings ───────────────────────────────────────────────────
-  var welcomeEnabled   = true;
-  var welcomeAmount    = 150;
-  var friendBonusAmt   = 50;
-  var referrerBonusAmt = 100;
-  try {
-    var s = $app.dao().findRecordById('settings', 'main');
-    welcomeEnabled   = s.get('welcomeBonusEnabled') !== false;
-    welcomeAmount    = Number(s.get('welcomeBonus') || 150);
-    friendBonusAmt   = Number(s.get('referralFriendBonus') || 50);
-    referrerBonusAmt = Number(s.get('referralBonus') || 100);
-  } catch (_) { /* use defaults */ }
-
-  var nowStr     = new Date().toISOString();
-  var client     = null;
+  // ── Find or create the client ─────────────────────────────────────────────
+  // NOTE: no bonus crediting here. Welcome + referral bonuses are credited by
+  // main.pb.js when the client's FIRST order reaches status 'delivered'.
+  var client      = null;
   var isNewClient = false;
 
-  // ── Try to find existing client (separate try so catch = "not found") ─────
   try {
     client = $app.dao().findFirstRecordByFilter('clients', 'phone = {:p}', { p: phone });
   } catch (_) { client = null; }
 
   if (client !== null) {
-    // ── EXISTING CLIENT ───────────────────────────────────────────────────
-    var needsSave = false;
-
-    if (name && client.get('name') !== name) {
+    // ── EXISTING CLIENT — refresh display name if it changed ──
+    if (name && name !== phone && client.get('name') !== name) {
       client.set('name', name);
-      needsSave = true;
-    }
-
-    // Retroactive welcome bonus for accounts that never got it
-    if (welcomeEnabled && welcomeAmount > 0) {
-      var existHist = [];
-      try { existHist = JSON.parse(client.get('bonus_history') || '[]'); } catch(_) { existHist = []; }
-      if (!Array.isArray(existHist)) existHist = [];
-
-      var hasWelcome = false;
-      for (var i = 0; i < existHist.length; i++) {
-        if (existHist[i] && existHist[i].type === 'welcome') { hasWelcome = true; break; }
-      }
-
-      if (!hasWelcome) {
-        var existBal = Number(client.get('bonus_balance') || 0) + welcomeAmount;
-        existHist.push({ type: 'welcome', amount: welcomeAmount, label: 'Welcome bonus', date: nowStr });
-        client.set('bonus_balance', existBal);
-        client.set('bonus_history', JSON.stringify(existHist));
-        needsSave = true;
-        $app.logger().info('bonus: retroactive welcome credited', 'phone', phone, 'amount', welcomeAmount);
-      }
-    }
-
-    if (needsSave) {
       try {
         $app.dao().saveRecord(client);
         client = $app.dao().findRecordById('clients', client.id);
@@ -137,32 +117,17 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
         $app.logger().error('otp: save existing client failed', 'phone', phone, 'err', String(saveErr));
       }
     }
-
   } else {
-    // ── NEW CLIENT ────────────────────────────────────────────────────────
+    // ── NEW CLIENT (camelCase fields — matches the live schema) ──
     isNewClient = true;
-    var initBalance = 0;
-    var initHistory = [];
-
-    if (welcomeEnabled && welcomeAmount > 0) {
-      initBalance += welcomeAmount;
-      initHistory.push({ type: 'welcome', amount: welcomeAmount, label: 'Welcome bonus', date: nowStr });
-      $app.logger().info('bonus: welcome credited at registration', 'phone', phone, 'amount', welcomeAmount);
-    }
-
-    if (referredBy && friendBonusAmt > 0) {
-      initBalance += friendBonusAmt;
-      initHistory.push({ type: 'referral', amount: friendBonusAmt, label: 'Referral friend bonus', date: nowStr });
-    }
-
     var col = $app.dao().findCollectionByNameOrId('clients');
     client = new Record(col, {
       username:     d,
       phone:        phone,
       name:         name,
-      bonus_balance: initBalance,
-      bonus_history: initHistory,
-      referred_by:  referredBy || null,
+      bonusBalance: 0,
+      bonusHistory: '[]',
+      referredBy:   referredBy || null,
       email:        d + '@kemalusman.local',
       emailVisibility: false,
       verified:     true,
@@ -171,37 +136,33 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
     client.refreshTokenKey();
     $app.dao().saveRecord(client);
 
-    // Re-read to get referral_code assigned by PB after-create hook
+    // Re-read to get referralCode assigned by main.pb.js after-create hook.
     try { client = $app.dao().findRecordById('clients', client.id); } catch (_) {}
 
-    // Credit the referrer
-    if (referredBy && referrerBonusAmt > 0) {
-      var ownCode = client.get('referral_code');
-      if (!ownCode || String(referredBy) !== String(ownCode)) {
-        var referrer = null;
-        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referral_code = {:c}', { c: referredBy }); } catch (_) {}
-        if (referrer && referrer.id !== client.id) {
-          var refBal = Number(referrer.get('bonus_balance') || 0) + referrerBonusAmt;
-          var refHist = [];
-          try { refHist = JSON.parse(referrer.get('bonus_history') || '[]'); } catch (_) { refHist = []; }
-          refHist.push({ type: 'referral', amount: referrerBonusAmt, label: 'Referral payout for ' + phone, date: nowStr });
-          referrer.set('bonus_balance', refBal);
-          referrer.set('bonus_history', JSON.stringify(refHist));
-          try {
-            $app.dao().saveRecord(referrer);
-            $app.logger().info('bonus: referrer credited', 'id', referrer.id, 'amount', referrerBonusAmt);
-          } catch (refErr) {
-            $app.logger().error('bonus: referrer save failed', 'err', String(refErr));
-          }
-        }
+    // Self-referral guard: if someone typed their own fresh code, clear it so
+    // the first-delivery payout (main.pb.js) can't self-credit.
+    try {
+      var ownCode = client.get('referralCode');
+      if (referredBy && ownCode && String(referredBy) === String(ownCode)) {
+        client.set('referredBy', null);
+        $app.dao().saveRecord(client);
+        $app.logger().info('otp: self-referral cleared', 'phone', phone);
       }
+    } catch (_) {}
+
+    if (referredBy) {
+      $app.logger().info('otp: referral recorded — payout on first delivery',
+        'phone', phone, 'referredBy', referredBy);
     }
   }
 
-  // ── Build response ────────────────────────────────────────────────────────
-  var finalBalance = Number(client.get('bonus_balance') || 0);
+  // ── Build response (camelCase reads — matches the live schema) ────────────
+  var finalBalance = Number(client.get('bonusBalance') || 0);
   var finalHistory = [];
-  try { finalHistory = JSON.parse(client.get('bonus_history') || '[]'); } catch (_) { finalHistory = []; }
+  try {
+    var rawHist = client.get('bonusHistory');
+    finalHistory = JSON.parse((typeof rawHist === 'string') ? (rawHist || '[]') : String(rawHist || '[]'));
+  } catch (_) { finalHistory = []; }
   if (!Array.isArray(finalHistory)) finalHistory = [];
 
   var token = $tokens.recordAuthToken($app, client);
@@ -214,7 +175,7 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
       name:         client.get('name'),
       bonusBalance: finalBalance,
       bonusHistory: finalHistory,
-      referralCode: client.get('referral_code'),
+      referralCode: client.get('referralCode'),
     },
   });
 });

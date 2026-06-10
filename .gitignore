@@ -66,3 +66,16 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+
+# ─── Build artifacts & one-off junk (2026-06-10 cleanup) ──────────────────────
+ios/build/
+.expo/
+venv/
+dist-test*/
+raw-images/
+debug-*.html
+debug-*.png
+appstore_screens/
+ipad_screens/
+tools/raw-output/
+tools/

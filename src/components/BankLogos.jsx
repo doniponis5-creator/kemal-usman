@@ -31,23 +31,6 @@ export function MBankLogo({ size = 28 }) {
   );
 }
 
-export function OBankLogo({ size = 28, color = '#E5007E' }) {
-  return (
-    <svg
-      style={wrap(size, 32, 22)}
-      viewBox="0 0 32 22"
-      fill="none"
-      aria-label="O!Bank"
-      role="img"
-    >
-      {/* O */}
-      <circle cx="10" cy="11" r="7.4" stroke={color} strokeWidth="3.2" fill="none" />
-      {/* ! */}
-      <line x1="23" y1="4" x2="23" y2="14" stroke={color} strokeWidth="3.2" strokeLinecap="round" />
-      <circle cx="23" cy="18" r="1.9" fill={color} />
-    </svg>
-  );
-}
 
 // Square viewBox so the cash icon renders in the same N×N footprint as the
 // bank logo <img> tags — keeps the payment list visually consistent.

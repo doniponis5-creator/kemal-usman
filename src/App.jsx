@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, createContext, useContext } from "react";
+import React, { useState, useRef, useEffect, useMemo, createContext, useContext } from "react";
 import { createPortal } from "react-dom";
 // FIX (CRITICAL): PB URL no longer hardcoded. Driven by VITE_PB_URL in .env so
 // production builds can point at HTTPS. The fallback is local-dev only.
@@ -23,6 +23,19 @@ import { sendWhatsApp } from "./api/whatsapp";
 import logger from "./utils/logger";
 import { captureError, setSentryUser, clearSentryUser } from "./utils/sentry";
 import { useAudioPlayer } from "./api/audioPlayer";
+import {
+  notifyOrderCreated,
+  notifyOrderStatus,
+  notifyAdminNewOrder,
+  notifyPaymentPending,
+  notifyPaymentConfirmed,
+  notifyBonusEarned,
+  notifyWelcomeBonus,
+  notifyReferralBonus,
+  notifyNewReview,
+  scheduleCartReminder,
+  cancelCartReminder,
+} from "./api/notifications";
 import AudioPlayerOverlay from "./components/AudioPlayerOverlay";
 import AudioHintTooltip, { shouldShowAudioHint } from "./components/AudioHintTooltip";
 // FIX: Phone normalization util — fixes the "MyOrders shows 0 orders" bug
@@ -68,9 +81,10 @@ import { PullToRefresh } from "./components/PullToRefresh";
 // PRO: catalog sort bottom-sheet
 import { SortFilterSheet } from "./components/SortFilterSheet";
 // FIX: inline SVG bank logos — replaces /frame_4.png and /O bank.jpg which don't exist in /public.
-import { MBankLogo, OBankLogo, CashLogo } from "./components/BankLogos";
-// FIX: robust deep-link opener for M-Bank / O!Bank — uses Capacitor App.openUrl on native.
+import { CashLogo } from "./components/BankLogos";
+// FIX: robust deep-link opener — uses Capacitor App.openUrl on native.
 import { openPaymentApp, dialPhone, copyToClipboard } from "./utils/openPayment";
+import { createOdengiInvoice, pollOdengiPayment, cancelOdengiInvoice } from "./api/odengi";
 // PRO: premium iOS-style floating glass navbar with liquid bubble
 import { GlassNavBar } from "./components/GlassNavBar";
 
@@ -78,13 +92,18 @@ import { GlassNavBar } from "./components/GlassNavBar";
 const TRANSLATIONS = {
   ru: {
     appName: "Kemal Usman", appSubtitle: "Бишкек · Парфюм на разлив",
-    login: "Войти", logout: "Выйти", loginLabel: "Логин", passwordLabel: "Пароль",
+    login: "Войти", logout: "Выйти", exit: "Выйти", loginLabel: "Логин", passwordLabel: "Пароль",
     loginPlaceholder: "user или admin", passwordPlaceholder: "Пароль",
-    loginError: "Неверный логин или пароль!", demoHint: "Демо: admin / admin123",
+    loginError: "Неверный логин или пароль!",
     register: "Регистрация", getStarted: "Начать",
     catalog: "Каталог", cart: "Корзина", myOrders: "Заказы", profile: "Профиль",
     orders: "Заказы", products: "Товары", stats: "Статистика", settings: "Настройки",
     banners: "Баннеры", bonus: "Бонус", adminPanel: "Администратор",
+    notifications: "Уведомления", notifTitle: "Заголовок", notifBody: "Текст сообщения",
+    notifSend: "Отправить", notifSendAll: "Всем клиентам", notifSendOne: "Одному клиенту",
+    notifSelectProduct: "Привязать товар", notifPromoTag: "Тег акции", notifSent: "Отправлено!",
+    notifEmpty: "Нет уведомлений", notifNew: "Новое", notifPromo: "Акция",
+    notifHistory: "История уведомлений", notifSelectClient: "Выберите клиента",
     search: "Поиск парфюма...", allCategories: "Все",
     fromPrice: "от", variants: "вар.", selectVariant: "Выберите объём",
     addToCart: "В корзину", addedToCart: "Добавлено!", outOfStock: "Нет в наличии",
@@ -152,19 +171,58 @@ const TRANSLATIONS = {
     // ── Feature 3 keys ─────────────────────────────────────────────────
     hint_audio: "🎵 Послушай аромат парфюма!",
     listen_scent: "Послушать аромат",
-    popular: "🔥 Популярно",
+    popular: "Популярно",
     audio_file: "Аудио аромата",
     is_popular: "Популярный",
+    // ── Badge labels ──
+    badge_popular: "Популярно",
+    badge_hit: "Хит продаж",
+    badge_new: "Новинка",
+    badge_author: "By KemalUsman",
+    badge_featured: "Показывать первым",
+    badge_author_sub: "Авторский парфюм — премиум бейдж",
+    badge_popular_sub: "Оранжевый бейдж на карточке",
+    badge_hit_sub: "Для самых продаваемых",
+    badge_new_sub: "Зелёный бейдж (7 дней)",
+    badge_featured_sub: "Закрепить в начале каталога",
+    badges_title: "Бейджи",
+    priority_title: "Приоритет",
+    priority_label: "Порядок в каталоге",
+    priority_sub: "Чем выше число — тем раньше показывается",
+    seo_title: "SEO / Маркетинг",
+    seo_short_desc: "Короткое описание (для поиска)",
+    seo_short_desc_placeholder: "Лёгкий цветочный аромат для лета...",
+    seo_tags: "Теги (через запятую)",
+    seo_tags_placeholder: "сладкий, вечерний, подарок, зима...",
+    visibility_title: "Видимость",
+    visibility_schedule: "Запланированная видимость",
+    visibility_from: "Показывать с",
+    visibility_until: "Показывать до",
+    related_title: "Похожие товары",
+    related_add: "Добавить похожий",
+    related_max: "Макс. 3 товара",
+    remember_me: "Запомнить",
+    cancel: "Отмена",
+    show_password: "Показать",
+    hide_password: "Скрыть",
+    in_stock: "В наличии",
+    out_of_stock: "Нет в наличии",
+    toggle_stock: "Наличие",
   },
   kg: {
     appName: "Kemal Usman", appSubtitle: "Бишкек · Атир куюп жана упаковка",
-    login: "Кирүү", logout: "Чыгуу", loginLabel: "Логин", passwordLabel: "Сыр сөз",
+    login: "Кирүү", logout: "Чыгуу", exit: "Чыгуу", loginLabel: "Логин", passwordLabel: "Сыр сөз",
     loginPlaceholder: "user же admin", passwordPlaceholder: "Сыр сөз",
-    loginError: "Логин же сыр сөз туура эмес!", demoHint: "Демо: admin / admin123",
+    loginError: "Логин же сыр сөз туура эмес!",
     register: "Катталуу", getStarted: "Баштоо",
     catalog: "Каталог", myOrders: "Заказдар", profile: "Профиль",
     orders: "Заказдар", products: "Товарлар", stats: "Статистика", settings: "Жөндөөлөр",
     banners: "Баннерлер", bonus: "Бонус", adminPanel: "Администратор",
+    notifications: "Билдирүүлөр", notifTitle: "Аталышы", notifBody: "Билдирүү тексти",
+    notifSend: "Жөнөтүү", notifSendAll: "Баардык кардарларга", notifSendOne: "Бир кардарга",
+    notifSelectProduct: "Товар тандоо", notifPromoTag: "Акция теги", notifSent: "Жөнөтүлдү!",
+    notifEmpty: "Билдирүүлөр жок", notifNew: "Жаңы", notifPromo: "Акция",
+    notifHistory: "Билдирүүлөр тарыхы", notifSelectClient: "Кардарды тандаңыз",
     search: "Атир издөө...", allCategories: "Баары",
     fromPrice: "баштап", variants: "вар.", selectVariant: "Көлөмдү тандаңыз",
     addToCart: "Себетке", addedToCart: "Кошулду!", outOfStock: "Жок",
@@ -232,9 +290,43 @@ const TRANSLATIONS = {
     // ── Feature 3 keys ─────────────────────────────────────────────────
     hint_audio: "🎵 Атирдын жытын уккула!",
     listen_scent: "Жытын ук",
-    popular: "🔥 Популярдуу",
+    popular: "Популярдуу",
     audio_file: "Аудио жыт",
     is_popular: "Популярдуу",
+    // ── Badge labels ──
+    badge_popular: "Популярдуу",
+    badge_hit: "Хит сатуу",
+    badge_new: "Жаңы",
+    badge_author: "By KemalUsman",
+    badge_featured: "Биринчи көрсөтүү",
+    badge_author_sub: "Автордук парфюм — премиум бейдж",
+    badge_popular_sub: "Кызгылт сары бейдж карточкада",
+    badge_hit_sub: "Эң көп сатылган үчүн",
+    badge_new_sub: "Жашыл бейдж (7 күн)",
+    badge_featured_sub: "Каталогдун башында бекитүү",
+    badges_title: "Бейджилер",
+    priority_title: "Артыкчылык",
+    priority_label: "Каталогдогу тартиби",
+    priority_sub: "Сан канчалык чоң — ошончо эрте көрүнөт",
+    seo_title: "SEO / Маркетинг",
+    seo_short_desc: "Кыска сүрөттөмө (издөө үчүн)",
+    seo_short_desc_placeholder: "Жайга арналган жеңил гүл жыты...",
+    seo_tags: "Тегдер (үтүр менен)",
+    seo_tags_placeholder: "таттуу, кечки, белек, кыш...",
+    visibility_title: "Көрүнүш",
+    visibility_schedule: "Пландалган көрүнүш",
+    visibility_from: "Баштап көрсөтүү",
+    visibility_until: "Чейин көрсөтүү",
+    related_title: "Окшош товарлар",
+    related_add: "Окшош кошуу",
+    related_max: "Макс. 3 товар",
+    remember_me: "Эстеп кал",
+    cancel: "Жокко чыгаруу",
+    show_password: "Көрсөтүү",
+    hide_password: "Жашыруу",
+    in_stock: "Бар",
+    out_of_stock: "Жок",
+    toggle_stock: "Бар/Жок",
   },
 };
 
@@ -352,12 +444,16 @@ const IC = {
   copy: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>,
   filter: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="12" y1="18" x2="12" y2="18" /></svg>,
   bottle: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6v2l2 3v12a2 2 0 01-2 2H9a2 2 0 01-2-2V8l2-3V3z" /><line x1="7" y1="11" x2="17" y2="11" /></svg>,
+  // Badge SVG icons
+  flame: (s = 12, c = "#fff") => <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M12 23c-4.97 0-8-3.56-8-7.93A9.14 9.14 0 0110 7.5c0 0-.5 3.5 2 5 2.5 1.5 4-1 4-1a5.71 5.71 0 01.5 3.43C16.5 18 16 20 14 21.5c4-1.5 6-5.5 6-6.57C20 10.5 16 4 12 1c0 3-2 5-2 5s-3 2.5-3 7.07C7 17.5 9 23 12 23z"/></svg>,
+  bolt: (s = 12, c = "#fff") => <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M13 2L4 14h7l-2 8 9-12h-7l2-8z"/></svg>,
+  sparkle: (s = 12, c = "#fff") => <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>,
+  crown: (s = 12, c = "#fff") => <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M2 20h20V9l-5 4-5-8-5 8-5-4v11zm2-2v-5.5l3.3 2.6L12 8.2l4.7 6.9L20 12.5V18H4z"/><path d="M2 20h20v-8l-5 4-5-8-5 8-5-4v8z"/></svg>,
+  pin: (s = 12, c = "#fff") => <svg width={s} height={s} viewBox="0 0 24 24" fill={c}><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>,
 };
 
 // ─── DATA ──────────────────────────────────────────────────────────────────────
 const PAYMENT_METHODS = [
-  { id: "mbank", label: "M Bank", color: "#E4002B" },
-  { id: "obank", label: "O!Bank", color: "#7B2D8B" },
   { id: "cash", label: "Наличные / Нак. акча", color: "#111111" },
 ];
 
@@ -430,6 +526,129 @@ const api = {
     } catch { /* ignore */ }
   },
 
+  // ─── Notifications ────────────────────────────────────────────
+  // Collection: notifications { title, body, type, productId, promoTag, targetPhone, readBy, created }
+  getNotifications: () => pb.collection("notifications").getFullList({ sort: "-created", requestKey: null }),
+  getNotificationsForClient: (phone) => pb.collection("notifications").getFullList({
+    sort: "-created",
+    filter: `targetPhone="" || targetPhone="${phone}"`,
+    requestKey: null,
+  }),
+  createNotification: (data) => pb.collection("notifications").create(data, { requestKey: null }),
+  deleteNotification: (id) => pb.collection("notifications").delete(id, { requestKey: null }),
+  markNotificationRead: async (id, phone) => {
+    try {
+      const rec = await pb.collection("notifications").getOne(id, { requestKey: null });
+      const readBy = (() => { try { return Array.isArray(rec.readBy) ? rec.readBy : JSON.parse(rec.readBy || '[]'); } catch { return []; } })();
+      if (!readBy.includes(phone)) {
+        readBy.push(phone);
+        await pb.collection("notifications").update(id, { readBy: JSON.stringify(readBy) }, { requestKey: null });
+      }
+    } catch (e) { console.warn("markRead error:", e); }
+  },
+
+  // ─── Banners (PocketBase-synced via site_media) ───────────────
+  // Each banner image → site_media key "banner_<id>"
+  // Banner metadata (title, subtitle, overlays, order) → site_media key "banners_meta" (JSON in "value" text field)
+  saveBannerImage: async (bannerId, base64DataUrl) => {
+    try {
+      const res = await fetch(base64DataUrl);
+      const blob = await res.blob();
+      const ext = blob.type?.includes('png') ? 'png' : 'jpg';
+      const file = new File([blob], `banner_${bannerId}.${ext}`, { type: blob.type || 'image/jpeg' });
+      const key = `banner_${bannerId}`;
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="${key}"`, requestKey: null });
+      const formData = new FormData();
+      formData.append("key", key);
+      formData.append("file", file);
+      let record;
+      if (existing.length > 0) {
+        record = await pb.collection("site_media").update(existing[0].id, formData, { requestKey: null });
+      } else {
+        record = await pb.collection("site_media").create(formData, { requestKey: null });
+      }
+      return `${PB_URL}/api/files/site_media/${record.id}/${record.file}`;
+    } catch (e) { console.warn('saveBannerImage error:', e); return null; }
+  },
+  saveBannersMeta: async (banners) => {
+    try {
+      // Strip base64 img from meta — only store PB URLs or /public paths
+      const meta = banners.map(b => {
+        const { ...rest } = b;
+        // Keep img only if it's a URL (not base64)
+        if (rest.img && rest.img.startsWith('data:')) rest.img = null;
+        return rest;
+      });
+      const key = "banners_meta";
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="${key}"`, requestKey: null });
+      const formData = new FormData();
+      formData.append("key", key);
+      // Store as a tiny text file so PB accepts it
+      const jsonBlob = new Blob([JSON.stringify(meta)], { type: 'application/json' });
+      formData.append("file", new File([jsonBlob], "banners_meta.json", { type: 'application/json' }));
+      if (existing.length > 0) {
+        await pb.collection("site_media").update(existing[0].id, formData, { requestKey: null });
+      } else {
+        await pb.collection("site_media").create(formData, { requestKey: null });
+      }
+    } catch (e) { console.warn('saveBannersMeta error:', e); }
+  },
+  loadBannersMeta: async () => {
+    try {
+      const records = await pb.collection("site_media").getFullList({ filter: `key="banners_meta"`, requestKey: null });
+      if (records.length > 0 && records[0].file) {
+        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) return data;
+        }
+      }
+      return null;
+    } catch { return null; }
+  },
+  deleteBannerImage: async (bannerId) => {
+    try {
+      const key = `banner_${bannerId}`;
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="${key}"`, requestKey: null });
+      if (existing.length > 0) await pb.collection("site_media").delete(existing[0].id, { requestKey: null });
+    } catch { /* ignore */ }
+  },
+
+  // ─── Payment Settings ─────────────
+  // Stored in site_media as key="payment_settings", file=JSON blob.
+  // Shape: { }
+  savePaymentSettings: async (data) => {
+    try {
+      const key = "payment_settings";
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="${key}"`, requestKey: null });
+      const formData = new FormData();
+      formData.append("key", key);
+      const jsonBlob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+      formData.append("file", new File([jsonBlob], "payment_settings.json", { type: 'application/json' }));
+      if (existing.length > 0) {
+        await pb.collection("site_media").update(existing[0].id, formData, { requestKey: null });
+      } else {
+        await pb.collection("site_media").create(formData, { requestKey: null });
+      }
+      return true;
+    } catch (e) { console.warn('savePaymentSettings error:', e); return false; }
+  },
+  loadPaymentSettings: async () => {
+    try {
+      const records = await pb.collection("site_media").getFullList({ filter: `key="payment_settings"`, requestKey: null });
+      if (records.length > 0 && records[0].file) {
+        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data === 'object') return data;
+        }
+      }
+      return null;
+    } catch { return null; }
+  },
+
   // ─── Instagram Graph API ───────────────────────────────────────
   // Fetches recent media from Instagram Graph API using long-lived token.
   // Token must be set in settings.instagramToken by admin.
@@ -482,7 +701,7 @@ const api = {
 };
 
 const DEFAULT_SETTINGS = {
-  shopName: "Kemal Usman", whatsappPhone: "996557100505",
+  shopName: "Kemal Usman", whatsappPhone: "996551120009",
   contactPhone1: "+996551120009", contactPhone2: "+996557100505",
   // adminPassword removed — admin auth now goes through PocketBase
   // (`pb.admins.authWithPassword`). Manage credentials at /_/ on the PB host.
@@ -508,220 +727,189 @@ const DEFAULT_SETTINGS = {
   youtubeUrl: '',
 };
 
-// Fragrantica CDN fallback images (agar PocketBase da rasm bo'lmasa)
-const FALLBACK_IMAGES = {
-  "Sauvage":            "https://fimgs.net/mdimg/perfume/375x500.25921.jpg",
-  "Miss Dior":          "https://fimgs.net/mdimg/perfume/375x500.22038.jpg",
-  "Bleu de Chanel":     "https://fimgs.net/mdimg/perfume/375x500.17439.jpg",
-  "N°5":                "https://fimgs.net/mdimg/perfume/375x500.1.jpg",
-  "Black Opium":        "https://fimgs.net/mdimg/perfume/375x500.25426.jpg",
-  "Y Eau de Parfum":    "https://fimgs.net/mdimg/perfume/375x500.48617.jpg",
-  "Eros":               "https://fimgs.net/mdimg/perfume/375x500.22392.jpg",
-  "Bright Crystal":     "https://fimgs.net/mdimg/perfume/375x500.7206.jpg",
-  "Acqua di Giò":       "https://fimgs.net/mdimg/perfume/375x500.1174.jpg",
-  "Sì":                 "https://fimgs.net/mdimg/perfume/375x500.24031.jpg",
-  "Sì Passione":        "https://fimgs.net/mdimg/perfume/375x500.40523.jpg",
-  "Light Blue":         "https://fimgs.net/mdimg/perfume/375x500.5676.jpg",
-  "The One":            "https://fimgs.net/mdimg/perfume/375x500.4957.jpg",
-  "Boss Bottled":       "https://fimgs.net/mdimg/perfume/375x500.2017.jpg",
-  "Hugo Man":           "https://fimgs.net/mdimg/perfume/375x500.2020.jpg",
-  "CK One":             "https://fimgs.net/mdimg/perfume/375x500.865.jpg",
-  "Euphoria":           "https://fimgs.net/mdimg/perfume/375x500.3022.jpg",
-  "My Burberry":        "https://fimgs.net/mdimg/perfume/375x500.23629.jpg",
-  "1 Million":          "https://fimgs.net/mdimg/perfume/375x500.7361.jpg",
-  "Lady Million":       "https://fimgs.net/mdimg/perfume/375x500.11604.jpg",
-  "Black Orchid":       "https://fimgs.net/mdimg/perfume/375x500.3669.jpg",
-  "Oud Wood":           "https://fimgs.net/mdimg/perfume/375x500.5071.jpg",
-  "Guilty":             "https://fimgs.net/mdimg/perfume/375x500.11960.jpg",
-  "Bloom":              "https://fimgs.net/mdimg/perfume/375x500.42268.jpg",
-  "L'Interdit":         "https://fimgs.net/mdimg/perfume/375x500.49052.jpg",
-  "Gentleman":          "https://fimgs.net/mdimg/perfume/375x500.45895.jpg",
-  "La Vie Est Belle":   "https://fimgs.net/mdimg/perfume/375x500.17836.jpg",
-  "Cool Water":         "https://fimgs.net/mdimg/perfume/375x500.801.jpg",
-  "Angel":              "https://fimgs.net/mdimg/perfume/375x500.1135.jpg",
-  "Aventus":            "https://fimgs.net/mdimg/perfume/375x500.19439.jpg",
-  "Baccarat Rouge 540": "https://fimgs.net/mdimg/perfume/375x500.38088.jpg",
-};
+// FALLBACK_IMAGES — disabled: Fragrantica CDN blocks hotlinking (ERR_CONNECTION_RESET)
+// Images are now hosted directly on PocketBase via pb-download-images.js
+const FALLBACK_IMAGES = {};
 
 const INITIAL_PRODUCTS = [
   {
     id: 1, name: "Sauvage", brand: "Dior", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.25921.jpg",
-    desc: "Свежий, дерзкий аромат с нотами бергамота из Калабрии, жасмина и амброксана. Дикий и благородный — как звёздная ночь в пустыне.",
+    img: null,
+    desc: "🔝 Верхние: бергамот, перец Сычуань\n💎 Средние: герань, лаванда, элеми\n🌿 Базовые: амброксан, кедр, лабданум\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: сильный\n\nСвежий, дерзкий аромат для уверенного мужчины. Бергамот из Калабрии раскрывается мощным амброксаном — дикий и благородный, как звёздная ночь в пустыне.",
     variants: [{ id: 1, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 2, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 3, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 301, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
   },
   {
     id: 2, name: "Miss Dior", brand: "Dior", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.22038.jpg",
-    desc: "Нежный цветочный аромат с розой, пионом и белым мускусом. Воплощение женственности, изящества и искренней любви.",
+    img: null,
+    desc: "🔝 Верхние: мандарин, ландыш, пион\n💎 Средние: роза, ирис, жасмин\n🌿 Базовые: пачули, мускус, бобы тонка\n\n📋 Тип: EDP · Стойкость: 6-8 ч · Шлейф: умеренный\n\nНежный цветочный аромат — воплощение женственности и изящества. Роза и пион сплетаются с тёплым пачули, создавая образ искренней любви.",
     variants: [{ id: 4, label: "5 мл", price: 380, type: "ml", inStock: true }, { id: 5, label: "10 мл", price: 650, type: "ml", inStock: true }, { id: 6, label: "20 мл", price: 1200, type: "ml", inStock: true }, { id: 302, label: "Упаковка 50 мл", price: 2300, type: "pkg", inStock: true }],
   },
   {
     id: 3, name: "Bleu de Chanel", brand: "Chanel", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.17439.jpg",
-    desc: "Древесный ароматический аромат с цитрусовыми нотами, ладаном и сандалом. Элегантный, уверенный, безвременный.",
+    img: null,
+    desc: "🔝 Верхние: грейпфрут, лимон, мята\n💎 Средние: жасмин, имбирь, нутмег\n🌿 Базовые: ладан, кедр, сандал\n\n📋 Тип: EDP · Стойкость: 8-12 ч · Шлейф: сильный\n\nДревесно-ароматический шедевр Chanel. Элегантный и уверенный — цитрусовая свежесть плавно переходит в тёплый сандал и ладан. Безвременная классика.",
     variants: [{ id: 7, label: "5 мл", price: 420, type: "ml", inStock: true }, { id: 8, label: "10 мл", price: 750, type: "ml", inStock: true }, { id: 9, label: "20 мл", price: 1350, type: "ml", inStock: true }, { id: 303, label: "Упаковка 50 мл", price: 2600, type: "pkg", inStock: true }],
   },
   {
     id: 4, name: "N°5", brand: "Chanel", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.1.jpg",
-    desc: "Легендарный цветочный альдегидный аромат с розой, жасмином и ветивером. Символ роскоши и женственности с 1921 года.",
+    img: null,
+    desc: "🔝 Верхние: альдегиды, нероли, иланг-иланг\n💎 Средние: роза, жасмин, ландыш\n🌿 Базовые: сандал, ветивер, ваниль\n\n📋 Тип: Parfum · Стойкость: 10-14 ч · Шлейф: сильный\n\nЛегендарный аромат с 1921 года — символ абсолютной роскоши. Цветочно-альдегидная композиция, которую узнают с первой ноты. Вне времени и трендов.",
     variants: [{ id: 10, label: "5 мл", price: 450, type: "ml", inStock: true }, { id: 11, label: "10 мл", price: 800, type: "ml", inStock: true }, { id: 12, label: "20 мл", price: 1450, type: "ml", inStock: true }, { id: 304, label: "Упаковка 50 мл", price: 2800, type: "pkg", inStock: true }],
   },
   {
     id: 5, name: "Black Opium", brand: "YSL", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.25426.jpg",
-    desc: "Соблазнительный кофейно-ванильный аромат с жасмином и белым чаем. Для смелых, уверенных и ярких женщин.",
+    img: null,
+    desc: "🔝 Верхние: груша, розовый перец\n💎 Средние: кофе, жасмин, флёрдоранж\n🌿 Базовые: ваниль, пачули, кедр\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: сильный\n\nСоблазнительный кофейно-ванильный аромат для смелых женщин. Зёрна кофе и жасмин создают энергичный контраст, а ваниль добавляет чувственную глубину.",
     variants: [{ id: 13, label: "5 мл", price: 360, type: "ml", inStock: true }, { id: 14, label: "10 мл", price: 620, type: "ml", inStock: true }, { id: 15, label: "20 мл", price: 1150, type: "ml", inStock: true }, { id: 305, label: "Упаковка 50 мл", price: 2200, type: "pkg", inStock: true }],
   },
   {
     id: 6, name: "Y Eau de Parfum", brand: "YSL", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.48617.jpg",
-    desc: "Мужественный аромат с яблоком, имбирём, шалфеем и амброксаном. Свежий, современный, уверенный в себе.",
+    img: null,
+    desc: "🔝 Верхние: яблоко, имбирь, бергамот\n💎 Средние: шалфей, можжевельник, герань\n🌿 Базовые: амброксан, кедр, бобы тонка\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: умеренный\n\nСовременный мужской аромат — свежее яблоко и имбирь встречаются с тёплым амброксаном. Уверенный, динамичный, идеальный на каждый день.",
     variants: [{ id: 16, label: "5 мл", price: 390, type: "ml", inStock: true }, { id: 17, label: "10 мл", price: 680, type: "ml", inStock: true }, { id: 18, label: "20 мл", price: 1250, type: "ml", inStock: true }, { id: 306, label: "Упаковка 60 мл", price: 2400, type: "pkg", inStock: true }],
   },
   {
     id: 7, name: "Eros", brand: "Versace", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.22392.jpg",
-    desc: "Страстный восточный аромат с мятой, зелёным яблоком, ванилью и ветивером. Вдохновлён греческим богом любви.",
+    img: null,
+    desc: "🔝 Верхние: мята, зелёное яблоко, лимон\n💎 Средние: бобы тонка, герань, амброксан\n🌿 Базовые: ваниль, ветивер, дубовый мох\n\n📋 Тип: EDT · Стойкость: 6-8 ч · Шлейф: сильный\n\nСтрастный аромат, вдохновлённый греческим богом любви. Свежая мята и яблоко разгораются в тёплую ваниль — мощный, притягательный, незабываемый.",
     variants: [{ id: 19, label: "5 мл", price: 320, type: "ml", inStock: true }, { id: 20, label: "10 мл", price: 560, type: "ml", inStock: true }, { id: 21, label: "20 мл", price: 1000, type: "ml", inStock: true }, { id: 307, label: "Упаковка 50 мл", price: 1950, type: "pkg", inStock: true }],
   },
   {
     id: 8, name: "Bright Crystal", brand: "Versace", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.7206.jpg",
-    desc: "Нежный цветочный аромат с гранатом, нарциссом, магнолией и мускусом. Прозрачный как хрусталь, чистый как роса.",
+    img: null,
+    desc: "🔝 Верхние: гранат, юзу, ледяной аккорд\n💎 Средние: магнолия, пион, лотос\n🌿 Базовые: мускус, красное дерево, амбра\n\n📋 Тип: EDT · Стойкость: 4-6 ч · Шлейф: лёгкий\n\nНежный, прозрачный как хрусталь цветочный аромат. Магнолия и пион создают воздушную лёгкость, а мускус добавляет чувственный шлейф.",
     variants: [{ id: 22, label: "5 мл", price: 300, type: "ml", inStock: true }, { id: 23, label: "10 мл", price: 520, type: "ml", inStock: true }, { id: 24, label: "20 мл", price: 950, type: "ml", inStock: true }, { id: 308, label: "Упаковка 50 мл", price: 1850, type: "pkg", inStock: true }],
   },
   {
     id: 9, name: "Acqua di Giò", brand: "Armani", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.1174.jpg",
-    desc: "Свежий морской аромат с бергамотом, персиком и нотами океана. Вдохновлён морем острова Пантеллерия.",
+    img: null,
+    desc: "🔝 Верхние: бергамот, нероли, зелёный мандарин\n💎 Средние: жасмин, морские ноты, персик\n🌿 Базовые: кедр, мускус, амбра\n\n📋 Тип: EDT · Стойкость: 6-8 ч · Шлейф: умеренный\n\nСвежий морской аромат, вдохновлённый островом Пантеллерия. Бергамот и морской бриз создают ощущение средиземноморского лета круглый год.",
     variants: [{ id: 25, label: "5 мл", price: 340, type: "ml", inStock: true }, { id: 26, label: "10 мл", price: 590, type: "ml", inStock: true }, { id: 27, label: "20 мл", price: 1080, type: "ml", inStock: true }, { id: 309, label: "Упаковка 50 мл", price: 2050, type: "pkg", inStock: true }],
   },
   {
     id: 10, name: "Sì", brand: "Armani", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.24031.jpg",
-    desc: "Чувственный женственный аромат с чёрной смородиной, нероли, розой и ванилью. Современная элегантность.",
+    img: null,
+    desc: "🔝 Верхние: чёрная смородина, мандарин\n💎 Средние: нероли, роза, фрезия\n🌿 Базовые: ваниль, пачули, амброксан\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: умеренный\n\nЧувственный женственный аромат — чёрная смородина встречается с нежной розой и тёплой ванилью. Современная элегантность в каждой капле.",
     variants: [{ id: 28, label: "5 мл", price: 370, type: "ml", inStock: true }, { id: 29, label: "10 мл", price: 640, type: "ml", inStock: true }, { id: 30, label: "20 мл", price: 1180, type: "ml", inStock: true }, { id: 310, label: "Упаковка 50 мл", price: 2250, type: "pkg", inStock: true }],
   },
   {
     id: 11, name: "Light Blue", brand: "Dolce&Gabbana", category: "Унисекс",
-    img: "https://fimgs.net/mdimg/perfume/375x500.5676.jpg",
-    desc: "Лёгкий свежий средиземноморский аромат с сицилийским лимоном, яблоком и бамбуком. Летнее настроение круглый год.",
+    img: null,
+    desc: "🔝 Верхние: сицилийский лимон, яблоко Гренни Смит\n💎 Средние: бамбук, жасмин, белая роза\n🌿 Базовые: кедр, мускус, амбра\n\n📋 Тип: EDT · Стойкость: 4-6 ч · Шлейф: лёгкий\n\nЛёгкий средиземноморский аромат — сицилийский лимон и зелёное яблоко дарят ощущение летнего побережья. Идеален для жаркого дня.",
     variants: [{ id: 31, label: "5 мл", price: 280, type: "ml", inStock: true }, { id: 32, label: "10 мл", price: 490, type: "ml", inStock: true }, { id: 33, label: "20 мл", price: 900, type: "ml", inStock: true }, { id: 311, label: "Упаковка 50 мл", price: 1750, type: "pkg", inStock: true }],
   },
   {
     id: 12, name: "The One", brand: "Dolce&Gabbana", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.4957.jpg",
-    desc: "Восточный пряный аромат с табаком, имбирём, кардамоном и янтарём. Тёплый, обволакивающий, роскошный.",
+    img: null,
+    desc: "🔝 Верхние: грейпфрут, кориандр, базилик\n💎 Средние: имбирь, кардамон, флёрдоранж\n🌿 Базовые: табак, амбра, кедр\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: сильный\n\nВосточный пряный аромат для харизматичного мужчины. Тёплый табак и кардамон обволакивают роскошной амброй — идеален для вечера.",
     variants: [{ id: 34, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 35, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 36, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 312, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
   },
   {
     id: 13, name: "Boss Bottled", brand: "Hugo Boss", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.2017.jpg",
-    desc: "Классический мужской аромат с яблоком, корицей, сандалом и кедром. Для уверенного, целеустремлённого мужчины.",
+    img: null,
+    desc: "🔝 Верхние: яблоко, цитрусы, слива\n💎 Средние: герань, корица, гвоздика\n🌿 Базовые: сандал, кедр, ветивер\n\n📋 Тип: EDT · Стойкость: 6-8 ч · Шлейф: умеренный\n\nКлассический мужской аромат для делового стиля. Яблоко и корица создают тёплое вступление, а сандал с кедром — уверенный финиш.",
     variants: [{ id: 37, label: "5 мл", price: 290, type: "ml", inStock: true }, { id: 38, label: "10 мл", price: 500, type: "ml", inStock: true }, { id: 39, label: "20 мл", price: 920, type: "ml", inStock: true }, { id: 313, label: "Упаковка 50 мл", price: 1780, type: "pkg", inStock: true }],
   },
   {
     id: 14, name: "Hugo Man", brand: "Hugo Boss", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.801.jpg",
-    desc: "Дерзкий свежий аромат с мятой, зелёным яблоком и кедром. Для свободного, современного и независимого.",
+    img: null,
+    desc: "🔝 Верхние: зелёное яблоко, мята, лаванда\n💎 Средние: шалфей, герань, гвоздика\n🌿 Базовые: кедр, сандал, мускус\n\n📋 Тип: EDT · Стойкость: 4-6 ч · Шлейф: лёгкий\n\nДерзкий свежий аромат для свободного духа. Зелёное яблоко и мята заряжают энергией, кедр добавляет мужественности.",
     variants: [{ id: 40, label: "5 мл", price: 260, type: "ml", inStock: true }, { id: 41, label: "10 мл", price: 450, type: "ml", inStock: true }, { id: 42, label: "20 мл", price: 830, type: "ml", inStock: true }, { id: 314, label: "Упаковка 40 мл", price: 1600, type: "pkg", inStock: true }],
   },
   {
     id: 15, name: "CK One", brand: "Calvin Klein", category: "Унисекс",
-    img: "https://fimgs.net/mdimg/perfume/375x500.865.jpg",
-    desc: "Культовый унисекс аромат с зелёным чаем, бергамотом, кардамоном и мускусом. Свежесть, свобода и единство.",
+    img: null,
+    desc: "🔝 Верхние: бергамот, кардамон, ананас\n💎 Средние: жасмин, фиалка, зелёный чай\n🌿 Базовые: мускус, амбра, кедр\n\n📋 Тип: EDT · Стойкость: 4-6 ч · Шлейф: лёгкий\n\nКультовый унисекс аромат с 1994 года. Зелёный чай и бергамот создают ощущение чистоты и свободы. Подходит всем, всегда.",
     variants: [{ id: 43, label: "5 мл", price: 240, type: "ml", inStock: true }, { id: 44, label: "10 мл", price: 420, type: "ml", inStock: true }, { id: 45, label: "20 мл", price: 780, type: "ml", inStock: true }, { id: 315, label: "Упаковка 100 мл", price: 2000, type: "pkg", inStock: true }],
   },
   {
     id: 16, name: "Euphoria", brand: "Calvin Klein", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.3022.jpg",
-    desc: "Чувственный восточный аромат с гранатом, лотосом, чёрной орхидеей и красным деревом. Таинственный и соблазнительный.",
+    img: null,
+    desc: "🔝 Верхние: гранат, хурма, зелёные ноты\n💎 Средние: чёрная орхидея, лотос, жасмин\n🌿 Базовые: красное дерево, мускус, амбра, крем\n\n📋 Тип: EDP · Стойкость: 6-8 ч · Шлейф: умеренный\n\nТаинственный восточный аромат, в котором экзотический гранат встречается с чёрной орхидеей. Чувственный, глубокий и обволакивающий — как шёлковое платье в полумраке.",
     variants: [{ id: 46, label: "5 мл", price: 310, type: "ml", inStock: true }, { id: 47, label: "10 мл", price: 540, type: "ml", inStock: true }, { id: 48, label: "20 мл", price: 980, type: "ml", inStock: true }, { id: 316, label: "Упаковка 50 мл", price: 1900, type: "pkg", inStock: true }],
   },
   {
     id: 17, name: "My Burberry", brand: "Burberry", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.23629.jpg",
-    desc: "Цветочный аромат с нотами садовых цветов, персика, сладкого горошка и патчули. Вдохновлён лондонским садом после дождя.",
+    img: null,
+    desc: "🔝 Верхние: сладкий горошек, бергамот, груша\n💎 Средние: герань, фрезия, роза\n🌿 Базовые: пачули, дождевые капли, мускус\n\n📋 Тип: EDP · Стойкость: 5-7 ч · Шлейф: умеренный\n\nЦветочный аромат, вдохновлённый лондонским садом после тёплого дождя. Нежные лепестки розы и фрезии оседают на тёплой земле — элегантно, спокойно и невероятно женственно.",
     variants: [{ id: 49, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 50, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 51, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 317, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
   },
   {
     id: 18, name: "1 Million", brand: "Paco Rabanne", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.7361.jpg",
-    desc: "Пряный кожаный аромат с кровавым апельсином, розой, корицей и патчули. Роскошь, соблазн и уверенность.",
+    img: null,
+    desc: "🔝 Верхние: грейпфрут, мята, кровавый апельсин\n💎 Средние: корица, роза, абсолют корицы\n🌿 Базовые: кожа, амбра, пачули, белое дерево\n\n📋 Тип: EDT · Стойкость: 6-8 ч · Шлейф: сильный\n\nДерзкий аромат роскоши и успеха в золотом слитке. Свежая мята обрушивается пряной корицей, а тёплая кожа в базе добавляет харизму — аромат мужчины, который привык побеждать.",
     variants: [{ id: 52, label: "5 мл", price: 330, type: "ml", inStock: true }, { id: 53, label: "10 мл", price: 580, type: "ml", inStock: true }, { id: 54, label: "20 мл", price: 1060, type: "ml", inStock: true }, { id: 318, label: "Упаковка 50 мл", price: 2050, type: "pkg", inStock: true }],
   },
   {
     id: 19, name: "Lady Million", brand: "Paco Rabanne", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.11604.jpg",
-    desc: "Роскошный цветочный аромат с нероли, жасмином, белой розой и мёдом. Для женщины, которая знает себе цену.",
+    img: null,
+    desc: "🔝 Верхние: малина, нероли, горький апельсин\n💎 Средние: жасмин, гардения, апельсиновый цвет\n🌿 Базовые: мёд, пачули, амбра\n\n📋 Тип: EDP · Стойкость: 7-9 ч · Шлейф: сильный\n\nРоскошный аромат для женщины, которая знает себе цену. Искрящаяся малина переходит в роскошный букет жасмина и гардении, а мёд в базе добавляет сладкое послевкусие победы.",
     variants: [{ id: 55, label: "5 мл", price: 360, type: "ml", inStock: true }, { id: 56, label: "10 мл", price: 620, type: "ml", inStock: true }, { id: 57, label: "20 мл", price: 1150, type: "ml", inStock: true }, { id: 319, label: "Упаковка 50 мл", price: 2200, type: "pkg", inStock: true }],
   },
   {
     id: 20, name: "Black Orchid", brand: "Tom Ford", category: "Унисекс",
-    img: "https://fimgs.net/mdimg/perfume/375x500.3669.jpg",
-    desc: "Тёмный роскошный аромат с трюфелем, чёрной орхидеей, сандалом и ладаном. Таинственный, обольстительный, незабываемый.",
+    img: null,
+    desc: "🔝 Верхние: трюфель, бергамот, чёрная смородина\n💎 Средние: чёрная орхидея, лотос, фрукты\n🌿 Базовые: пачули, ваниль, сандал, ладан, ветивер\n\n📋 Тип: EDP · Стойкость: 10-12 ч · Шлейф: сильный\n\nТёмная роскошь в чистом виде — первый аромат Тома Форда в собственном имени. Чёрный трюфель и орхидея создают гипнотическую глубину, а сандал с ладаном оставляют незабываемый шлейф.",
     variants: [{ id: 58, label: "5 мл", price: 700, type: "ml", inStock: true }, { id: 59, label: "10 мл", price: 1300, type: "ml", inStock: true }, { id: 60, label: "20 мл", price: 2400, type: "ml", inStock: true }, { id: 320, label: "Упаковка 50 мл", price: 5500, type: "pkg", inStock: true }],
   },
   {
     id: 21, name: "Oud Wood", brand: "Tom Ford", category: "Унисекс",
-    img: "https://fimgs.net/mdimg/perfume/375x500.5071.jpg",
-    desc: "Экзотический уд с розовым перцем, сандалом, кардамоном и ванилью. Согревающий восточный шедевр для ценителей.",
+    img: null,
+    desc: "🔝 Верхние: розовый перец, кардамон\n💎 Средние: уд, сандал, ветивер\n🌿 Базовые: бобы тонка, амбра, мускус\n\n📋 Тип: EDP · Стойкость: 10-14 ч · Шлейф: сильный\n\nРедкий удовый аромат, отшлифованный до совершенства. Розовый перец и кардамон открывают дорогу благородному уду, а тёплый сандал и тонка в базе превращают его в бархатный шедевр.",
     variants: [{ id: 61, label: "5 мл", price: 800, type: "ml", inStock: true }, { id: 62, label: "10 мл", price: 1500, type: "ml", inStock: true }, { id: 63, label: "20 мл", price: 2800, type: "ml", inStock: true }, { id: 321, label: "Упаковка 50 мл", price: 6200, type: "pkg", inStock: true }],
   },
   {
     id: 22, name: "Guilty", brand: "Gucci", category: "Унисекс",
-    img: "https://fimgs.net/mdimg/perfume/375x500.11960.jpg",
-    desc: "Чувственный восточный аромат с лавандой, розовым перцем, геранью и амброй. Для тех, кто живёт по своим правилам.",
+    img: null,
+    desc: "🔝 Верхние: лаванда, лимон, розовый перец\n💎 Средние: апельсиновый цвет, герань\n🌿 Базовые: кедр, пачули, амбра\n\n📋 Тип: EDT · Стойкость: 6-8 ч · Шлейф: умеренный\n\nАромат-бунтарь для тех, кто пишет свои правила. Провокационная лаванда с розовым перцем бросает вызов, а пачули с амброй в базе придают чувственную глубину без извинений.",
     variants: [{ id: 64, label: "5 мл", price: 380, type: "ml", inStock: true }, { id: 65, label: "10 мл", price: 660, type: "ml", inStock: true }, { id: 66, label: "20 мл", price: 1200, type: "ml", inStock: true }, { id: 322, label: "Упаковка 50 мл", price: 2300, type: "pkg", inStock: true }],
   },
   {
     id: 23, name: "Bloom", brand: "Gucci", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.42268.jpg",
-    desc: "Белый цветочный аромат с жасмином, туберозой, нероли и ранункулюсом. Богатый, насыщенный, по-женски сильный.",
+    img: null,
+    desc: "🔝 Верхние: ранункулюс, туберозый лист\n💎 Средние: тубероза, жасмин самбак\n🌿 Базовые: мускус, сандал\n\n📋 Тип: EDP · Стойкость: 7-9 ч · Шлейф: сильный\n\nБелый сад, расцветающий на коже. Алессандро Микеле создал аромат из цветов, которые в природе не растут вместе — буйная тубероза и жасмин самбак сплетаются в богатый, чувственный букет.",
     variants: [{ id: 67, label: "5 мл", price: 400, type: "ml", inStock: true }, { id: 68, label: "10 мл", price: 700, type: "ml", inStock: true }, { id: 69, label: "20 мл", price: 1280, type: "ml", inStock: true }, { id: 323, label: "Упаковка 50 мл", price: 2450, type: "pkg", inStock: true }],
   },
   {
     id: 24, name: "L'Interdit", brand: "Givenchy", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.49052.jpg",
-    desc: "Белый цветочный аромат с тёмным сердцем из ветивера, пачули и белых цветов. Запретный и невыразимо притягательный.",
+    img: null,
+    desc: "🔝 Верхние: груша, бергамот\n💎 Средние: тубероза, жасмин, апельсиновый цвет\n🌿 Базовые: ветивер, пачули, мускус, амбра\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: сильный\n\nЗапретный плод в мире парфюмерии. Нежные белые цветы скрывают тёмное сердце из ветивера и пачули — контраст света и тени, невинности и соблазна. Аромат, от которого невозможно отвернуться.",
     variants: [{ id: 70, label: "5 мл", price: 360, type: "ml", inStock: true }, { id: 71, label: "10 мл", price: 620, type: "ml", inStock: true }, { id: 72, label: "20 мл", price: 1150, type: "ml", inStock: true }, { id: 324, label: "Упаковка 50 мл", price: 2200, type: "pkg", inStock: true }],
   },
   {
     id: 25, name: "Gentleman", brand: "Givenchy", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.45895.jpg",
-    desc: "Элегантный ирисово-ванильный аромат с виски, пачули и бергамотом. Для современного джентльмена с характером.",
+    img: null,
+    desc: "🔝 Верхние: груша, бергамот, кардамон\n💎 Средние: ирис, лаванда\n🌿 Базовые: пачули, ваниль, кожа\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: умеренный\n\nСовременный джентльмен без галстука. Ирис и лаванда создают аристократичную элегантность, а тёплая кожа и ваниль в базе раскрывают характер и глубину. Утончённость без усилий.",
     variants: [{ id: 73, label: "5 мл", price: 370, type: "ml", inStock: true }, { id: 74, label: "10 мл", price: 640, type: "ml", inStock: true }, { id: 75, label: "20 мл", price: 1180, type: "ml", inStock: true }, { id: 325, label: "Упаковка 60 мл", price: 2250, type: "pkg", inStock: true }],
   },
   {
     id: 26, name: "La Vie Est Belle", brand: "Lancôme", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.17836.jpg",
-    desc: "Сладкий гурманский аромат с ирисом, жасмином, пралине и ванилью. Жизнь прекрасна — и этот аромат напоминает об этом.",
+    img: null,
+    desc: "🔝 Верхние: чёрная смородина, груша\n💎 Средние: ирис, жасмин, апельсиновый цвет\n🌿 Базовые: пралине, ваниль, пачули, бобы тонка\n\n📋 Тип: EDP · Стойкость: 8-10 ч · Шлейф: сильный\n\n«Жизнь прекрасна» — и этот аромат напоминает об этом каждый день. Сладкое пралине с ирисом создают гурманскую гармонию, а тёплая ваниль в базе дарит ощущение уюта и счастья.",
     variants: [{ id: 76, label: "5 мл", price: 350, type: "ml", inStock: true }, { id: 77, label: "10 мл", price: 600, type: "ml", inStock: true }, { id: 78, label: "20 мл", price: 1100, type: "ml", inStock: true }, { id: 326, label: "Упаковка 50 мл", price: 2100, type: "pkg", inStock: true }],
   },
   {
     id: 27, name: "Cool Water", brand: "Davidoff", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.801.jpg",
-    desc: "Классический свежий морской аромат с мятой, лавандой, геранью и океанской солью. Культовый аромат с 1988 года.",
+    img: null,
+    desc: "🔝 Верхние: мята, лаванда, кориандр, розмарин\n💎 Средние: жасмин, герань, нероли, сандал\n🌿 Базовые: кедр, мускус, амбра, табак\n\n📋 Тип: EDT · Стойкость: 4-6 ч · Шлейф: лёгкий\n\nКультовый морской аромат с 1988 года, определивший целую эпоху свежей мужской парфюмерии. Мята и лаванда дышат океанским бризом — чистый, спортивный и вечно актуальный.",
     variants: [{ id: 79, label: "5 мл", price: 220, type: "ml", inStock: true }, { id: 80, label: "10 мл", price: 380, type: "ml", inStock: true }, { id: 81, label: "20 мл", price: 700, type: "ml", inStock: true }, { id: 327, label: "Упаковка 75 мл", price: 1650, type: "pkg", inStock: true }],
   },
   {
     id: 28, name: "Angel", brand: "Mugler", category: "Женские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.1135.jpg",
-    desc: "Сладкий гурманский аромат с хлопком, ванилью, шоколадом и пачули. Первый «съедобный» аромат, ставший иконой моды.",
+    img: null,
+    desc: "🔝 Верхние: бергамот, гелиотроп, мёд\n💎 Средние: карамель, ежевика, красные ягоды\n🌿 Базовые: пачули, шоколад, ваниль, мускус\n\n📋 Тип: EDP · Стойкость: 8-12 ч · Шлейф: сильный\n\nПервый «съедобный» аромат в истории, перевернувший правила парфюмерии в 1992 году. Шоколад и карамель окутаны тёмным пачули — дерзкий, сладкий и невозможно узнаваемый.",
     variants: [{ id: 82, label: "5 мл", price: 340, type: "ml", inStock: true }, { id: 83, label: "10 мл", price: 590, type: "ml", inStock: true }, { id: 84, label: "20 мл", price: 1080, type: "ml", inStock: true }, { id: 328, label: "Упаковка 50 мл", price: 2050, type: "pkg", inStock: true }],
   },
   {
     id: 29, name: "Aventus", brand: "Creed", category: "Мужские",
-    img: "https://fimgs.net/mdimg/perfume/375x500.19439.jpg",
-    desc: "Фруктово-дымный аромат с ананасом, берёзой, розой и мускусом. Символ силы, успеха и роскоши для настоящих лидеров.",
+    img: null,
+    desc: "🔝 Верхние: ананас, бергамот, чёрная смородина, яблоко\n💎 Средние: берёза, жасмин, роза, пачули\n🌿 Базовые: мускус, амбра, ваниль, дубовый мох\n\n📋 Тип: EDP · Стойкость: 10-14 ч · Шлейф: сильный\n\nЛегендарный аромат успеха и лидерства. Ананас и берёза создают культовый фруктово-дымный аккорд, узнаваемый с первого вдоха. Для мужчины, который вдохновляет и ведёт за собой.",
     variants: [{ id: 85, label: "5 мл", price: 950, type: "ml", inStock: true }, { id: 86, label: "10 мл", price: 1800, type: "ml", inStock: true }, { id: 87, label: "20 мл", price: 3400, type: "ml", inStock: true }, { id: 329, label: "Упаковка 50 мл", price: 8500, type: "pkg", inStock: true }],
   },
   {
     id: 30, name: "Baccarat Rouge 540", brand: "Maison Francis Kurkdjian", category: "Унисекс",
-    img: "https://fimgs.net/mdimg/perfume/375x500.38088.jpg",
-    desc: "Культовый янтарно-цветочный аромат с жасмином, шафраном, амброксаном и берёзой. Для тех, кто ценит истинное совершенство.",
+    img: null,
+    desc: "🔝 Верхние: шафран, жасмин\n💎 Средние: амброксан, кедр\n🌿 Базовые: смола ели, мускус, кашемировое дерево\n\n📋 Тип: EDP · Стойкость: 12-16 ч · Шлейф: сильный\n\nКультовый аромат нового времени, покоривший мир минималистичной роскошью. Шафран и амброксан создают сияющий кристаллический аккорд — невесомый, но невозможно забыть. Для тех, кто ценит совершенство.",
     variants: [{ id: 88, label: "5 мл", price: 1200, type: "ml", inStock: true }, { id: 89, label: "10 мл", price: 2200, type: "ml", inStock: true }, { id: 90, label: "20 мл", price: 4200, type: "ml", inStock: true }, { id: 330, label: "Упаковка 70 мл", price: 12000, type: "pkg", inStock: true }],
   },
 ];
@@ -747,7 +935,14 @@ function pickDesc(p, lang) {
   if (lang === "kg" && p.desc_kg && String(p.desc_kg).trim()) return p.desc_kg;
   return p.desc || "";
 }
-function generateReferralCode(name) { return (name.slice(0, 4).toUpperCase() + Math.floor(1000 + Math.random() * 9000)); }
+function generateReferralCode(name) {
+  // Transliterate Cyrillic → Latin for clean referral codes
+  const cyr = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
+  const lat = 'abvgdeejziiklmnoprstufhccsssiieua';
+  const trans = (s) => s.split('').map(c => { const i = cyr.indexOf(c.toLowerCase()); return i >= 0 ? lat[i] : c; }).join('');
+  const prefix = trans(name || 'USER').replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase() || 'USER';
+  return prefix + Math.floor(1000 + Math.random() * 9000);
+}
 // ─── UI PRIMITIVES ─────────────────────────────────────────────────────────────
 function Toast({ toast, onDismiss }) {
   // PRO: spring entrance from above, soft scale + fade. Auto-dismisses via
@@ -794,9 +989,15 @@ function Toast({ toast, onDismiss }) {
 }
 
 function StatusChip({ status }) {
-  const map = { new: { bg: "#FFF3E0", color: "#FF6B00", label: "Новый" }, confirmed: { bg: "#E3F2FD", color: "#1976D2", label: "Подтверждён" }, preparing: { bg: "#E8F5E9", color: "#388E3C", label: "Готовится" }, delivering: { bg: "#EDE7F6", color: "#7C5CBF", label: "Доставляется" }, delivered: { bg: "#E8F5E9", color: "#388E3C", label: "Доставлен" }, cancelled: { bg: "#FFEBEE", color: "#E53935", label: "Отменён" } };
-  const s = map[status] || { bg: "rgba(0,0,0,0.08)", color: T.textSecond, label: status };
-  return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>{s.label}</span>;
+  const { lang } = useLang();
+  const labels = {
+    ru: { new: "Новый", confirmed: "Подтверждён", preparing: "Готовится", delivering: "Доставляется", delivered: "Доставлен", cancelled: "Отменён" },
+    kg: { new: "Жаңы", confirmed: "Тастыкталды", preparing: "Даярдалууда", delivering: "Жеткирилүүдө", delivered: "Жеткирилди", cancelled: "Жокко чыгарылды" },
+  };
+  const colors = { new: { bg: "#FFF3E0", color: "#FF6B00" }, confirmed: { bg: "#E3F2FD", color: "#1976D2" }, preparing: { bg: "#E8F5E9", color: "#388E3C" }, delivering: { bg: "#EDE7F6", color: "#7C5CBF" }, delivered: { bg: "#E8F5E9", color: "#388E3C" }, cancelled: { bg: "#FFEBEE", color: "#E53935" } };
+  const c = colors[status] || { bg: "rgba(0,0,0,0.08)", color: T.textSecond };
+  const label = (labels[lang] || labels.ru)[status] || status;
+  return <span style={{ background: c.bg, color: c.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>{label}</span>;
 }
 
 function NavBar({ items, active, onSelect }) {
@@ -859,6 +1060,73 @@ function NavBar({ items, active, onSelect }) {
       })}
     </div>
   );
+}
+
+// ─── DESCRIPTION RENDERER (SVG icons instead of emoji) ────────────────────────
+// Description renderer — splits by keyword patterns, not newlines
+// Handles text that may have no real \n (PocketBase may store as single block)
+const DESC_SECTIONS = [
+  { kw: "Верхние", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M12 3L20 11H15V21H9V11H4L12 3Z" fill={c || '#FF9500'}/></svg> },
+  { kw: "Средние", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M6 3H18L21 9L12 21L3 9L6 3Z" fill={c || '#AF52DE'}/></svg> },
+  { kw: "Базовые", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22L6.66 19.7C7.14 19.87 7.64 20 8 20C19 20 22 3 22 3C21 5 14 5.25 9 6.25C4 7.25 2 11.5 2 13.5C2 15.5 3.75 17.25 3.75 17.25C7 8 17 8 17 8Z" fill={c || '#34C759'}/></svg> },
+  { kw: "Тип", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><rect x="5" y="2" width="14" height="20" rx="2" stroke={c || '#8E8E93'} strokeWidth="1.5" fill="none"/><path d="M9 2V4H15V2" stroke={c || '#8E8E93'} strokeWidth="1.5"/><line x1="9" y1="9" x2="15" y2="9" stroke={c || '#8E8E93'} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="13" x2="15" y2="13" stroke={c || '#8E8E93'} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="17" x2="12" y2="17" stroke={c || '#8E8E93'} strokeWidth="1.5" strokeLinecap="round"/></svg> },
+];
+
+function DescRenderer({ text, color, iconColor }) {
+  if (!text) return null;
+  const tc = color || '#666';
+  // Build a regex that splits before each keyword: Верхние:|Средние:|Базовые:|Тип:
+  const kwPattern = DESC_SECTIONS.map(s => s.kw + ':').join('|');
+  const splitRe = new RegExp('(' + kwPattern + ')', 'g');
+  // Remove all emoji characters first
+  let clean = text.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{27BF}\u{FE0E}\u{FE0F}\u{200D}]/gu, '');
+  // Split by keywords, keeping delimiters
+  const tokens = clean.split(splitRe).filter(Boolean);
+  const result = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i];
+    // Check if this token is a keyword delimiter
+    const sec = DESC_SECTIONS.find(s => token === s.kw + ':');
+    if (sec) {
+      // Next token is the content after the keyword
+      const content = (tokens[i + 1] || '').replace(/^\s+/, '').split(/[。\n]/).shift()?.trim() || '';
+      // Find where this section's content ends (before next keyword or end)
+      let fullContent = '';
+      if (i + 1 < tokens.length) {
+        const nextTok = tokens[i + 1] || '';
+        // Check if next token is another keyword
+        const isNextKw = DESC_SECTIONS.some(s => nextTok === s.kw + ':');
+        if (!isNextKw) {
+          fullContent = nextTok.trim();
+          i += 2;
+        } else {
+          i += 1;
+        }
+      } else {
+        i += 1;
+      }
+      result.push(
+        <div key={'s' + result.length} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+          <div style={{ marginTop: 2 }}>{sec.svg(iconColor)}</div>
+          <span style={{ color: tc, fontSize: 13, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: iconColor || tc }}>{sec.kw}: </span>
+            {fullContent}
+          </span>
+        </div>
+      );
+    } else {
+      // Plain text (body paragraph) — split by newlines for multi-line
+      const lines = token.split(/\n+/).map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        result.push(
+          <div key={'t' + result.length} style={{ color: tc, fontSize: 13, lineHeight: 1.6, marginTop: 6 }}>{line}</div>
+        );
+      }
+      i += 1;
+    }
+  }
+  return result.length > 0 ? <>{result}</> : null;
 }
 
 // ─── IMAGE UPLOAD + CROP ───────────────────────────────────────────────────────
@@ -1103,6 +1371,7 @@ function MultiImageUpload({ images = [], coverImg, onImagesChange, onCoverChange
   const fileRefs = [fileRef0, fileRef1, fileRef2];
   const [cropSrc, setCropSrc] = useState(null);
   const [cropSlot, setCropSlot] = useState(null);
+  const [hoverSlot, setHoverSlot] = useState(null);
 
   const handleFile = (e, slotIndex) => {
     const f = e.target.files[0]; if (!f) return;
@@ -1130,7 +1399,21 @@ function MultiImageUpload({ images = [], coverImg, onImagesChange, onCoverChange
     }
   };
 
+  // Move image left/right for reorder
+  const moveImage = (fromIdx, dir) => {
+    const toIdx = fromIdx + dir;
+    if (toIdx < 0 || toIdx >= 3) return;
+    const newImages = [...images];
+    const tmp = newImages[fromIdx];
+    newImages[fromIdx] = newImages[toIdx];
+    newImages[toIdx] = tmp;
+    onImagesChange(newImages);
+    // Update cover if moved
+    if (coverImg === tmp) onCoverChange(tmp);
+  };
+
   const slots = [0, 1, 2];
+  const filledCount = images.filter(Boolean).length;
 
   return (
     <div>
@@ -1141,106 +1424,913 @@ function MultiImageUpload({ images = [], coverImg, onImagesChange, onCoverChange
           onCancel={() => { setCropSrc(null); setCropSlot(null); }}
         />
       )}
-      <div style={{ fontSize: 13, fontWeight: 600, color: T.textMuted, marginBottom: 8 }}>
-        {t.images} · {t.maxImages} · {t.selectCover}
+      {/* Header with count indicator */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#8E8E93", letterSpacing: -0.1 }}>
+          {t.selectCover || 'Выберите обложку'}
+        </div>
+        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          {[0,1,2].map(i => (
+            <div key={i} style={{
+              width: 6, height: 6, borderRadius: "50%",
+              background: images[i] ? "#34C759" : "rgba(120,120,128,0.20)",
+              transition: "background 0.22s",
+            }} />
+          ))}
+          <span style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500, marginLeft: 4 }}>{filledCount}/3</span>
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 10 }}>
+
+      {/* Image grid — PRO layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
         {slots.map(i => {
           const imgUrl = images[i] || null;
           const isCover = !!(coverImg && coverImg === imgUrl);
+          const isHover = hoverSlot === i;
           return (
-            <div key={i} style={{ flex: 1, position: "relative" }}>
+            <div key={i} style={{ position: "relative" }}
+              onMouseEnter={() => setHoverSlot(i)} onMouseLeave={() => setHoverSlot(null)}>
+              {/* Main image area */}
               <div
-                onClick={() => { if (!imgUrl) fileRefs[i].current?.click(); }}
+                onClick={() => { if (!imgUrl) fileRefs[i].current?.click(); else onCoverChange(imgUrl); }}
                 style={{
-                  width: "100%", height: 90, borderRadius: 14,
-                  border: isCover ? `2.5px solid ${T.accent}` : `2px dashed ${imgUrl ? T.accent : T.border}`,
-                  background: imgUrl ? "#fff" : T.bg,
+                  width: "100%",
+                  aspectRatio: "3/4",
+                  borderRadius: 14,
+                  border: isCover
+                    ? "2.5px solid #111"
+                    : imgUrl
+                      ? "1.5px solid rgba(0,0,0,0.08)"
+                      : "1.5px dashed rgba(0,0,0,0.12)",
+                  background: imgUrl ? "#fff" : "rgba(120,120,128,0.04)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: imgUrl ? "default" : "pointer",
+                  cursor: "pointer",
                   overflow: "hidden", position: "relative",
-                  boxSizing: "border-box"
+                  boxSizing: "border-box",
+                  transition: "border-color 0.22s, box-shadow 0.22s, transform 0.18s",
+                  boxShadow: isCover
+                    ? "0 2px 8px rgba(0,0,0,0.12)"
+                    : imgUrl
+                      ? "0 1px 4px rgba(0,0,0,0.06)"
+                      : "none",
+                  transform: isHover && imgUrl ? "scale(1.02)" : "scale(1)",
                 }}
               >
-                {imgUrl
-                  ? <img src={imgUrl} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
-                  : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, color: T.textMuted }}>
-                      {React.cloneElement(IC.camera, { style: { width: 22, height: 22 } })}
-                      <span style={{ fontSize: 11 }}>{t.image} {i + 1}</span>
-                    </div>
-                }
+                {imgUrl ? (
+                  <img src={imgUrl} style={{ width: "100%", height: "100%", objectFit: "cover", background: "#fff" }} alt="" />
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#C7C7CC" }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <span style={{ fontSize: 11, fontWeight: 500 }}>Фото {i + 1}</span>
+                  </div>
+                )}
+                {/* Cover badge */}
                 {isCover && (
-                  <div style={{ position: "absolute", top: 5, left: 5, background: T.accent, color: "#fff", fontSize: 10, fontWeight: 700, borderRadius: 6, padding: "2px 6px" }}>
+                  <div style={{
+                    position: "absolute", top: 6, left: 6,
+                    background: "#111", color: "#fff",
+                    fontSize: 9, fontWeight: 700, letterSpacing: 0.3,
+                    borderRadius: 6, padding: "3px 8px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
+                  }}>
                     {t.cover}
                   </div>
                 )}
+                {/* Hover overlay with actions */}
+                {imgUrl && isHover && (
+                  <div style={{
+                    position: "absolute", inset: 0,
+                    background: "rgba(0,0,0,0.35)",
+                    borderRadius: 12,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                    transition: "opacity 0.18s",
+                  }}>
+                    {/* Replace */}
+                    <button onClick={(e) => { e.stopPropagation(); fileRefs[i].current?.click(); }}
+                      style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "#111", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </button>
+                    {/* Move left */}
+                    {i > 0 && images[i-1] && (
+                      <button onClick={(e) => { e.stopPropagation(); moveImage(i, -1); }}
+                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "#111", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
+                      </button>
+                    )}
+                    {/* Move right */}
+                    {i < 2 && images[i+1] && (
+                      <button onClick={(e) => { e.stopPropagation(); moveImage(i, 1); }}
+                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "#111", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+                      </button>
+                    )}
+                    {/* Delete */}
+                    <button onClick={(e) => { e.stopPropagation(); handleRemove(i); }}
+                      style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(229,57,53,0.92)", color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                )}
               </div>
-
-              {imgUrl && (
-                <div style={{ display: "flex", gap: 4, marginTop: 5 }}>
+              {/* Mobile action buttons (no hover on touch) */}
+              {imgUrl && !isHover && (
+                <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
                   {!isCover && (
-                    <button
-                      onClick={() => onCoverChange(imgUrl)}
-                      style={{ flex: 1, fontSize: 10, padding: "4px 0", borderRadius: 7, border: `1px solid ${T.accent}`, background: T.accentLight, color: T.accent, fontWeight: 700, cursor: "pointer" }}
-                    >
-                      ✓ {t.cover}
+                    <button onClick={() => onCoverChange(imgUrl)}
+                      style={{ flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(0,0,0,0.06)", color: "#3A3A3C", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                      Обложка
                     </button>
                   )}
-                  <button
-                    onClick={() => handleRemove(i)}
-                    style={{ flex: isCover ? 1 : 0, width: isCover ? "auto" : 28, fontSize: 10, padding: "4px 0", borderRadius: 7, border: `1px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    ✕
-                  </button>
-                  <button
-                    onClick={() => fileRefs[i].current?.click()}
-                    style={{ flex: 0, width: 28, fontSize: 10, padding: "4px 0", borderRadius: 7, border: `1px solid ${T.border}`, background: T.bg, color: T.textMuted, cursor: "pointer" }}
-                  >
+                  <button onClick={() => fileRefs[i].current?.click()}
+                    style={{ width: 28, fontSize: 10, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(10,132,255,0.08)", color: "#0A84FF", fontWeight: 600, cursor: "pointer" }}>
                     ↑
+                  </button>
+                  <button onClick={() => handleRemove(i)}
+                    style={{ width: 28, fontSize: 10, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(229,57,53,0.08)", color: "#E53935", fontWeight: 600, cursor: "pointer" }}>
+                    ✕
                   </button>
                 </div>
               )}
-
-              <input
-                ref={fileRefs[i]}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={e => handleFile(e, i)}
-              />
+              <input ref={fileRefs[i]} type="file" accept="image/*" style={{ display: "none" }} onChange={e => handleFile(e, i)} />
             </div>
           );
         })}
       </div>
+
+      {/* Tip */}
+      {filledCount === 0 && (
+        <div style={{ textAlign: "center", marginTop: 10, fontSize: 11, color: "#C7C7CC", fontWeight: 500 }}>
+          Нажмите на слот для загрузки фото
+        </div>
+      )}
     </div>
+  );
+}
+
+// ─── STORY VIEWER — Instagram-style fullscreen product stories ────────────────
+function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang }) {
+  const [groupIdx, setGroupIdx] = useState(initialGroup || 0);
+  const [itemIdx, setItemIdx] = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [selVarIdx, setSelVarIdx] = useState(0);
+  const [swipedUp, setSwipedUp] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const DURATION = 8000;
+  const timerRef = useRef(null);
+  const startRef = useRef(Date.now());
+  const touchStartRef = useRef({ y: 0, time: 0 });
+
+  const group = stories[groupIdx];
+  if (!group || !group.items || group.items.length === 0) return null;
+  const item = group.items[itemIdx] || group.items[0];
+
+  // Reset variant when item changes
+  useEffect(() => { setSelVarIdx(0); setSwipedUp(false); }, [groupIdx, itemIdx]);
+
+  // Progress timer
+  useEffect(() => {
+    if (paused || swipedUp) return;
+    startRef.current = Date.now();
+    setProgress(0);
+    const tick = () => {
+      const elapsed = Date.now() - startRef.current;
+      const p = Math.min(elapsed / DURATION, 1);
+      setProgress(p);
+      if (p >= 1) { goNext(); return; }
+      timerRef.current = requestAnimationFrame(tick);
+    };
+    timerRef.current = requestAnimationFrame(tick);
+    return () => { if (timerRef.current) cancelAnimationFrame(timerRef.current); };
+  }, [groupIdx, itemIdx, paused, swipedUp]);
+
+  const goNext = () => {
+    if (itemIdx < group.items.length - 1) {
+      setItemIdx(i => i + 1);
+    } else if (groupIdx < stories.length - 1) {
+      setGroupIdx(g => g + 1);
+      setItemIdx(0);
+    } else {
+      onClose();
+    }
+  };
+
+  const goPrev = () => {
+    if (itemIdx > 0) {
+      setItemIdx(i => i - 1);
+    } else if (groupIdx > 0) {
+      setGroupIdx(g => g - 1);
+      setItemIdx(0);
+    }
+  };
+
+  const handleTap = (e) => {
+    if (swipedUp) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    if (x < rect.width * 0.3) goPrev();
+    else goNext();
+  };
+
+  // Pause on hold
+  const handlePointerDown = () => {
+    if (swipedUp) return;
+    if (timerRef.current) cancelAnimationFrame(timerRef.current);
+  };
+  const handlePointerUp = () => {
+    if (paused || swipedUp) return;
+    startRef.current = Date.now() - (progress * DURATION);
+    const tick = () => {
+      const elapsed = Date.now() - startRef.current;
+      const p = Math.min(elapsed / DURATION, 1);
+      setProgress(p);
+      if (p >= 1) { goNext(); return; }
+      timerRef.current = requestAnimationFrame(tick);
+    };
+    timerRef.current = requestAnimationFrame(tick);
+  };
+
+  // Swipe up detection
+  const handleTouchStart = (e) => {
+    touchStartRef.current = { y: e.touches[0].clientY, time: Date.now() };
+  };
+  const handleTouchEnd = (e) => {
+    const dy = touchStartRef.current.y - e.changedTouches[0].clientY;
+    const dt = Date.now() - touchStartRef.current.time;
+    if (dy > 60 && dt < 400 && !swipedUp) {
+      setSwipedUp(true);
+      if (timerRef.current) cancelAnimationFrame(timerRef.current);
+    } else if (dy < -60 && dt < 400 && swipedUp) {
+      setSwipedUp(false);
+    }
+  };
+
+  // Keyboard
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowRight') goNext();
+      else if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'Escape') { if (swipedUp) setSwipedUp(false); else onClose(); }
+      else if (e.key === 'ArrowUp') { setSwipedUp(true); if (timerRef.current) cancelAnimationFrame(timerRef.current); }
+      else if (e.key === 'ArrowDown') setSwipedUp(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [groupIdx, itemIdx, swipedUp]);
+
+  const imgSrc = item.img || item.images?.[0] || '';
+  const variants = (item.variants || []).filter(v => v.inStock);
+  const allVariants = item.variants || [];
+  const selectedVar = allVariants[selVarIdx] || allVariants[0];
+  const selectedPrice = selectedVar?.price || 0;
+  const saleInfo = typeof getSaleInfo === 'function' ? getSaleInfo(item) : null;
+  const discountedPrice = saleInfo && selectedPrice ? Math.round(selectedPrice * (1 - saleInfo.percent / 100)) : null;
+  const desc = item.desc || item.description || '';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 10000,
+        background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {/* Main story area */}
+      <div
+        style={{
+          position: 'relative', width: '100%', maxWidth: 440, height: '100%', maxHeight: '100vh',
+          overflow: 'hidden', cursor: 'pointer',
+        }}
+        onClick={handleTap}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {/* Background — full bleed product image with gradient */}
+        {imgSrc && (
+          <motion.div
+            key={`bg-${groupIdx}-${itemIdx}`}
+            initial={{ scale: 1.3, opacity: 0 }}
+            animate={{ scale: 1.15, opacity: 1 }}
+            transition={{ duration: 0.6 }}
+            style={{
+              position: 'absolute', inset: 0,
+              backgroundImage: `url(${imgSrc})`,
+              backgroundSize: 'cover', backgroundPosition: 'center',
+              filter: 'blur(50px) saturate(1.4) brightness(0.35)',
+            }}
+          />
+        )}
+        {/* Gradient overlays */}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 30%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.6) 80%, rgba(0,0,0,0.9) 100%)', zIndex: 1 }} />
+
+        {/* Progress bars */}
+        <div style={{ position: 'absolute', top: 12, left: 14, right: 14, display: 'flex', gap: 3, zIndex: 20 }}>
+          {group.items.map((_, i) => (
+            <div key={i} style={{ flex: 1, height: 2.5, borderRadius: 2, background: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
+              <div
+                style={{
+                  height: '100%', borderRadius: 2, background: '#fff',
+                  width: i < itemIdx ? '100%' : i === itemIdx ? `${progress * 100}%` : '0%',
+                  transition: i === itemIdx ? 'none' : 'width 0.2s',
+                }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Header */}
+        <div style={{ position: 'absolute', top: 24, left: 14, right: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #833AB4, #F56040, #FFDC80)',
+              padding: 2, flexShrink: 0,
+            }}>
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {group.icon ? (
+                  <span style={{ fontSize: 16 }}>{group.icon}</span>
+                ) : (
+                  <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>KU</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{group.label}</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10 }}>
+                {itemIdx + 1} / {group.items.length} · Kemal Usman
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Pause/Play */}
+            <motion.div
+              whileTap={{ scale: 0.85 }}
+              onClick={(e) => { e.stopPropagation(); setPaused(p => !p); }}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.12)',
+                backdropFilter: 'blur(10px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              {paused ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+              )}
+            </motion.div>
+            {/* Close */}
+            <motion.div
+              whileTap={{ scale: 0.85 }}
+              onClick={(e) => { e.stopPropagation(); onClose(); }}
+              style={{
+                width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.12)',
+                backdropFilter: 'blur(10px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Main Content — slides up when swipedUp */}
+        <motion.div
+          animate={{ y: swipedUp ? '-28%' : 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            padding: '70px 24px 160px', zIndex: 10,
+          }}
+        >
+          {/* Product image — KATTA */}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${groupIdx}-${itemIdx}`}
+              initial={{ opacity: 0, scale: 0.8, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -30 }}
+              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              style={{ textAlign: 'center', width: '100%' }}
+            >
+              {imgSrc ? (
+                <div style={{
+                  width: '65%', maxWidth: 280, aspectRatio: '3/4', margin: '0 auto 20px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  filter: 'drop-shadow(0 30px 60px rgba(0,0,0,0.5))',
+                }}>
+                  <img src={imgSrc} alt={item.name} style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
+                </div>
+              ) : (
+                <div style={{
+                  width: '55%', aspectRatio: '3/4', margin: '0 auto 20px',
+                  borderRadius: 20, background: 'rgba(255,255,255,0.05)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <svg width="48" height="100" viewBox="0 0 60 140" fill="none" opacity="0.3">
+                    <rect x="20" y="0" width="20" height="16" rx="2" fill="#555"/>
+                    <rect x="8" y="16" width="44" height="110" rx="4" fill="#444"/>
+                  </svg>
+                </div>
+              )}
+
+              {/* Brand */}
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, letterSpacing: 3.5, textTransform: 'uppercase', marginBottom: 6, fontWeight: 500 }}>
+                {item.brand || item.category || ''}
+              </div>
+              {/* Name */}
+              <div style={{ color: '#fff', fontSize: 26, fontWeight: 700, marginBottom: 10, letterSpacing: -0.5, lineHeight: 1.2 }}>
+                {pickName(item, lang)}
+              </div>
+
+              {/* Price pill */}
+              <motion.div
+                layout
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 10,
+                  background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(20px)',
+                  borderRadius: 16, padding: '10px 22px', marginBottom: 8,
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                {discountedPrice ? (
+                  <>
+                    <span style={{ color: '#fff', fontSize: 22, fontWeight: 700 }}>{discountedPrice.toLocaleString()} сом</span>
+                    <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 14, textDecoration: 'line-through' }}>{selectedPrice.toLocaleString()}</span>
+                    <span style={{ background: '#FF4444', color: '#fff', fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 8 }}>-{saleInfo.percent}%</span>
+                  </>
+                ) : (
+                  <span style={{ color: '#fff', fontSize: 22, fontWeight: 700 }}>{selectedPrice ? `${selectedPrice.toLocaleString()} сом` : ''}</span>
+                )}
+              </motion.div>
+
+              {saleInfo && (
+                <div style={{ color: '#FF8A80', fontSize: 11, fontWeight: 600, marginBottom: 4 }}>
+                  {saleInfo.remaining.h}ч {saleInfo.remaining.m}м {lang === 'kg' ? 'калды' : 'осталось'}
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Swipe-up detail panel */}
+        <motion.div
+          animate={{ y: swipedUp ? 0 : '100%' }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            height: '55%', zIndex: 25,
+            background: 'rgba(15,15,15,0.95)', backdropFilter: 'blur(30px)',
+            borderRadius: '24px 24px 0 0',
+            padding: '20px 20px 100px',
+            overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Handle bar */}
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)', margin: '0 auto 18px' }}
+            onClick={() => setSwipedUp(false)}
+          />
+
+          {/* Variant selector */}
+          {allVariants.length > 1 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 10, fontWeight: 600 }}>
+                {lang === 'kg' ? 'Көлөмү' : 'Объём'}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {allVariants.filter(v => v.inStock).map((v) => {
+                  const vi = allVariants.indexOf(v);
+                  return (
+                    <motion.button
+                      key={v.id || vi}
+                      whileTap={{ scale: 0.94 }}
+                      onClick={() => setSelVarIdx(vi)}
+                      style={{
+                        padding: '8px 18px', borderRadius: 12,
+                        background: vi === selVarIdx ? '#fff' : 'rgba(255,255,255,0.08)',
+                        color: vi === selVarIdx ? '#111' : '#fff',
+                        border: vi === selVarIdx ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                        fontSize: 13, fontWeight: vi === selVarIdx ? 700 : 500,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {v.label}
+                      {v.price ? ` · ${v.price.toLocaleString()} сом` : ''}
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Description */}
+          {desc && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8, fontWeight: 600 }}>
+                {lang === 'kg' ? 'Сүрөттөмө' : 'Описание'}
+              </div>
+              <div style={{ fontSize: 14, lineHeight: 1.6 }}>
+                <DescRenderer text={desc} color="rgba(255,255,255,0.7)" iconColor="rgba(255,255,255,0.5)" />
+              </div>
+            </div>
+          )}
+
+          {/* Category tag */}
+          {item.category && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '6px 14px', marginBottom: 12 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{item.category}</span>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Swipe up hint — only when NOT swiped up */}
+        <AnimatePresence>
+          {!swipedUp && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, y: [0, -6, 0] }}
+              exit={{ opacity: 0 }}
+              transition={{ y: { repeat: Infinity, duration: 1.5 }, opacity: { duration: 0.3 } }}
+              style={{
+                position: 'absolute', bottom: 100, left: 0, right: 0, zIndex: 20,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                pointerEvents: 'none',
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2" strokeLinecap="round">
+                <polyline points="18 15 12 9 6 15"/>
+              </svg>
+              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: 500 }}>
+                {lang === 'kg' ? 'Толугураак' : 'Подробнее'}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Bottom CTA */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, padding: '12px 16px 28px', zIndex: 30,
+          background: swipedUp ? 'rgba(15,15,15,0.98)' : 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%)',
+        }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                const varId = selectedVar?.id || item.variants?.[0]?.id;
+                if (varId && onAddToCart) {
+                  onAddToCart(item.id, varId);
+                }
+              }}
+              style={{
+                flex: 1, background: '#fff', color: '#111', border: 'none',
+                padding: '15px 20px', borderRadius: 16, fontSize: 15, fontWeight: 700,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
+                <path d="M16 10a4 4 0 01-8 0"/>
+              </svg>
+              {lang === 'kg' ? 'Себетке' : 'В корзину'}
+              {selectedPrice > 0 && (
+                <span style={{ opacity: 0.5, fontWeight: 500, fontSize: 13, marginLeft: 4 }}>
+                  · {(discountedPrice || selectedPrice).toLocaleString()} сом
+                </span>
+              )}
+            </motion.button>
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={(e) => { e.stopPropagation(); if (swipedUp) setSwipedUp(false); else goNext(); }}
+              style={{
+                width: 52, background: 'rgba(255,255,255,0.12)', border: 'none',
+                backdropFilter: 'blur(10px)',
+                borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {swipedUp ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              )}
+            </motion.button>
+          </div>
+        </div>
+      </div>
+
+      {/* Side panel — story groups (desktop only) */}
+      {typeof window !== 'undefined' && window.innerWidth >= 768 && (
+        <div style={{
+          width: 200, background: 'rgba(255,255,255,0.03)',
+          borderLeft: '1px solid rgba(255,255,255,0.06)',
+          padding: '20px 14px', height: '100%', overflowY: 'auto',
+        }}>
+          <div style={{ color: 'rgba(255,255,255,0.25)', fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16, fontWeight: 600 }}>
+            Stories
+          </div>
+          {stories.map((g, gi) => (
+            <motion.div
+              key={gi}
+              whileHover={{ background: 'rgba(255,255,255,0.08)' }}
+              onClick={(e) => { e.stopPropagation(); setGroupIdx(gi); setItemIdx(0); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 10px', borderRadius: 12, cursor: 'pointer', marginBottom: 6,
+                background: gi === groupIdx ? 'rgba(255,255,255,0.1)' : 'transparent',
+                border: gi === groupIdx ? '1px solid rgba(255,255,255,0.1)' : '1px solid transparent',
+                transition: 'all 0.2s',
+              }}
+            >
+              <div style={{
+                width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                background: gi === groupIdx
+                  ? 'linear-gradient(135deg, #833AB4, #F56040, #FFDC80)'
+                  : 'rgba(255,255,255,0.06)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: gi === groupIdx ? 2 : 0,
+              }}>
+                {gi === groupIdx ? (
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 15 }}>{g.icon}</span>
+                  </div>
+                ) : (
+                  <span style={{ fontSize: 15 }}>{g.icon}</span>
+                )}
+              </div>
+              <div>
+                <div style={{ color: '#fff', fontSize: 11, fontWeight: gi === groupIdx ? 600 : 400 }}>{g.label}</div>
+                <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9 }}>
+                  {g.items.length} {lang === 'kg' ? 'товар' : (g.items.length === 1 ? 'товар' : 'товаров')}
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </motion.div>
   );
 }
 
 // ─── BANNER SLIDER ─────────────────────────────────────────────────────────────
 function BannerSlider({ banners }) {
   const [idx, setIdx] = useState(0);
+  const [imgErrors, setImgErrors] = useState({});
   useEffect(() => {
+    if (!banners.length) return;
     const timer = setInterval(() => setIdx(i => (i + 1) % banners.length), 3000);
     return () => clearInterval(timer);
   }, [banners.length]);
   if (!banners.length) return null;
-  const b = banners[idx];
+  // Filter out banners whose images failed to load
+  const validBanners = banners.filter(b => !b.img || !imgErrors[b.id]);
+  if (!validBanners.length) return null;
+  const safeIdx = idx % validBanners.length;
+  const b = validBanners[safeIdx];
+  const fallbackBg = b.bg || "linear-gradient(135deg, #111111 0%, #000000 100%)";
   return (
-    <div style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", height: 160 }}>
-      <div style={{ width: "100%", height: "100%", background: b.img ? "transparent" : b.bg, position: "relative" }}>
-        {b.img && <img src={b.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-        <div style={{ position: "absolute", inset: 0, padding: "20px 22px", display: "flex", flexDirection: "column", justifyContent: "center", background: b.img ? "rgba(0,0,0,0.35)" : "transparent" }}>
-          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>АКЦИЯ</div>
-          <div style={{ color: "#fff", fontSize: 20, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>{b.title}</div>
-          <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 13 }}>{b.subtitle}</div>
+    <div style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", aspectRatio: "21 / 9" }}>
+      <div style={{ width: "100%", height: "100%", background: fallbackBg, position: "relative" }}>
+        {b.img && !imgErrors[b.id] && (
+          <img
+            src={b.img} alt=""
+            onError={() => setImgErrors(prev => ({ ...prev, [b.id]: true }))}
+            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", display: "block" }}
+          />
+        )}
+        <div style={{ position: "absolute", inset: 0, padding: "20px 22px", display: "flex", flexDirection: "column", justifyContent: "center", background: b.img && !imgErrors[b.id] ? "rgba(0,0,0,0.35)" : "transparent" }}>
+          {b.title && <div style={{ color: "#fff", fontSize: 20, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>{b.title}</div>}
+          {b.subtitle && <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 13 }}>{b.subtitle}</div>}
         </div>
       </div>
-      {banners.length > 1 && (
+      {validBanners.length > 1 && (
         <div style={{ position: "absolute", bottom: 10, right: 14, display: "flex", gap: 5 }}>
-          {banners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? 20 : 6, height: 6, borderRadius: 3, background: i === idx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s", cursor: "pointer" }} />)}
+          {validBanners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s", cursor: "pointer" }} />)}
         </div>
       )}
     </div>
+  );
+}
+
+// ─── REGISTER MODAL (for guests trying to order) ─────────────────────────────
+// Shows a bottom-sheet registration form (phone + name + OTP) when a guest
+// attempts to place an order. After successful OTP verification the parent
+// receives onRegister({ phone, name, refCode, record, isNewClient }) and can
+// immediately submit the pending order.
+function RegisterModal({ open, onClose, onRegister, showToast }) {
+  const { lang, t } = useLang();
+  const [phone, setPhone] = useState("+996");
+  const [name, setName] = useState("");
+  const [err, setErr] = useState("");
+  const [refCode, setRefCode] = useState("");
+  const [showRefInput, setShowRefInput] = useState(false);
+  const [otpStep, setOtpStep] = useState("idle");
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown(c => Math.max(0, c - 1)), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (open) {
+      setPhone("+996"); setName(""); setErr(""); setRefCode("");
+      setShowRefInput(false); setOtpStep("idle"); setOtpCode("");
+    }
+  }, [open]);
+
+  const formatPhone = (v) => {
+    const digits = v.replace(/\D/g, "").slice(0, 12);
+    if (digits.length <= 3) return "+" + digits;
+    if (digits.length <= 6) return "+" + digits.slice(0, 3) + " " + digits.slice(3);
+    if (digits.length <= 9) return "+" + digits.slice(0, 3) + " " + digits.slice(3, 6) + " " + digits.slice(6);
+    return "+" + digits.slice(0, 3) + " " + digits.slice(3, 6) + " " + digits.slice(6, 9) + " " + digits.slice(9, 12);
+  };
+
+  async function handleRequestOtp() {
+    if (!phone || !name) { setErr(lang === "ru" ? "Заполните все поля" : "Бардык талааларды толтуруңуз"); return; }
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 11) { setErr(lang === "ru" ? "Введите корректный номер" : "Туура номер жазыңыз"); return; }
+    setErr(""); setOtpLoading(true);
+    try {
+      await requestOtp(phone);
+      setOtpStep("verify"); setOtpCode(""); setResendCooldown(60);
+      showToast?.(lang === "ru" ? "Код отправлен по SMS" : "Код SMS аркылуу жөнөтүлдү");
+    } catch (e) {
+      const msg = String(e?.message || "");
+      if (msg.includes("429") || msg.includes("too_many")) {
+        setErr(lang === "ru" ? "Слишком много попыток, попробуйте позже" : "Көп аракет, кийинчерээк аракет кылыңыз");
+      } else {
+        setErr(lang === "ru" ? "Ошибка отправки SMS" : "SMS жөнөтүүдө ката");
+      }
+    } finally { setOtpLoading(false); }
+  }
+
+  async function handleVerifyOtp() {
+    const code = otpCode.replace(/\D/g, "");
+    if (code.length !== 6) { setErr(lang === "ru" ? "Введите код из SMS" : "SMS кодду жазыңыз"); return; }
+    setErr(""); setOtpLoading(true);
+    try {
+      const { record, isNewClient } = await verifyOtp({ phone, code, name, referredBy: refCode.trim().toUpperCase() || null });
+      onRegister({ phone, name, refCode: refCode.trim().toUpperCase(), record, isNewClient });
+    } catch {
+      setErr(lang === "ru" ? "Неверный код" : "Код туура эмес");
+    } finally { setOtpLoading(false); }
+  }
+
+  const inp = {
+    width: "100%", padding: "14px 16px", fontSize: 15,
+    background: "#F5F5F5", border: "1px solid #E5E5E5",
+    borderRadius: 14, color: "#111", outline: "none", boxSizing: "border-box",
+  };
+  const lbl = { fontSize: 10, color: "#888", marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            key="reg-backdrop"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9998 }}
+          />
+          {/* Bottom sheet */}
+          <motion.div
+            key="reg-sheet"
+            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            style={{
+              position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 9999,
+              background: "#fff", borderRadius: "24px 24px 0 0",
+              padding: "28px 20px", paddingBottom: "calc(28px + env(safe-area-inset-bottom, 0px))",
+              maxHeight: "90vh", overflowY: "auto",
+              boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
+            }}
+          >
+            {/* Handle */}
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#DDD", margin: "0 auto 20px" }} />
+
+            {/* Title */}
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 4, textAlign: "center" }}>
+              {lang === "ru" ? "Регистрация" : "Катталуу"}
+            </div>
+            <div style={{ fontSize: 13, color: "#888", marginBottom: 20, textAlign: "center" }}>
+              {lang === "ru" ? "Для оформления заказа зарегистрируйтесь" : "Заказ берүү үчүн катталыңыз"}
+            </div>
+
+            {/* Phone */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={lbl}>{lang === "ru" ? "НОМЕР ТЕЛЕФОНА" : "ТЕЛЕФОН НОМЕРИ"}</div>
+              <input
+                type="tel" value={phone}
+                onChange={e => { if (otpStep === "idle") { setPhone(formatPhone(e.target.value)); setErr(""); } }}
+                readOnly={otpStep !== "idle"}
+                placeholder="+996 700 123 456"
+                style={{ ...inp, letterSpacing: 1, opacity: otpStep !== "idle" ? 0.7 : 1 }}
+              />
+            </div>
+
+            {otpStep === "idle" ? (
+              <>
+                {/* Name */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={lbl}>{lang === "ru" ? "ВАШЕ ИМЯ" : "АТЫҢЫЗ"}</div>
+                  <input
+                    type="text" value={name}
+                    onChange={e => { setName(e.target.value); setErr(""); }}
+                    placeholder={lang === "ru" ? "Введите имя" : "Атыңызды жазыңыз"}
+                    style={inp}
+                  />
+                </div>
+
+                {/* Referral */}
+                <div style={{ marginBottom: 14 }}>
+                  <button onClick={() => setShowRefInput(p => !p)} style={{ background: "none", border: "none", color: "#AAA", fontSize: 12, cursor: "pointer", padding: 0, letterSpacing: 0.5 }}>
+                    {lang === "ru" ? "Есть реферальный код? +" : "Реферал код барбы? +"}
+                  </button>
+                  {showRefInput && (
+                    <input
+                      type="text" value={refCode}
+                      onChange={e => setRefCode(e.target.value.toUpperCase().slice(0, 6))}
+                      placeholder={lang === "ru" ? "Введите код (6 символов)" : "Код жазыңыз (6 белги)"}
+                      style={{ ...inp, marginTop: 8, letterSpacing: 2, textAlign: "center" }}
+                    />
+                  )}
+                </div>
+
+                {err && (
+                  <div style={{ color: "#E53935", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 10, border: "1px solid #FFCDD2", textAlign: "center" }}>{err}</div>
+                )}
+
+                <button onClick={handleRequestOtp} disabled={otpLoading} style={{
+                  width: "100%", padding: "16px", background: "#111", border: "none",
+                  borderRadius: 14, fontSize: 14, fontWeight: 700, color: "#fff",
+                  cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
+                  opacity: otpLoading ? 0.6 : 1,
+                }}>
+                  {otpLoading ? (lang === "ru" ? "ОТПРАВКА..." : "ЖӨНӨТҮҮ...") : (lang === "ru" ? "ПОЛУЧИТЬ КОД" : "КОДДУ АЛУУ")}
+                </button>
+              </>
+            ) : (
+              <>
+                {/* OTP input */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={lbl}>{lang === "ru" ? "КОД ИЗ SMS" : "SMS КОДУ"}</div>
+                  <input
+                    type="tel" inputMode="numeric" maxLength={6} value={otpCode}
+                    onChange={e => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErr(""); }}
+                    placeholder="••••••" autoFocus
+                    style={{ ...inp, fontSize: 22, letterSpacing: 8, textAlign: "center", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+                  />
+                </div>
+
+                {err && (
+                  <div style={{ color: "#E53935", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 10, border: "1px solid #FFCDD2", textAlign: "center" }}>{err}</div>
+                )}
+
+                <button onClick={handleVerifyOtp} disabled={otpLoading} style={{
+                  width: "100%", padding: "16px", background: "#111", border: "none",
+                  borderRadius: 14, fontSize: 14, fontWeight: 700, color: "#fff",
+                  cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
+                  marginBottom: 10, opacity: otpLoading ? 0.6 : 1,
+                }}>
+                  {otpLoading ? (lang === "ru" ? "ПРОВЕРКА..." : "ТЕКШЕРҮҮ...") : (lang === "ru" ? "ВОЙТИ И ЗАКАЗАТЬ" : "КИРҮҮ ЖАНА ЗАКАЗ БЕРҮҮ")}
+                </button>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <button onClick={() => { setOtpStep("idle"); setOtpCode(""); setErr(""); }}
+                    style={{ background: "none", border: "none", color: "#888", fontSize: 12, cursor: "pointer", padding: 0 }}>
+                    {lang === "ru" ? "Изменить номер" : "Номерди өзгөртүү"}
+                  </button>
+                  <button onClick={() => { if (resendCooldown <= 0 && !otpLoading) handleRequestOtp(); }}
+                    disabled={resendCooldown > 0 || otpLoading}
+                    style={{ background: "none", border: "none", color: resendCooldown > 0 ? "#CCC" : "#555", fontSize: 12, cursor: (resendCooldown > 0 || otpLoading) ? "default" : "pointer", padding: 0 }}>
+                    {resendCooldown > 0 ? (lang === "ru" ? `Повторно через ${resendCooldown}с` : `${resendCooldown}с кийин кайра`) : (lang === "ru" ? "Отправить ещё раз" : "Кайра жөнөтүү")}
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -1477,7 +2567,11 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
         {/* Guest */}
         {onGuest && (
-          <button onClick={setGuestMode} style={{ background: 'none', border: 'none', color: '#BBB', fontSize: 12, cursor: 'pointer', letterSpacing: 0.5, padding: 0 }}>
+          <button onClick={setGuestMode} style={{
+            background: 'none', border: '1.5px solid #D1D1D6', color: '#888', fontSize: 13,
+            cursor: 'pointer', letterSpacing: 1, padding: '12px 0', borderRadius: 14,
+            width: '100%', fontWeight: 600, textTransform: 'uppercase',
+          }}>
             {lang === 'ru' ? 'Войти как гость' : 'Мейман катары кирүү'}
           </button>
         )}
@@ -1490,7 +2584,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       position: "fixed",
       top: 0, left: 0, right: 0, bottom: 0,
       width: "100vw",
-      height: "100vh",
+      height: "100dvh",
       overflow: "hidden",
       display: "flex",
       flexDirection: "column",
@@ -1554,7 +2648,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           on the parent) handles legibility over the photo. */}
       <div id="login-form-container" style={{
         position: "relative", zIndex: 2,
-        padding: "0 24px 48px",
+        padding: "0 24px calc(env(safe-area-inset-bottom, 20px) + 28px)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -1741,8 +2835,9 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       {/* Guest mode */}
       {onGuest && (
         <button onClick={setGuestMode} style={{
-          background: "none", border: "none", color: "rgba(255,255,255,0.3)",
-          fontSize: 13, cursor: "pointer", letterSpacing: 0.5, padding: 0
+          background: "none", border: "1.5px solid rgba(255,255,255,0.25)", color: "rgba(255,255,255,0.5)",
+          fontSize: 13, cursor: "pointer", letterSpacing: 1, padding: "12px 0",
+          borderRadius: 14, width: "100%", fontWeight: 600, textTransform: "uppercase",
         }}>
           {lang === "ru" ? "Войти как гость" : "Мейман катары кирүү"}
         </button>
@@ -1783,20 +2878,225 @@ const getSaleInfo = (p) => {
 // Sale price calculator
 const salePrice = (originalPrice, salePercent) => Math.round(originalPrice * (1 - salePercent / 100));
 
-// Live countdown hook
-function useSaleCountdown(product) {
-  const [info, setInfo] = React.useState(() => getSaleInfo(product));
-  React.useEffect(() => {
-    if (!product?.salePercent || !product?.saleEnd) { setInfo(null); return; }
-    const tick = () => setInfo(getSaleInfo(product));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [product?.salePercent, product?.saleEnd, product?.saleStart]);
-  return info;
+// ─── SMART SEARCH ──────────────────────────────────────────────────────────────
+// Fuzzy matching: supports partial words, typos (edit distance), transliteration
+// Returns scored results sorted by relevance
+const smartSearch = (products, query, lang, limit = 8) => {
+  if (!query || query.length < 3) return [];
+  const q = query.toLowerCase().trim();
+
+  // Simple edit distance for short strings (fuzzy)
+  const editDist = (a, b) => {
+    if (a.length > 20 || b.length > 20) return 99;
+    const m = a.length, n = b.length;
+    const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        dp[i][j] = Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1, dp[i-1][j-1] + (a[i-1] !== b[j-1] ? 1 : 0));
+    return dp[m][n];
+  };
+
+  // Score a product (higher = better match, 0 = no match)
+  const score = (p) => {
+    const name = (p.name || "").toLowerCase();
+    const nameKg = (p.name_kg || "").toLowerCase();
+    const brand = (p.brand || "").toLowerCase();
+    const category = (p.category || "").toLowerCase();
+    const displayName = pickName(p, lang).toLowerCase();
+    let s = 0;
+
+    // Exact start match — highest priority
+    if (name.startsWith(q) || brand.startsWith(q) || displayName.startsWith(q)) s += 100;
+    // Contains match
+    if (name.includes(q) || brand.includes(q) || displayName.includes(q) || nameKg.includes(q)) s += 50;
+    // Category match
+    if (category.includes(q)) s += 20;
+
+    // Word-level matching: each query word checked against all product words
+    const qWords = q.split(/\s+/);
+    const pWords = `${name} ${brand} ${nameKg} ${category}`.split(/\s+/).filter(Boolean);
+    for (const qw of qWords) {
+      if (qw.length < 2) continue;
+      for (const pw of pWords) {
+        if (pw.startsWith(qw)) s += 30;        // word prefix
+        else if (pw.includes(qw)) s += 15;     // word contains
+        else if (qw.length >= 3 && pw.length >= 3) {
+          const d = editDist(qw, pw.slice(0, qw.length + 2));
+          if (d <= 1) s += 20;                  // 1 typo tolerance
+          else if (d <= 2 && qw.length >= 5) s += 8; // 2 typos for longer words
+        }
+      }
+    }
+
+    return s;
+  };
+
+  return products
+    .map(p => ({ product: p, score: score(p) }))
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+    .map(r => r.product);
+};
+
+// ─── SEARCH DROPDOWN COMPONENT ─────────────────────────────────────────────────
+function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
+  if (!results || results.length === 0) return null;
+
+  const minPriceOf = (p) => {
+    const prices = (p.variants || []).filter(v => v.inStock).map(v => v.price || 0).filter(Boolean);
+    return prices.length ? Math.min(...prices) : 0;
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.18 }}
+      style={{
+        position: "absolute",
+        top: "100%",
+        left: 0,
+        right: 0,
+        zIndex: 2000,
+        background: "#fff",
+        borderRadius: isMobile ? "0 0 16px 16px" : 16,
+        boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
+        maxHeight: isMobile ? "60vh" : 480,
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch",
+        border: "1px solid rgba(0,0,0,0.06)",
+        borderTop: "none",
+      }}
+    >
+      {results.map((p, idx) => {
+        const imgSrc = p.img || p.images?.[0];
+        const name = pickName(p, lang);
+        const price = minPriceOf(p);
+        const si = getSaleInfo(p);
+        return (
+          <motion.div
+            key={p.id || idx}
+            onClick={() => onSelect(p)}
+            whileTap={{ scale: 0.98, backgroundColor: "#F8F8F8" }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: isMobile ? "10px 14px" : "12px 20px",
+              cursor: "pointer",
+              borderBottom: idx < results.length - 1 ? "1px solid #F0F0F0" : "none",
+              transition: "background 0.15s",
+            }}
+            onMouseEnter={e => { if (!isMobile) e.currentTarget.style.background = '#F8F8F8'; }}
+            onMouseLeave={e => { if (!isMobile) e.currentTarget.style.background = '#fff'; }}
+          >
+            {/* Product image */}
+            <div style={{
+              width: isMobile ? 48 : 56,
+              height: isMobile ? 48 : 56,
+              borderRadius: 10,
+              background: "#FFFFFF",
+              border: "1px solid #F0F0F0",
+              overflow: "hidden",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 4,
+            }}>
+              {imgSrc ? (
+                <img src={imgSrc} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+              ) : (
+                <svg width="24" height="32" viewBox="0 0 60 140" fill="none" opacity="0.25">
+                  <rect x="20" y="0" width="20" height="16" rx="2" fill="#C5C0B6"/>
+                  <rect x="8" y="16" width="44" height="110" rx="4" fill="#D5D0C8"/>
+                </svg>
+              )}
+            </div>
+            {/* Product info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: isMobile ? 14 : 15,
+                fontWeight: 600,
+                color: "#111",
+                lineHeight: 1.3,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>
+                {name}
+              </div>
+              <div style={{
+                fontSize: isMobile ? 12 : 13,
+                color: "#999",
+                marginTop: 2,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>
+                {p.brand || p.category || ""}
+              </div>
+            </div>
+            {/* Price */}
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              {price > 0 ? (
+                <>
+                  {si ? (
+                    <>
+                      <div style={{ fontSize: 11, color: "#bbb", textDecoration: "line-through" }}>
+                        {price.toLocaleString()} сом
+                      </div>
+                      <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "#E53935" }}>
+                        {salePrice(price, si.percent).toLocaleString()} сом
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "#111" }}>
+                      {price > 0 ? `от ${price.toLocaleString()} сом` : ""}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+            {/* Arrow */}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.3 }}>
+              <path d="M9 18l6-6-6-6" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </motion.div>
+        );
+      })}
+    </motion.div>
+  );
 }
 
-// Compact countdown badge for product cards (mobile + desktop)
+// Live countdown hook — ticks every 50ms for millisecond display
+function useSaleCountdown(product) {
+  const [info, setInfo] = React.useState(() => getSaleInfo(product));
+  const [ms, setMs] = React.useState(0);
+  React.useEffect(() => {
+    if (!product?.salePercent || !product?.saleEnd) { setInfo(null); return; }
+    const tick = () => {
+      const si = getSaleInfo(product);
+      setInfo(si);
+      if (si) {
+        const now = Date.now();
+        const end = new Date(product.saleEnd).getTime();
+        const remaining = Math.max(0, end - now);
+        setMs(Math.floor((remaining % 1000) / 10));
+      }
+    };
+    tick();
+    const id = setInterval(tick, 47);
+    return () => clearInterval(id);
+  }, [product?.salePercent, product?.saleEnd, product?.saleStart]);
+  return info ? { ...info, ms } : null;
+}
+
+// Compact countdown badge for product cards — Variant C: progress bar + milliseconds
 function SaleCountdownBadge({ product }) {
   const sale = useSaleCountdown(product);
   if (!sale) return null;
@@ -1810,29 +3110,35 @@ function SaleCountdownBadge({ product }) {
         position: 'absolute', top: 8, left: 8, right: 8,
         background: 'rgba(0,0,0,0.82)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-        borderRadius: 10, padding: '7px 10px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        borderRadius: 11, padding: '8px 12px',
+        display: 'flex', flexDirection: 'column', gap: 6,
         zIndex: 5,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-        <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#FF3B30', animation: 'salePulse 1.5s infinite' }} />
-        <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.8, textTransform: 'uppercase' }}>Акция</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#E53935', animation: 'salePulse 1.5s infinite' }} />
+          <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
+            Скидка -{sale.percent}%
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: 600 }}>
+            {pad(sale.remaining.h)}:{pad(sale.remaining.m)}:{pad(sale.remaining.s)}
+          </span>
+          <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>.</span>
+          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: 500, width: 16, display: 'inline-block' }}>
+            {pad(sale.ms)}
+          </span>
+        </div>
       </div>
-      <div style={{ display: 'flex', gap: 3 }}>
-        {[
-          { val: pad(sale.remaining.h), label: 'ч' },
-          { val: pad(sale.remaining.m), label: 'м' },
-          { val: pad(sale.remaining.s), label: 'с' },
-        ].map((t, i) => (
-          <React.Fragment key={i}>
-            {i > 0 && <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontWeight: 700, lineHeight: 1, paddingTop: 2 }}>:</span>}
-            <div style={{ background: 'rgba(255,255,255,0.13)', borderRadius: 5, padding: '2px 5px', minWidth: 24, textAlign: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: i === 2 ? '#FF3B30' : '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{t.val}</div>
-              <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>{t.label}</div>
-            </div>
-          </React.Fragment>
-        ))}
+      {/* Progress bar */}
+      <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+        <div style={{
+          width: `${Math.max(2, sale.progress * 100)}%`, height: '100%', borderRadius: 2,
+          background: sale.progress < 0.15 ? '#E53935' : 'linear-gradient(90deg, #E53935, #FF8A80)',
+          transition: 'width 0.3s ease',
+        }} />
       </div>
     </motion.div>
   );
@@ -1867,7 +3173,7 @@ function SaleProgressBar({ product }) {
 // One component covers every product image surface in the app:
 //
 //   size="card"   → catalog grid + admin preview + admin list thumbnail
-//                   180px, object-fit: cover (uniform crop, premium grid)
+//                   200px, object-fit: contain (full bottle visible, 8px padding)
 //   size="detail" → product modal hero + any future "fit to box" surface
 //                   260px, object-fit: contain on light gray (no crop, full
 //                   bottle visible end-to-end).
@@ -1885,17 +3191,24 @@ function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
   const lang = langProp || langCtx;
 
   const isCard = size === "card";
+  const pad = isCard ? 10 : 14;
   const containerStyle = {
     width: "100%",
-    height: isCard ? 180 : 260,
-    background: isCard ? "#FAFAFA" : "#F5F5F5",
+    height: isCard ? 200 : 260,
+    background: "#FFFFFF",
     position: "relative",
     overflow: "hidden",
   };
   const imgStyle = {
-    width: "100%",
-    height: "100%",
-    objectFit: isCard ? "cover" : "contain",
+    position: "absolute",
+    top: pad,
+    left: pad,
+    right: pad,
+    bottom: pad,
+    width: `calc(100% - ${pad * 2}px)`,
+    height: `calc(100% - ${pad * 2}px)`,
+    objectFit: "contain",
+    objectPosition: "center center",
     display: "block",
   };
 
@@ -1950,10 +3263,9 @@ function ProductCard({ p, onClick, preview = false, showAudioHint = false, onAud
   const audioForHint = audioUrl(p) || (typeof window !== 'undefined' && p?.id ? localStorage.getItem('parfum_audio_' + p.id) : null);
   const hintVisible = !preview && showAudioHint && !!audioForHint;
   return (
-    <motion.div
+    <div
       onClick={onClick}
-      whileTap={onClick ? { scale: 0.97 } : undefined}
-      style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: onClick ? "pointer" : "default" }) }}
+      style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: onClick ? "pointer" : "default" }), WebkitTransform: 'translateZ(0)' }}
     >
       {/* Image area — delegates rendering to <ProductImage>. Overlays
           (gradient, badges, audio button, out-of-stock chip) sit on top
@@ -1979,31 +3291,28 @@ function ProductCard({ p, onClick, preview = false, showAudioHint = false, onAud
             {t.outOfStock}
           </div>
         )}
-        {stk && !saleInfo && p?.isPopular === true && (
-          <motion.div
-            initial={{ opacity: 0, y: -3, scale: 0.94 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 460, damping: 28, delay: 0.05 }}
-            style={{
-              position: "absolute", top: 8, left: 8,
-              display: "inline-flex", alignItems: "center", gap: 3,
-              background: "linear-gradient(135deg, #FF6A00 0%, #FF3B30 100%)",
-              color: "#fff",
-              borderRadius: 20,
-              padding: "3px 8px",
-              fontSize: 10,
-              fontWeight: 600,
-              letterSpacing: 0.1,
-              lineHeight: 1,
-              boxShadow: "0 2px 6px rgba(255,59,48,0.25)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
-            }}
-          >
-            <span style={{ fontSize: 10, lineHeight: 1 }}>🔥</span>
-            <span>{lang === 'kg' ? 'Популярдуу' : 'Популярно'}</span>
-          </motion.div>
-        )}
+        {/* ── Stacked badges (top-left) ── */}
+        {stk && !saleInfo && (() => {
+          const badges = [];
+          if (p?.isPopular) badges.push({ icon: IC.flame(10, "#fff"), text: t.badge_popular, bg: "linear-gradient(135deg, #FF6A00 0%, #FF3B30 100%)", shadow: "rgba(255,59,48,0.25)" });
+          if (p?.isHit) badges.push({ icon: IC.bolt(10, "#fff"), text: t.badge_hit, bg: "linear-gradient(135deg, #FF9500 0%, #FF6B00 100%)", shadow: "rgba(255,149,0,0.25)" });
+          if (p?.isNew) badges.push({ icon: IC.sparkle(10, "#fff"), text: t.badge_new, bg: "linear-gradient(135deg, #34C759 0%, #30D158 100%)", shadow: "rgba(52,199,89,0.25)" });
+          return badges.slice(0, 2).map((b, bi) => (
+            <div key={bi}
+              style={{
+                position: "absolute", top: 8 + bi * 26, left: 8,
+                display: "inline-flex", alignItems: "center", gap: 4,
+                background: b.bg, color: "#fff", borderRadius: 20,
+                padding: "3px 9px 3px 6px", fontSize: 10, fontWeight: 600,
+                letterSpacing: 0.1, lineHeight: 1,
+                boxShadow: `0 2px 6px ${b.shadow}`,
+                backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+              }}>
+              <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{b.icon}</span>
+              <span>{b.text}</span>
+            </div>
+          ));
+        })()}
         {/* Audio preview overlay — only renders if product has recorded audio.
             In preview mode we skip it so the admin doesn't accidentally play
             the client-side preview while editing. */}
@@ -2016,8 +3325,22 @@ function ProductCard({ p, onClick, preview = false, showAudioHint = false, onAud
       </div>
       {/* Content — brand · name · variant chips · price */}
       <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 400, lineHeight: 1 }}>
-          {p?.brand || ""}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 400, lineHeight: 1, flex: 1 }}>
+            {p?.brand || ""}
+          </div>
+          {p?.isAuthor && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              background: "#111", color: "#fff", borderRadius: 7,
+              padding: "3px 9px 3px 6px", fontSize: 9.5, fontWeight: 700,
+              letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+            }}>
+              <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{IC.crown(11, "#FFD700")}</span>
+              {t.badge_author}
+            </div>
+          )}
         </div>
         <div style={{ color: T.text, fontSize: 14, fontWeight: 700, lineHeight: 1.25, letterSpacing: -0.2 }}>
           {pickName(p, lang) || (lang === 'kg' ? 'Жаңы продукт' : 'Новый товар')}
@@ -2038,7 +3361,7 @@ function ProductCard({ p, onClick, preview = false, showAudioHint = false, onAud
             </>;
           })()}
         </div>
-        {!preview && <SaleProgressBar product={p} />}
+        {/* SaleProgressBar removed — progress bar is now inside SaleCountdownBadge (Variant C) */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
           <div style={{ lineHeight: 1.1 }}>
             {minP !== null ? (
@@ -2052,9 +3375,7 @@ function ProductCard({ p, onClick, preview = false, showAudioHint = false, onAud
               )
             ) : <span style={{ color: T.danger, fontSize: 11, fontWeight: 500 }}>{t.outOfStock}</span>}
           </div>
-          <motion.div
-            whileTap={!preview && stk ? { scale: 0.88 } : {}}
-            transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+          <div
             style={{
               width: 36, height: 36, borderRadius: 18,
               background: stk ? "#111111" : T.border,
@@ -2066,15 +3387,15 @@ function ProductCard({ p, onClick, preview = false, showAudioHint = false, onAud
             }}
           >
             {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
-          </motion.div>
+          </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
-function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, onRefresh, setIsDetailOpen }) {
+function CatalogScreen({ products, settings, addToCart, banners, showToast, onAdminLogin, onRefresh, setIsDetailOpen, reviews = [] }) {
   const { lang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
@@ -2094,6 +3415,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const lastScrollYRef = useRef(0);
   const [imgIndex, setImgIndex] = useState(0);
+  const [imgIsLandscape, setImgIsLandscape] = useState(false);
   const [touchStartX, setTouchStartX] = React.useState(null);
   // Hero scroll animations — driven by framer-motion motion values so the
   // image transform runs on the compositor thread without forcing a React
@@ -2107,7 +3429,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
   // Hero outer height grows from 320 → 440 across the first 200px of scroll —
   // reveals the image fully (cover crop is replaced by `objectFit: contain`,
   // so growing the box is what actually exposes more of the bottle).
-  const heroHeight = useTransform(scrollMV, [0, 200], [320, 440], { clamp: true });
+  const heroHeight = useTransform(scrollMV, [0, 200], [380, 460], { clamp: true });
   const heroScale = useMotionValue(1);
   const touchStartYRef = useRef(0);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -2138,17 +3460,24 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
     }
   };
 
-  const cats = ["all", ...Array.from(new Set(products.map(p => p.category)))];
+  const cats = ["all", ...Array.from(new Set(products.map(p => (p.category || "").trim()).filter(Boolean)))];
   // PRO: sort state + bottom-sheet
   const [sort, setSort] = useState('default');
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   let filteredProducts = products.filter(p => {
-    const matchCat = cat === "all" || p.category === cat;
+    // Hide products where ALL variants are out of stock (admin X toggle controls visibility)
+    const vars = p.variants || [];
+    const hasInStock = vars.some(v => v.inStock);
+    if (!hasInStock) return false;
+    const matchCat = cat === "all" || (p.category || "").trim() === (cat || "").trim();
     const q = search.toLowerCase();
-    const matchSearch =
+    const matchSearch = !q ||
       (p.name || "").toLowerCase().includes(q) ||
       (p.name_kg || "").toLowerCase().includes(q) ||
-      (p.brand || "").toLowerCase().includes(q);
+      (p.brand || "").toLowerCase().includes(q) ||
+      (p.shortDesc || "").toLowerCase().includes(q) ||
+      (p.tags || "").toLowerCase().includes(q) ||
+      (p.desc || "").toLowerCase().includes(q);
     return matchCat && matchSearch;
   });
   // Apply sort
@@ -2171,7 +3500,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
     });
   }
 
-  const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
+  const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setImgIsLandscape(false); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
 
   // Manual scroll wiring for the detail body — React's synthetic onScroll
   // misses fires inside Capacitor's WKWebView momentum scroll, so attach
@@ -2268,16 +3597,15 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
             WebkitOverflowScrolling: "touch",
           }}
         >
-          {/* ── Hero image — edge-to-edge, height-animated 320 → 440 on scroll
-              so the bottle reveals fully without ever getting cropped. The
-              foreground uses objectFit: contain so the entire product image
-              is always visible inside the gray frame. ── */}
+          {/* ── Hero image — adaptive: landscape photos get `cover` (edge-to-edge),
+              portrait/cutout images get `contain` with a rich blurred backdrop.
+              Aspect ratio is detected on load for each image. ── */}
           <motion.div
             style={{
               position: "relative",
               width: "100%",
               height: heroHeight,
-              backgroundColor: "#F4F4F6",
+              backgroundColor: "#FFFFFF",
               overflow: "hidden",
             }}
             onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
@@ -2293,9 +3621,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
           >
             {allImages.length > 0 ? (
               <>
-                {/* Blurred backdrop — same cover, scaled up + heavy blur,
-                    dimmed slightly so the foreground image stays the focus.
-                    Premium feel without an extra asset. */}
+                {/* Blurred backdrop — hidden for portrait (white bg), visible for landscape */}
                 <img
                   src={allImages[imgIndex]}
                   alt=""
@@ -2306,32 +3632,37 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    filter: "blur(36px) saturate(120%) brightness(1.04)",
-                    transform: "scale(1.18)",
-                    opacity: 0.55,
+                    filter: imgIsLandscape ? "blur(0px)" : "blur(44px) saturate(140%) brightness(0.95)",
+                    transform: imgIsLandscape ? "scale(1)" : "scale(1.25)",
+                    opacity: 0,
                     pointerEvents: "none",
+                    transition: "filter 0.3s, opacity 0.3s, transform 0.3s",
                   }}
                 />
-                {/* Foreground product — full-bleed `objectFit: cover` fills
-                    the hero box edge-to-edge. Tall portrait bottle photos
-                    will be cropped top/bottom — accepted trade-off vs. the
-                    gray letterbox on the sides that `contain` produces.
-                    `scale` is the pull-down zoom from touch handlers. */}
+                {/* Foreground: cover for landscape, contain for portrait */}
                 <motion.img
                   src={allImages[imgIndex]}
                   alt=""
                   draggable={false}
+                  onLoad={(e) => {
+                    const { naturalWidth: nw, naturalHeight: nh } = e.target;
+                    setImgIsLandscape(nw > 0 && nh > 0 && nw / nh >= 1.25);
+                  }}
                   style={{
                     position: "absolute",
                     inset: 0,
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: imgIsLandscape ? "cover" : "contain",
+                    objectPosition: "center center",
                     display: "block",
                     zIndex: 1,
                     scale: heroScale,
                     transformOrigin: "center center",
                     willChange: "transform",
+                    padding: imgIsLandscape ? 0 : 16,
+                    boxSizing: "border-box",
+                    transition: "padding 0.3s",
                   }}
                 />
               </>
@@ -2390,27 +3721,30 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
             flexDirection: "column",
             gap: 0,
             flex: 1,
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.06)",
           }}>
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "#aaa", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
-              <div style={{ color: "#111", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: pickDesc(detail, lang) ? 12 : 0 }}>{pickName(detail, lang)}</div>
+              <div style={{ color: "#111", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 8 }}>{pickName(detail, lang)}</div>
+              {/* Sale badge + countdown in detail */}
+              {(() => {
+                const si = getSaleInfo(detail);
+                if (!si) return null;
+                return <SaleCountdownBadge product={detail} />;
+              })()}
               {pickDesc(detail, lang) && (
                 <div>
                   <motion.div
-                    animate={{ height: descExpanded ? "auto" : 44 }}
+                    animate={{ height: descExpanded ? "auto" : 60 }}
                     transition={{ type: "spring", stiffness: 360, damping: 32 }}
                     style={{
-                      color: "#6b6b70",
-                      fontSize: 14,
-                      lineHeight: 1.55,
                       overflow: "hidden",
-                      letterSpacing: -0.05,
                       WebkitMaskImage: descExpanded ? "none" : "linear-gradient(to bottom, #000 60%, transparent 100%)",
                       maskImage: descExpanded ? "none" : "linear-gradient(to bottom, #000 60%, transparent 100%)",
                     }}
                   >
-                    {pickDesc(detail, lang)}
+                    <DescRenderer text={pickDesc(detail, lang)} color="#6b6b70" iconColor="#999" />
                   </motion.div>
                   <button
                     onClick={() => { haptic('light'); setDescExpanded(v => !v); }}
@@ -2439,11 +3773,8 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "#111", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
-                {detail.variants.map((v, i) => {
+                {detail.variants.filter(v => v.inStock).map((v, i) => {
                   const isSel = selVariant?.id === v.id;
-                  // Stagger only the first 4 chips (200, 260, 320, 380ms);
-                  // anything past that appears instantly so a long variant
-                  // list doesn't drag the entrance out.
                   const staggered = i < 4;
                   return (
                     <motion.div
@@ -2453,8 +3784,8 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
                       transition={staggered ? { duration: 0.28, delay: 0.2 + i * 0.06, ease: [0.22, 1, 0.36, 1] } : undefined}
                     >
                       <motion.button
-                        onClick={() => v.inStock && setSelVariant(v)}
-                        whileTap={v.inStock ? { scale: 0.94 } : {}}
+                        onClick={() => setSelVariant(v)}
+                        whileTap={{ scale: 0.94 }}
                         animate={{
                           scale: isSel ? 1.04 : 1,
                           backgroundColor: isSel ? "#111111" : "#fafafa",
@@ -2469,14 +3800,24 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
                           padding: "13px 8px",
                           borderRadius: 14,
                           border: isSel ? "1.5px solid #111" : "1.5px solid #ebebeb",
-                          cursor: v.inStock ? "pointer" : "default",
-                          opacity: v.inStock ? 1 : 0.38,
+                          cursor: "pointer",
                           textAlign: "center",
                         }}
                       >
                         <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? "#fff" : "#111", lineHeight: 1.2 }}>{v.label}</div>
-                        <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : "#999", marginTop: 4 }}>{formatSum(v.price)}</div>
-                        {!v.inStock && <div style={{ fontSize: 10, color: T.danger, marginTop: 2 }}>{t.outOfStock}</div>}
+                        {(() => {
+                          const si = getSaleInfo(detail);
+                          if (si) {
+                            const sp = salePrice(v.price, si.percent);
+                            return (
+                              <div style={{ marginTop: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: isSel ? "#fff" : "#FF3B30" }}>{formatSum(sp)}</span>
+                                <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,0.4)" : "#bbb", textDecoration: "line-through", marginLeft: 4 }}>{formatSum(v.price)}</span>
+                              </div>
+                            );
+                          }
+                          return <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : "#999", marginTop: 4 }}>{formatSum(v.price)}</div>;
+                        })()}
                       </motion.button>
                     </motion.div>
                   );
@@ -2513,9 +3854,28 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
                 initial={{ opacity: 0, y: -4, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                style={{ color: "#111", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}
+                style={{ display: "flex", alignItems: "baseline", gap: 8 }}
               >
-                {formatSum(selVariant.price)}
+                {(() => {
+                  const si = getSaleInfo(detail);
+                  if (si) {
+                    return (
+                      <>
+                        <span style={{ color: "#FF3B30", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
+                          {formatSum(salePrice(selVariant.price, si.percent))}
+                        </span>
+                        <span style={{ color: "#bbb", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
+                          {formatSum(selVariant.price)}
+                        </span>
+                      </>
+                    );
+                  }
+                  return (
+                    <span style={{ color: "#111", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
+                      {formatSum(selVariant.price)}
+                    </span>
+                  );
+                })()}
               </motion.div>
             </div>
           )}
@@ -2593,7 +3953,7 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
         <motion.div
           animate={{ paddingTop: headerCollapsed ? 10 : 0 }}
           transition={{ type: "spring", stiffness: 420, damping: 36 }}
-          style={{ padding: "0 16px 10px" }}
+          style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}
         >
           <div style={{ display: "flex", alignItems: "center", background: "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="#aaa" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#aaa" strokeWidth="2" /></svg>
@@ -2614,7 +3974,30 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
               )}
             </AnimatePresence>
           </div>
+          {/* Smart search dropdown */}
+          <AnimatePresence>
+            {search.length >= 3 && (
+              <SearchDropdown
+                results={smartSearch(products, search, lang)}
+                onSelect={(p) => { openDetail(p); setSearch(""); }}
+                lang={lang}
+                isMobile={true}
+              />
+            )}
+          </AnimatePresence>
         </motion.div>
+        {/* Backdrop overlay when search is active */}
+        <AnimatePresence>
+          {search.length >= 3 && smartSearch(products, search, lang).length > 0 && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSearch("")}
+              style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.2)", zIndex: 99 }}
+            />
+          )}
+        </AnimatePresence>
       </motion.div>
       {/* Banner */}
       {banners.length > 0 && <div style={{ marginTop: 14, marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
@@ -2690,25 +4073,92 @@ function CatalogScreen({ products, addToCart, banners, showToast, onAdminLogin, 
           </div>
         )}
         {filteredProducts.map((p, idx) => {
-          // PRO: subtle stagger fade-in (only first 12 cards staggered to avoid jank).
-          const delay = idx < 12 ? idx * 0.035 : 0;
+          // PRO: only animate first 8 cards for smooth initial load;
+          // remaining cards render instantly to avoid 500+ motion.div jank.
+          if (idx < 8) {
+            const delay = idx * 0.035;
+            return (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, delay, ease: [0.32, 0.72, 0, 1] }}
+              >
+                <ProductCard
+                  p={p}
+                  onClick={() => openDetail(p)}
+                  showAudioHint={idx === 0 && audioHintVisible}
+                  onAudioHintDismiss={() => setAudioHintVisible(false)}
+                />
+              </motion.div>
+            );
+          }
           return (
-            <motion.div
-              key={p.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, delay, ease: [0.32, 0.72, 0, 1] }}
-            >
+            <div key={p.id} className="product-card-wrap">
               <ProductCard
                 p={p}
                 onClick={() => openDetail(p)}
-                showAudioHint={idx === 0 && audioHintVisible}
-                onAudioHintDismiss={() => setAudioHintVisible(false)}
               />
-            </motion.div>
+            </div>
           );
         })}
       </div>
+
+      {/* ── ОТЗЫВЫ КЛИЕНТОВ (approved reviews) ── */}
+      {(() => {
+        const approved = reviews.filter(r => r.approved);
+        if (approved.length === 0) return null;
+        return (
+          <div style={{ padding: "28px 16px 20px" }}>
+            <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(0,0,0,0.3)", marginBottom: 6, fontWeight: 600 }}>
+              {lang === 'kg' ? 'Кардарлардын пикири' : 'Отзывы клиентов'}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 400, color: "#0a0a0a", marginBottom: 20, fontFamily: "'Georgia', serif", fontStyle: "italic" }}>
+              {lang === 'kg' ? 'Алар биз жөнүндө эмне дейт' : 'Что говорят о нас'}
+            </div>
+            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
+              {approved.slice(0, 10).map((r, i) => (
+                <motion.div
+                  key={r.id || i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.05 }}
+                  style={{
+                    minWidth: 260, maxWidth: 280, flexShrink: 0,
+                    background: "#f7f7f5", borderRadius: 16, padding: "20px 18px",
+                    border: "1px solid rgba(0,0,0,0.05)", scrollSnapAlign: "start",
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 2, marginBottom: 10 }}>
+                    {[1,2,3,4,5].map(s => (
+                      <svg key={s} width="13" height="13" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? "#111" : "#ddd"}>
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                      </svg>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#333", lineHeight: 1.6, marginBottom: 14, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                    "{r.text}"
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                      width: 30, height: 30, borderRadius: "50%", background: "#111",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      color: "#fff", fontSize: 11, fontWeight: 600,
+                    }}>
+                      {(r.name || "?").charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>{r.name}</div>
+                      {r.city && <div style={{ fontSize: 10, color: "rgba(0,0,0,0.35)" }}>{r.city}</div>}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
     </Outer>
   );
 }
@@ -2721,6 +4171,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
   const [address, setAddress] = useState("");
   const [editingAddress, setEditingAddress] = useState(false);
   const [payMethod, setPayMethod] = useState(PAYMENT_METHODS[0].id);
+  const [showPayQr, setShowPayQr] = useState(false);
 
   // Reverse-geocode current device location into a human-readable address.
   const getLocation = () => {
@@ -2748,11 +4199,22 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
     };
   });
 
-  const subtotal = items.reduce((s, i) => s + i.variant.price * i.qty, 0);
+  const subtotal = items.reduce((s, i) => {
+    const si = getSaleInfo(i.prod);
+    const fp = si ? salePrice(i.variant.price, si.percent) : i.variant.price;
+    return s + fp * i.qty;
+  }, 0);
   const _minFree = settings?.minOrderForFreeDelivery || 0;
   const deliveryCost = deliveryType === "delivery" ? (_minFree > 0 && subtotal >= _minFree ? 0 : (settings?.deliveryCost || 0)) : 0;
   const bonusDiscount = useBonus ? Math.min(bonusBalance, Math.floor(subtotal * (useBonusPercent / 100))) : 0;
   const total = subtotal + deliveryCost - bonusDiscount;
+
+  // ── Out-of-stock detection for cart items ──────────────────────────────
+  const outOfStockIds = new Set(
+    items.filter(i => i.variant?.inStock === false).map(i => `${i.productId}_${i.variantId}`)
+  );
+  const hasOutOfStock = outOfStockIds.size > 0;
+  const canCheckout = total > 0 && !hasOutOfStock && items.length > 0;
 
   const updateQty = (ci, d) => setCart(prev => { const next = prev.map(i => i.productId === ci.productId && i.variantId === ci.variantId ? { ...i, qty: Math.max(1, i.qty + d) } : i); localStorage.setItem('parfum_cart', JSON.stringify(next)); return next; });
   const remove = (ci) => setCart(prev => { const next = prev.filter(i => !(i.productId === ci.productId && i.variantId === ci.variantId)); localStorage.setItem('parfum_cart', JSON.stringify(next)); return next; });
@@ -2761,9 +4223,12 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
   // cart screen via this window event. We mirror form state into a ref so the
   // listener never closes over stale values.
   const formRef = React.useRef(null);
-  formRef.current = { comment, useBonus, deliveryType, address, payMethod, total, bonusDiscount, subtotal };
+  formRef.current = { comment, useBonus, deliveryType, address, payMethod, total, bonusDiscount, subtotal, canCheckout };
   React.useEffect(() => {
-    const handler = () => onOrder?.(formRef.current);
+    const handler = () => {
+      if (!formRef.current.canCheckout) return; // Block invalid orders at UI level
+      onOrder?.(formRef.current);
+    };
     window.addEventListener('cart:checkout', handler);
     return () => window.removeEventListener('cart:checkout', handler);
   }, [onOrder]);
@@ -2795,7 +4260,9 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       {/* Items — PRO: AnimatePresence makes adds spring in, removes swipe out */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         <AnimatePresence initial={false}>
-          {items.map((item) => (
+          {items.map((item) => {
+            const isOOS = outOfStockIds.has(`${item.productId}_${item.variantId}`);
+            return (
             <motion.div
               key={`${item.productId}-${item.variantId}`}
               layout
@@ -2803,15 +4270,16 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 120, scale: 0.85, transition: { duration: 0.22 } }}
               transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-              style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center" }}
+              style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center", ...(isOOS ? { border: '2px solid #FF3B30', opacity: 0.7 } : {}) }}
             >
               <div style={{ width: 60, height: 60, borderRadius: 14, background: T.accentPale, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.accent, opacity: 0.5 } })}
+                {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover", ...(isOOS ? { filter: 'grayscale(1)' } : {}) }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.accent, opacity: 0.5 } })}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{item.prod.brand}</div>
                 <div style={{ color: T.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{item.prod.name}</div>
                 <div style={{ color: T.accent, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
+                {isOOS && <div style={{ color: '#FF3B30', fontSize: 11, fontWeight: 700, marginTop: 2 }}>{lang === 'kg' ? 'Кампада жок' : 'Нет в наличии'}</div>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                 <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 2 }}>{IC.close}</button>
@@ -2820,10 +4288,10 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                   <motion.span key={item.qty} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 460, damping: 22 }} style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text, display: 'inline-block' }}>{item.qty}</motion.span>
                   <button onClick={() => updateQty(item, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.accent, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#fff" }}>+</button>
                 </div>
-                <motion.div key={item.variant.price * item.qty} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{formatSum(item.variant.price * item.qty)}</motion.div>
+                <motion.div key={(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return fp * item.qty; })()} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return formatSum(fp * item.qty); })()}</motion.div>
               </div>
             </motion.div>
-          ))}
+          ); })}
         </AnimatePresence>
       </div>
       {/* Delivery — Apple Pay-style segmented control + address card */}
@@ -3084,13 +4552,8 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
         <div style={{ ...card({ padding: "16px" }) }}>
           <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.paymentMethod}</div>
           {[
-            // Real brand assets from /public — encoded for the URL because
-            // "M bank.png" contains a space. Cash keeps the inline SVG since
-            // there's no real cash logo asset. All three render at 28×28
-            // contained, no wrapper background.
-            { id: 'mbank', label: 'M Bank',                  accent: '#0E7A6E', accentRgb: '14, 122, 110', logo: <img src={encodeURI('/M bank.png')} alt="M Bank" style={{ width: 28, height: 28, objectFit: 'contain', flexShrink: 0, display: 'block' }} /> },
-            { id: 'obank', label: 'O!Bank',                  accent: '#E5007E', accentRgb: '229, 0, 126',  logo: <img src="/OBANK.jpg"               alt="O!Bank" style={{ width: 28, height: 28, objectFit: 'contain', flexShrink: 0, display: 'block' }} /> },
-            { id: 'cash',  label: 'Наличные / Нак. акча',    accent: T.accent,  accentRgb: '17, 17, 17',   logo: <CashLogo size={28} /> },
+            { id: 'odengi', label: 'Онлайн оплата', logo: <svg style={{width:24,height:24,flexShrink:0,display:'block'}} viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" strokeWidth="1.8" fill="none"/><path d="M2 10h20" stroke="currentColor" strokeWidth="1.8"/><rect x="5" y="14" width="4" height="2" rx="1" fill="currentColor"/></svg> },
+            { id: 'cash',  label: 'Наличные / Нак. акча', logo: <CashLogo size={24} /> },
           ].map(opt => {
             const selected = payMethod === opt.id;
             return (
@@ -3099,17 +4562,30 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                 onClick={() => { haptic('light'); setPayMethod(opt.id); }}
                 whileTap={{ scale: 0.97 }}
                 animate={{
-                  borderColor: selected ? `rgba(${opt.accentRgb}, 0.25)` : T.border,
-                  backgroundColor: selected ? `rgba(${opt.accentRgb}, 0.08)` : T.bg,
+                  borderColor: selected ? 'rgba(17,17,17,0.12)' : T.border,
+                  backgroundColor: selected ? '#111' : '#fff',
                 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, border: '1px solid', cursor: "pointer", width: "100%", marginBottom: 8, textAlign: "left", boxSizing: "border-box" }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "14px 16px", borderRadius: 14,
+                  border: '1px solid', cursor: "pointer",
+                  width: "100%", marginBottom: 8,
+                  textAlign: "left", boxSizing: "border-box",
+                  boxShadow: selected ? '0 2px 12px rgba(0,0,0,0.12)' : 'none',
+                }}
               >
-                {opt.logo}
+                <motion.div
+                  animate={{ color: selected ? '#fff' : '#999' }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                >
+                  {opt.logo}
+                </motion.div>
                 <motion.span
-                  animate={{ color: selected ? opt.accent : T.text }}
-                  transition={{ duration: 0.22 }}
-                  style={{ fontWeight: 500, fontSize: 14, flex: 1, opacity: 1, letterSpacing: -0.1 }}
+                  animate={{ color: selected ? '#fff' : T.text }}
+                  transition={{ duration: 0.2 }}
+                  style={{ fontWeight: 600, fontSize: 14.5, flex: 1, letterSpacing: -0.2 }}
                 >
                   {opt.label}
                 </motion.span>
@@ -3122,7 +4598,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       transition={{ type: 'spring', stiffness: 460, damping: 22 }}
                       style={{
                         width: 22, height: 22, borderRadius: '50%',
-                        background: opt.accent,
+                        background: 'rgba(255,255,255,0.2)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         flexShrink: 0,
                       }}
@@ -3182,11 +4658,35 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
         </div>
       </div>
       <div style={{ padding: "0 16px", marginBottom: 8 }}>
+        {/* Out-of-stock warning banner */}
+        {hasOutOfStock && (
+          <div style={{ background: '#FFF3CD', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>⚠️</span>
+            <span style={{ fontSize: 13, color: '#664D03', fontWeight: 500 }}>
+              {lang === 'kg' ? 'Себетте кампада жок товарлар бар. Аларды өчүрүңүз.' : 'В корзине есть товары, которых нет в наличии. Удалите их для оформления.'}
+            </span>
+          </div>
+        )}
+        {total <= 0 && items.length > 0 && !hasOutOfStock && (
+          <div style={{ background: '#FFF3CD', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 18 }}>⚠️</span>
+            <span style={{ fontSize: 13, color: '#664D03', fontWeight: 500 }}>
+              {lang === 'kg' ? 'Заказдын суммасы 0 болушу мүмкүн эмес' : 'Сумма заказа не может быть 0 сом'}
+            </span>
+          </div>
+        )}
         <motion.button
-          style={{ ...btnGreen(), width: "100%", marginTop: 12, marginBottom: 8 }}
-          whileTap={{ scale: 0.97 }}
+          style={{
+            ...btnGreen(),
+            width: "100%",
+            marginTop: 12,
+            marginBottom: 8,
+            ...(canCheckout ? {} : { opacity: 0.45, pointerEvents: 'none' }),
+          }}
+          whileTap={canCheckout ? { scale: 0.97 } : {}}
           transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-          onClick={() => { haptic('medium'); window.dispatchEvent(new CustomEvent('cart:checkout')); }}
+          disabled={!canCheckout}
+          onClick={() => { if (!canCheckout) return; haptic('medium'); window.dispatchEvent(new CustomEvent('cart:checkout')); }}
         >
           {t.placeOrder}
         </motion.button>
@@ -3319,6 +4819,7 @@ function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }) {
                           });
                           setReviewOrderId(null);
                           showToast?.(lang === 'kg' ? 'Пикир жөнөтүлдү!' : 'Отзыв отправлен!');
+                          notifyNewReview(user?.name || user?.phone || 'Клиент', reviewRating);
                         } catch (e) {
                           console.warn('Review error:', e);
                           showToast?.(lang === 'kg' ? 'Ката кетти' : 'Ошибка');
@@ -3344,7 +4845,7 @@ function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }) {
   );
 }
 // ─── PROFILE SCREEN ────────────────────────────────────────────────────────────
-function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin, goToOrders }) {
+function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin, goToOrders, onOpenNotifications, unreadNotifCount = 0 }) {
   const { t, lang, setLang } = useLang();
   const [tab, setTab] = useState("bonus");
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -3544,14 +5045,24 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
         </div>
         <motion.div
           whileTap={{ scale: 0.98 }}
+          onClick={() => { haptic('light'); if (onOpenNotifications) onOpenNotifications(); }}
           style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
         >
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
             {React.cloneElement(IC.bell, { style: { width: 18, height: 18, color: T.accent } })}
+            {unreadNotifCount > 0 && (
+              <div style={{ position: "absolute", top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: "#FF3B30", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>
+                {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+              </div>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Билдирүүлөр' : 'Уведомления'}</div>
-            <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>{lang === 'kg' ? 'Заказ статусу жөнүндө' : 'О статусах заказа'}</div>
+            <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>
+              {unreadNotifCount > 0
+                ? (lang === 'kg' ? `${unreadNotifCount} жаңы билдирүү` : `${unreadNotifCount} новых`)
+                : (lang === 'kg' ? 'Заказ статусу жөнүндө' : 'О статусах заказа')}
+            </div>
           </div>
           {React.cloneElement(IC.chevron, { style: { width: 16, height: 16, color: T.textMuted, flexShrink: 0 } })}
         </motion.div>
@@ -3714,12 +5225,34 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
 }
 
 // ─── ADMIN ORDERS ──────────────────────────────────────────────────────────────
-function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, onSendWhatsApp, onConfirmMBankPayment, onRefresh }) {
+// PRO redesign: quick actions, search, archive, inline status dropdown
+const STATUS_COLORS = {
+  new:        { bg: "#FFF3E0", color: "#FF6B00", border: "#FFB74D" },
+  confirmed:  { bg: "#E3F2FD", color: "#1565C0", border: "#64B5F6" },
+  preparing:  { bg: "#FFF8E1", color: "#F9A825", border: "#FFD54F" },
+  delivering: { bg: "#EDE7F6", color: "#7C5CBF", border: "#B39DDB" },
+  delivered:  { bg: "#E8F5E9", color: "#2E7D32", border: "#81C784" },
+  cancelled:  { bg: "#FFEBEE", color: "#C62828", border: "#EF9A9A" },
+};
+
+function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, onSendWhatsApp, onConfirmOnlinePayment, onRefresh }) {
   const { t, lang } = useLang();
   const [filter, setFilter] = useState("all");
   const [statusMap, setStatusMap] = useState({});
   const [open, setOpen] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [showArchive, setShowArchive] = useState(false);
+  const [statusDropdown, setStatusDropdown] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setStatusDropdown(null); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const refresh = async () => {
     if (!onRefresh || refreshing) return;
     setRefreshing(true);
@@ -3727,221 +5260,466 @@ function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, onSendWha
     try { await onRefresh(); } catch { /* ignore */ }
     setRefreshing(false);
   };
+
   const orders = allOrders.map(o => ({ ...o, status: statusMap[o.id] || o.status }));
-  const filtered = filter === "all" ? orders : orders.filter(o => o.status === filter);
+
+  // Archive: orders delivered/cancelled older than 7 days
+  const ARCHIVE_DAYS = 7;
+  const archiveCutoff = new Date();
+  archiveCutoff.setDate(archiveCutoff.getDate() - ARCHIVE_DAYS);
+  const isArchived = (o) => {
+    if (o.status !== 'delivered' && o.status !== 'cancelled') return false;
+    try { return new Date(o.date) < archiveCutoff; } catch { return false; }
+  };
+  const activeOrders = orders.filter(o => !isArchived(o));
+  const archivedOrders = orders.filter(o => isArchived(o));
+  const workingOrders = showArchive ? archivedOrders : activeOrders;
+
+  // Filter by status
+  const statusFiltered = filter === "all" ? workingOrders : workingOrders.filter(o => o.status === filter);
+
+  // Search by name, phone, order ID
+  const searchLower = search.trim().toLowerCase();
+  const filtered = searchLower
+    ? statusFiltered.filter(o =>
+        (o.clientName || '').toLowerCase().includes(searchLower) ||
+        (o.clientPhone || '').includes(searchLower) ||
+        (o.id || '').toLowerCase().includes(searchLower)
+      )
+    : statusFiltered;
+
   const statuses = ["all", "new", "confirmed", "preparing", "delivering", "delivered", "cancelled"];
-  const handleStatus = (id, st) => { haptic('medium'); setStatusMap(p => ({ ...p, [id]: st })); onStatusChange?.(id, st); };
+  const handleStatus = (id, st) => { haptic('medium'); setStatusMap(p => ({ ...p, [id]: st })); onStatusChange?.(id, st); setStatusDropdown(null); };
+
+  // Summary counts for header
+  const newCount = activeOrders.filter(o => o.status === 'new').length;
+  const todayCount = activeOrders.filter(o => { try { return new Date(o.date).toDateString() === new Date().toDateString(); } catch { return false; } }).length;
+  const todayRevenue = activeOrders.filter(o => { try { return new Date(o.date).toDateString() === new Date().toDateString() && o.status === 'delivered'; } catch { return false; } }).reduce((s, o) => s + (o.total || 0), 0);
+
+  const nextStatusMap = { new: 'confirmed', confirmed: 'preparing', preparing: 'delivering', delivering: 'delivered' };
+  const nextStatusLabel = { confirmed: lang === 'kg' ? 'Тастыктоо' : 'Подтвердить', preparing: lang === 'kg' ? 'Даярдоо' : 'Готовить', delivering: lang === 'kg' ? 'Жеткирүү' : 'Доставка', delivered: lang === 'kg' ? 'Жеткирилди' : 'Доставлен' };
+
   try {
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      <div style={{ padding: "52px 16px 14px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.4, color: T.text }}>{t.orders}</div>
-        {onRefresh && (
-          <motion.button
-            whileTap={{ scale: 0.92 }}
-            onClick={refresh}
-            disabled={refreshing}
+      {/* ── PRO Header with summary stats ── */}
+      <div style={{ padding: "52px 16px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -0.5, color: T.text }}>{t.orders}</div>
+            <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>
+              {lang === 'kg' ? 'Бүгүн' : 'Сегодня'}: {todayCount} {lang === 'kg' ? 'заказ' : 'заказов'}
+              {todayRevenue > 0 && ` · ${formatSum(todayRevenue)}`}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* Archive toggle */}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={() => { haptic('light'); setShowArchive(!showArchive); setFilter('all'); }}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "8px 12px", borderRadius: 10, border: "none",
+                background: showArchive ? T.accent : "rgba(0,0,0,0.06)",
+                color: showArchive ? "#fff" : T.textSecond,
+                fontSize: 12, fontWeight: 600, cursor: "pointer",
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/>
+                <line x1="10" y1="12" x2="14" y2="12"/>
+              </svg>
+              {lang === 'kg' ? 'Архив' : 'Архив'} {archivedOrders.length > 0 && `(${archivedOrders.length})`}
+            </motion.button>
+            {/* Refresh */}
+            {onRefresh && (
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                onClick={refresh}
+                disabled={refreshing}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36, height: 36, borderRadius: 10, border: "none",
+                  background: "rgba(0,0,0,0.06)", color: "#111",
+                  cursor: refreshing ? "default" : "pointer",
+                  opacity: refreshing ? 0.6 : 1,
+                }}
+              >
+                <motion.svg
+                  width="15" height="15" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                  animate={refreshing ? { rotate: 360 } : { rotate: 0 }}
+                  transition={refreshing ? { duration: 0.9, repeat: Infinity, ease: "linear" } : { duration: 0.3 }}
+                >
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </motion.svg>
+              </motion.button>
+            )}
+          </div>
+        </div>
+
+        {/* ── PRO Quick stat pills ── */}
+        {!showArchive && newCount > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
             style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "8px 14px", borderRadius: 999, border: "none",
-              background: "rgba(0,0,0,0.06)", color: "#111",
-              fontSize: 13, fontWeight: 600, cursor: refreshing ? "default" : "pointer",
-              opacity: refreshing ? 0.6 : 1, letterSpacing: -0.1,
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 999,
+              background: STATUS_COLORS.new.bg, marginBottom: 12,
             }}
           >
-            <motion.svg
-              width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-              animate={refreshing ? { rotate: 360 } : { rotate: 0 }}
-              transition={refreshing ? { duration: 0.9, repeat: Infinity, ease: "linear" } : { duration: 0.3 }}
-            >
-              <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </motion.svg>
-            {refreshing ? '...' : (lang === 'kg' ? 'Жаңыртуу' : 'Обновить')}
-          </motion.button>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLORS.new.color, animation: "pulse 2s infinite" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: STATUS_COLORS.new.color }}>
+              {newCount} {lang === 'kg' ? 'жаңы заказ' : newCount === 1 ? 'новый заказ' : 'новых заказов'}
+            </span>
+          </motion.div>
         )}
-      </div>
-      <div style={{ padding: "0 16px 14px", overflowX: "auto" }}>
-        <div style={{ display: "flex", gap: 8, width: "max-content" }}>
-          {statuses.map(s => (
-            <button key={s} onClick={() => { haptic('light'); setFilter(s); }} style={{ padding: "10px 20px", borderRadius: 22, border: `1.5px solid ${filter === s ? T.accent : T.border}`, background: filter === s ? T.accent : T.card, color: filter === s ? "#fff" : T.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", minHeight: 40, letterSpacing: -0.1 }}>
-              {s === "all" ? t.allOrders : t["status_" + s] || s}
-              {s !== "all" && (() => { const cnt = allOrders.filter(o => o.status === s).length; return cnt > 0 ? ` (${cnt})` : ''; })()}
+
+        {/* ── Search bar ── */}
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder={lang === 'kg' ? 'Аты, телефон, ID...' : 'Имя, телефон, ID...'}
+            style={{
+              width: "100%", padding: "11px 12px 11px 38px", borderRadius: 12,
+              border: `1.5px solid ${T.border}`, background: T.card, fontSize: 14,
+              outline: "none", boxSizing: "border-box", color: T.text,
+              fontFamily: "inherit",
+            }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.08)", border: "none", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={T.textSecond} strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
-          ))}
+          )}
         </div>
       </div>
-      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+
+      {/* ── Status filter chips ── */}
+      <div style={{ padding: "0 16px 14px", overflowX: "auto" }}>
+        <div style={{ display: "flex", gap: 6, width: "max-content" }}>
+          {statuses.map(s => {
+            const cnt = s === 'all' ? workingOrders.length : workingOrders.filter(o => o.status === s).length;
+            const sc = STATUS_COLORS[s];
+            const isActive = filter === s;
+            return (
+              <button key={s} onClick={() => { haptic('light'); setFilter(s); }} style={{
+                padding: "8px 14px", borderRadius: 20,
+                border: `1.5px solid ${isActive ? (sc ? sc.border : T.accent) : T.border}`,
+                background: isActive ? (sc ? sc.bg : T.accent) : T.card,
+                color: isActive ? (sc ? sc.color : "#fff") : T.textSecond,
+                fontSize: 12, fontWeight: 700, cursor: "pointer",
+                whiteSpace: "nowrap", minHeight: 36, letterSpacing: -0.1,
+                display: "flex", alignItems: "center", gap: 4,
+              }}>
+                {s === "all" ? (lang === 'kg' ? 'Баары' : 'Все') : t["status_" + s] || s}
+                {cnt > 0 && <span style={{
+                  background: isActive ? (sc ? sc.color : "#fff") : "rgba(0,0,0,0.08)",
+                  color: isActive ? "#fff" : T.textSecond,
+                  fontSize: 10, fontWeight: 800, borderRadius: 99,
+                  padding: "1px 6px", minWidth: 18, textAlign: "center",
+                }}>{cnt}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Orders list ── */}
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {!filtered.length && (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 360, damping: 28 }}
-            style={{
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              textAlign: "center",
-              padding: "56px 24px 64px",
-              gap: 14,
-            }}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "56px 24px 64px", gap: 14 }}
           >
-            {/* Icon — soft circle with box glyph */}
-            <div style={{
-              width: 64, height: 64, borderRadius: "50%",
-              background: "rgba(0,0,0,0.05)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              marginBottom: 4,
-            }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                <line x1="12" y1="22.08" x2="12" y2="12"/>
+                {showArchive
+                  ? <><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></>
+                  : <><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></>
+                }
               </svg>
             </div>
-            {/* Title */}
             <div style={{ fontSize: 17, fontWeight: 700, color: T.text, letterSpacing: -0.3 }}>
-              {t.noOrders}
+              {showArchive
+                ? (lang === 'kg' ? 'Архив бош' : 'Архив пуст')
+                : t.noOrders}
             </div>
-            {/* Description — secondary text */}
             <div style={{ fontSize: 13, color: "#8E8E93", lineHeight: 1.45, maxWidth: 260 }}>
-              {lang === 'kg'
-                ? 'Жаңы заказдар азырынча жок. Тизмени жаңыртыңыз.'
-                : 'Новые заказы пока не поступали. Обновите список, чтобы проверить.'}
+              {showArchive
+                ? (lang === 'kg' ? 'Жеткирилген/жокко чыгарылган заказдар 7 күндөн кийин архивге түшөт.'
+                  : 'Доставленные/отменённые заказы старше 7 дней попадут в архив.')
+                : (lang === 'kg' ? 'Жаңы заказдар азырынча жок.' : 'Новые заказы пока не поступали.')}
             </div>
-            {/* Refresh button */}
-            {onRefresh && (
-              <motion.button
-                whileTap={{ scale: 0.97 }}
-                transition={{ type: "spring", stiffness: 460, damping: 24 }}
-                onClick={refresh}
-                disabled={refreshing}
-                style={{
-                  marginTop: 6,
-                  display: "inline-flex", alignItems: "center", gap: 8,
-                  padding: "10px 20px",
-                  borderRadius: 999,
-                  border: "none",
-                  background: "#111111",
-                  color: "#fff",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: refreshing ? "default" : "pointer",
-                  letterSpacing: -0.1,
-                  opacity: refreshing ? 0.7 : 1,
-                  boxShadow: "0 6px 16px rgba(17,17,17,0.20)",
-                }}
-              >
-                <motion.svg
-                  width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
-                  animate={refreshing ? { rotate: 360 } : { rotate: 0 }}
-                  transition={refreshing ? { duration: 0.9, repeat: Infinity, ease: "linear" } : { duration: 0.3 }}
-                >
-                  <polyline points="23 4 23 10 17 10"/>
-                  <polyline points="1 20 1 14 7 14"/>
-                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                </motion.svg>
-                {refreshing
-                  ? (lang === 'kg' ? 'Жаңылануу…' : 'Обновляем…')
-                  : (lang === 'kg' ? 'Жаңыртуу' : 'Обновить')}
-              </motion.button>
-            )}
           </motion.div>
         )}
-        {filtered.slice().reverse().map(order => (
-          <div key={order.id} style={{ ...card({ padding: "16px" }) }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => setOpen(open === order.id ? null : order.id)}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <span style={{ color: T.textMuted, fontSize: 11, fontVariantNumeric: "tabular-nums" }}>#{typeof order.id === 'string' ? order.id.slice(-6).toUpperCase() : order.id}</span>
+        {filtered.slice().reverse().map((order, idx) => {
+          const sc = STATUS_COLORS[order.status] || { bg: "rgba(0,0,0,0.04)", color: T.textSecond, border: T.border };
+          const isOpen = open === order.id;
+          const nextSt = nextStatusMap[order.status];
+          return (
+          <motion.div
+            key={order.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: Math.min(idx * 0.03, 0.3) }}
+            style={{
+              ...card({ padding: 0, overflow: 'hidden' }),
+              borderLeft: `4px solid ${sc.border}`,
+            }}
+          >
+            {/* ── Card header — always visible ── */}
+            <div style={{ padding: "14px 14px 12px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+              {/* Left: order info */}
+              <div style={{ flex: 1, cursor: "pointer", minWidth: 0 }} onClick={() => setOpen(isOpen ? null : order.id)}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
+                  <span style={{ color: T.textMuted, fontSize: 11, fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>#{typeof order.id === 'string' ? order.id.slice(-6).toUpperCase() : order.id}</span>
                   <StatusChip status={order.status} />
-                  {order.date && <span style={{ color: T.textMuted, fontSize: 10, marginLeft: 'auto' }}>{(() => { try { const d = new Date(order.date); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } })()}</span>}
+                  {(order.paymentMethod === 'mbank' || order.paymentMethod === 'odengi') && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, borderRadius: 6, padding: "2px 6px",
+                      background: (order.paymentStatus === 'mbank_pending' || order.paymentStatus === 'odengi_pending') ? '#FEF3C7' : '#D1FAE5',
+                      color: (order.paymentStatus === 'mbank_pending' || order.paymentStatus === 'odengi_pending') ? '#D97706' : '#059669',
+                    }}>Онлайн</span>
+                  )}
                 </div>
-                <div style={{ color: T.text, fontWeight: 800, fontSize: 17, letterSpacing: -0.3 }}>{formatSum(order.total)}</div>
-                <div style={{ color: T.textMuted, fontSize: 13, marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                  {order.clientName && <span style={{ fontWeight: 500 }}>{order.clientName}</span>}
-                  {order.clientName && order.clientPhone && <span>·</span>}
+                <div style={{ color: T.text, fontWeight: 800, fontSize: 18, letterSpacing: -0.3 }}>{formatSum(order.total)}</div>
+                <div style={{ color: T.textMuted, fontSize: 13, marginTop: 3, display: "flex", alignItems: "center", gap: 5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {order.clientName && <span style={{ fontWeight: 600, color: T.textSecond }}>{order.clientName}</span>}
+                  {order.clientName && order.clientPhone && <span style={{ color: T.border }}>|</span>}
                   {order.clientPhone && <span>{order.clientPhone}</span>}
+                  {order.date && <>
+                    <span style={{ color: T.border }}>|</span>
+                    <span style={{ fontSize: 11 }}>{(() => { try { const d = new Date(order.date); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } })()}</span>
+                  </>}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", paddingLeft: 8, paddingTop: 4, flexShrink: 0 }}>
-                <motion.div animate={{ rotate: open === order.id ? 180 : 0 }} transition={{ type: "spring", stiffness: 400, damping: 24 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                </motion.div>
+
+              {/* Right: quick actions — ALWAYS visible without expanding */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0, paddingTop: 2 }}>
+                {/* Quick next-status button */}
+                {nextSt && !showArchive && (
+                  <motion.button
+                    whileTap={{ scale: 0.93 }}
+                    onClick={(e) => { e.stopPropagation(); handleStatus(order.id, nextSt); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4,
+                      padding: "6px 10px", borderRadius: 8, border: "none",
+                      background: STATUS_COLORS[nextSt]?.bg || T.accentLight,
+                      color: STATUS_COLORS[nextSt]?.color || T.accent,
+                      fontSize: 11, fontWeight: 700, cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    {nextStatusLabel[nextSt] || nextSt}
+                  </motion.button>
+                )}
+                {/* Quick action row: WhatsApp + more */}
+                <div style={{ display: "flex", gap: 4 }}>
+                  {order.clientPhone && (
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => { e.stopPropagation(); onSendWhatsApp?.(order); }}
+                      title="WhatsApp"
+                      style={{
+                        width: 30, height: 30, borderRadius: 8, border: "none",
+                        background: "#E8F5E9", color: "#2E7D32",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        cursor: "pointer", padding: 0,
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 01-4.243-1.214l-.252-.149-2.868.852.852-2.868-.164-.264A8 8 0 1112 20z"/></svg>
+                    </motion.button>
+                  )}
+                  {/* Status dropdown trigger */}
+                  {!showArchive && (
+                    <div style={{ position: "relative" }} ref={statusDropdown === order.id ? dropdownRef : null}>
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        onClick={(e) => { e.stopPropagation(); setStatusDropdown(statusDropdown === order.id ? null : order.id); }}
+                        style={{
+                          width: 30, height: 30, borderRadius: 8, border: "none",
+                          background: "rgba(0,0,0,0.06)", color: T.textSecond,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          cursor: "pointer", padding: 0,
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                      </motion.button>
+                      {/* Dropdown menu */}
+                      {statusDropdown === order.id && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.92, y: -4 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          transition={{ duration: 0.15 }}
+                          style={{
+                            position: "absolute", right: 0, top: 34, zIndex: 100,
+                            background: "#fff", borderRadius: 12, padding: 4,
+                            boxShadow: "0 8px 30px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08)",
+                            minWidth: 160, border: `1px solid ${T.border}`,
+                          }}
+                        >
+                          {["confirmed", "preparing", "delivering", "delivered", "cancelled"].map(s => {
+                            const scc = STATUS_COLORS[s];
+                            return (
+                              <button
+                                key={s}
+                                onClick={(e) => { e.stopPropagation(); handleStatus(order.id, s); }}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                                  padding: "9px 12px", border: "none", borderRadius: 8,
+                                  background: order.status === s ? scc.bg : "transparent",
+                                  color: order.status === s ? scc.color : T.text,
+                                  fontSize: 13, fontWeight: order.status === s ? 700 : 500,
+                                  cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                                }}
+                              >
+                                <div style={{ width: 8, height: 8, borderRadius: "50%", background: scc.color, flexShrink: 0 }} />
+                                {t["status_" + s] || s}
+                                {order.status === s && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={scc.color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: "auto" }}><polyline points="20 6 9 17 4 12"/></svg>}
+                              </button>
+                            );
+                          })}
+                          <div style={{ height: 1, background: T.border, margin: "4px 0" }} />
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setStatusDropdown(null); if (window.confirm(t.confirmDeleteOrder || 'Delete?')) { haptic('medium'); onDelete?.(order.id); } }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8, width: "100%",
+                              padding: "9px 12px", border: "none", borderRadius: 8,
+                              background: "transparent", color: T.danger,
+                              fontSize: 13, fontWeight: 600, cursor: "pointer",
+                              textAlign: "left", fontFamily: "inherit",
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            {lang === 'kg' ? 'Өчүрүү' : 'Удалить'}
+                          </button>
+                        </motion.div>
+                      )}
+                    </div>
+                  )}
+                  {/* Expand toggle */}
+                  <motion.button
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setOpen(isOpen ? null : order.id)}
+                    style={{
+                      width: 30, height: 30, borderRadius: 8, border: "none",
+                      background: isOpen ? T.accent : "rgba(0,0,0,0.06)",
+                      color: isOpen ? "#fff" : T.textSecond,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      cursor: "pointer", padding: 0,
+                    }}
+                  >
+                    <motion.svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                      animate={{ rotate: isOpen ? 180 : 0 }} transition={{ type: "spring", stiffness: 400, damping: 24 }}>
+                      <polyline points="6 9 12 15 18 9"/>
+                    </motion.svg>
+                  </motion.button>
+                </div>
               </div>
             </div>
-            {open === order.id && (
+
+            {/* ── Expanded detail ── */}
+            {isOpen && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
-                style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}`, overflow: 'hidden' }}
+                style={{ borderTop: `1px solid ${T.border}`, overflow: 'hidden' }}
               >
-                {/* PRO: live order tracker timeline visible to admin too */}
-                <div style={{ marginBottom: 14 }}>
-                  <OrderTimeline status={order.status} lang={lang} />
-                </div>
-                {(order.clientName || order.clientPhone) && (
-                  <div style={{ background: T.bgSecond || '#F5F5F7', borderRadius: 10, padding: '10px 12px', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {order.clientName && (
-                      <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
-                        👤 {order.clientName}
-                      </div>
-                    )}
-                    {order.clientPhone && (
-                      <div style={{ fontSize: 13, color: T.textSecond }}>
-                        📞 {order.clientPhone}
-                      </div>
-                    )}
-                    {order.payMethod && (
-                      <div style={{ fontSize: 12, color: T.textMuted }}>
-                        💳 {order.payMethod === 'mbank' ? 'M-Bank' : order.payMethod === 'obank' ? 'O!Bank' : 'Наличные'}
-                      </div>
-                    )}
+                <div style={{ padding: "14px" }}>
+                  {/* Order timeline */}
+                  <div style={{ marginBottom: 14 }}>
+                    <OrderTimeline status={order.status} lang={lang} />
                   </div>
-                )}
-                {(order.items || []).map((item, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <span style={{ color: T.textSecond, fontSize: 13 }}>{item.name} × {item.qty}</span>
-                    <span style={{ color: T.text, fontWeight: 600, fontSize: 13 }}>{formatSum(item.price * item.qty)}</span>
-                  </div>
-                ))}
-                {order.address && <div style={{ color: T.textMuted, fontSize: 12, marginTop: 8 }}>{t.address}: {order.address}</div>}
-                <div style={{ color: T.textMuted, fontSize: 11, marginTop: 4 }}>{order.date}</div>
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ color: T.textSecond, fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{t.changeStatus}:</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {["confirmed", "preparing", "delivering", "delivered", "cancelled"].map(s => (
-                      <motion.button key={s} whileTap={{ scale: 0.95 }} onClick={() => handleStatus(order.id, s)} style={{ padding: "9px 16px", borderRadius: 12, border: `1.5px solid ${order.status === s ? T.accent : T.border}`, background: order.status === s ? T.accentLight : T.bg, color: order.status === s ? T.accent : T.textSecond, fontSize: 13, fontWeight: 600, cursor: "pointer", minHeight: 38, letterSpacing: -0.1 }}>{t["status_" + s] || s}</motion.button>
+
+                  {/* Client info card */}
+                  {(order.clientName || order.clientPhone) && (
+                    <div style={{ background: T.bgSecond || '#F5F5F7', borderRadius: 10, padding: '10px 12px', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {order.clientName && <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{order.clientName}</div>}
+                      {order.clientPhone && <div style={{ fontSize: 13, color: T.textSecond }}>{order.clientPhone}</div>}
+                      {(order.payMethod || order.paymentMethod) && (
+                        <div style={{ fontSize: 12, color: T.textMuted }}>
+                          {(order.payMethod || order.paymentMethod) === 'odengi' ? 'Онлайн оплата' : lang === 'kg' ? 'Накталай' : 'Наличные'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Items list */}
+                  <div style={{ background: T.bgSecond || '#F5F5F7', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+                    {(order.items || []).map((item, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: i < (order.items || []).length - 1 ? `1px solid ${T.border}` : 'none' }}>
+                        <span style={{ color: T.textSecond, fontSize: 13 }}>{item.name} <span style={{ color: T.textMuted }}>x{item.qty}</span></span>
+                        <span style={{ color: T.text, fontWeight: 700, fontSize: 13 }}>{formatSum((item.price || 0) * (item.qty || 0))}</span>
+                      </div>
                     ))}
-                  </div>
-                </div>
-                {order.paymentMethod === 'mbank' && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: order.paymentStatus === 'mbank_pending' ? '#FEF3C7' : '#D1FAE5', borderRadius: 10, marginTop: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: order.paymentStatus === 'mbank_pending' ? '#D97706' : '#059669' }}>
-                      💳 M-Bank: {order.paymentStatus === 'mbank_pending' ? 'Ожидает подтверждения' : 'Оплачено'}
-                    </span>
-                    {order.paymentStatus === 'mbank_pending' && (
-                      <button onClick={() => onConfirmMBankPayment?.(order.id)} style={{ marginLeft: 'auto', padding: '4px 10px', borderRadius: 8, background: '#059669', color: '#fff', border: 'none', fontSize: 12, cursor: 'pointer' }}>Подтвердить</button>
+                    {order.bonusDiscount > 0 && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0 0", marginTop: 4, borderTop: `1px dashed ${T.border}` }}>
+                        <span style={{ color: T.bonus, fontSize: 12, fontWeight: 600 }}>{lang === 'kg' ? 'Бонус чегирме' : 'Бонус скидка'}</span>
+                        <span style={{ color: T.bonus, fontWeight: 700, fontSize: 12 }}>-{formatSum(order.bonusDiscount)}</span>
+                      </div>
                     )}
                   </div>
-                )}
-                {order.clientPhone && <button onClick={() => onSendWhatsApp?.(order)} style={{ ...btnOutline({ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", fontSize: 14 }) }}>{React.cloneElement(IC.chat, { style: { width: 16, height: 16 } })}{t.sendWhatsApp}</button>}
-                {/* Delete order — safe placement at bottom with confirm */}
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => { if (window.confirm(t.confirmDeleteOrder)) { haptic('medium'); onDelete?.(order.id); } }}
-                  style={{ width: "100%", marginTop: 10, padding: "11px", borderRadius: 12, border: "none", background: "rgba(229,57,53,0.08)", color: "#E53935", fontWeight: 600, fontSize: 13, cursor: "pointer", letterSpacing: -0.1, fontFamily: "inherit" }}
-                >
-                  {lang === 'kg' ? 'Заказды өчүрүү' : 'Удалить заказ'}
-                </motion.button>
+
+                  {order.address && <div style={{ color: T.textSecond, fontSize: 12, marginBottom: 8, padding: "6px 10px", background: "rgba(0,0,0,0.03)", borderRadius: 8 }}>{lang === 'kg' ? 'Дарек' : 'Адрес'}: {order.address}</div>}
+                  {order.comment && <div style={{ color: T.textMuted, fontSize: 12, marginBottom: 8, fontStyle: "italic" }}>{order.comment}</div>}
+
+                  {/* Online payment confirmation */}
+                  {(order.paymentMethod === 'mbank' || order.paymentMethod === 'odengi') && (order.paymentStatus === 'mbank_pending' || order.paymentStatus === 'odengi_pending') && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => onConfirmOnlinePayment?.(order.id)}
+                      style={{
+                        width: "100%", padding: "10px", borderRadius: 10, border: "none",
+                        background: "#059669", color: "#fff", fontWeight: 700,
+                        fontSize: 13, cursor: "pointer", marginBottom: 8, fontFamily: "inherit",
+                      }}
+                    >
+                      {lang === 'kg' ? 'Онлайн төлөмдү тастыктоо' : 'Подтвердить онлайн оплату'}
+                    </motion.button>
+                  )}
+
+                  {/* Full status change row */}
+                  {!showArchive && (
+                    <div style={{ marginTop: 4 }}>
+                      <div style={{ color: T.textSecond, fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{t.changeStatus}:</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {["confirmed", "preparing", "delivering", "delivered", "cancelled"].map(s => {
+                          const scc = STATUS_COLORS[s];
+                          return (
+                            <motion.button key={s} whileTap={{ scale: 0.95 }} onClick={() => handleStatus(order.id, s)} style={{
+                              padding: "7px 12px", borderRadius: 8,
+                              border: `1.5px solid ${order.status === s ? scc.border : T.border}`,
+                              background: order.status === s ? scc.bg : "transparent",
+                              color: order.status === s ? scc.color : T.textSecond,
+                              fontSize: 12, fontWeight: 700, cursor: "pointer",
+                            }}>{t["status_" + s] || s}</motion.button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </motion.div>
             )}
-          </div>
-        ))}
+          </motion.div>
+          );
+        })}
       </div>
+
+      {/* Pulse animation keyframes */}
+      <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
     </div>
   );
   } catch (err) {
@@ -3950,21 +5728,46 @@ function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, onSendWha
   }
 }
 // ─── ADMIN PRODUCTS ────────────────────────────────────────────────────────────
+// ── EditSection — stable component for admin edit form grouping ────────────
+// Defined at module level (not inside a render fn) so React keeps the same
+// reference across re-renders. When it was inside an IIFE, every keystroke
+// created a new component type → React unmounted inputs → focus was lost.
+function EditSection({ title, hint, children, last, padded = true }) {
+  return (
+    <div style={{ marginBottom: last ? 0 : 22 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, padding: "0 4px" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.3 }}>{title}</div>
+        {hint && <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500, letterSpacing: -0.1 }}>{hint}</div>}
+      </div>
+      <div style={{
+        background: "#FAFAFA",
+        borderRadius: 16,
+        padding: padded ? "14px 14px" : 0,
+        border: "0.5px solid rgba(0,0,0,0.04)",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function AdminProductsScreen({ products = [], setProducts, showToast }) {
   const { t, lang } = useLang();
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
+  const [deleteStep, setDeleteStep] = useState(0); // 0=not active, 1=first confirm, 2=second confirm, 3=final warning
   // Edit-form language switcher — drives which language fields are shown.
   // Reset to 'ru' whenever a different product is opened.
   const [editLang, setEditLang] = useState('ru');
   useEffect(() => { setEditLang('ru'); }, [editing]);
-  const filtered = products.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || p.brand.toLowerCase().includes(search.toLowerCase()));
+  // filtered is now replaced by processedProducts (useMemo with search + filters + sort)
   const editProd = products.find(p => p.id === editing);
   const upd = (id, f, v) => setProducts(prev => prev.map(p => p.id === id ? { ...p, [f]: v } : p));
   const updVar = (pId, vId, f, v) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.map(vr => vr.id === vId ? { ...vr, [f]: v } : vr) } : p));
-  const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", isPopular: false, featured: false, variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
+  const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", isPopular: false, isHit: false, isNew: false, isAuthor: false, featured: false, priority: 0, shortDesc: "", tags: "", scheduled: false, showFrom: "", showUntil: "", relatedIds: [], variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
   // Delete confirmation now handled by the in-app modal — no native confirm.
   const delProd = async (id) => {
     const prod = products.find(p => p.id === id);
@@ -4144,7 +5947,16 @@ function AdminProductsScreen({ products = [], setProducts, showToast }) {
     fd.append("variants", variantsJson);
     fd.append("featured", String(!!prod.featured));
     fd.append("isPopular", String(!!prod.isPopular));
+    fd.append("isHit", String(!!prod.isHit));
+    fd.append("isNew", String(!!prod.isNew));
+    fd.append("isAuthor", String(!!prod.isAuthor));
     fd.append("priority", String(Number.isFinite(+prod.priority) ? +prod.priority : 0));
+    fd.append("shortDesc", prod.shortDesc || '');
+    fd.append("tags", prod.tags || '');
+    fd.append("scheduled", String(!!prod.scheduled));
+    fd.append("showFrom", prod.showFrom || '');
+    fd.append("showUntil", prod.showUntil || '');
+    fd.append("relatedIds", JSON.stringify(prod.relatedIds || []));
     fd.append("salePercent", String(Number(prod.salePercent) || 0));
     fd.append("saleEnd", prod.saleEnd || '');
     fd.append("saleStart", prod.saleStart || '');
@@ -4292,6 +6104,9 @@ function AdminProductsScreen({ products = [], setProducts, showToast }) {
       desc: prod.desc, desc_kg: prod.desc_kg,
       featured: !!prod.featured,
       isPopular: !!prod.isPopular,
+      isHit: !!prod.isHit,
+      isNew: !!prod.isNew,
+      isAuthor: !!prod.isAuthor,
       priority: prod.priority,
       variants: (prod.variants || []).length,
       newImageCount: newImageFiles.length,
@@ -4393,8 +6208,18 @@ function AdminProductsScreen({ products = [], setProducts, showToast }) {
             variants: Array.isArray(prod.variants) ? prod.variants : [],
             // Coerce booleans the same way loadAll does so downstream
             // strict checks (p.isPopular === true) still match.
-            isPopular: created.isPopular ?? false,
-            featured: created.featured ?? false,
+            isPopular: created.isPopular === true || created.isPopular === 'true',
+            isHit: created.isHit === true || created.isHit === 'true',
+            isNew: created.isNew === true || created.isNew === 'true',
+            isAuthor: created.isAuthor === true || created.isAuthor === 'true',
+            featured: created.featured === true || created.featured === 'true',
+            priority: Number(created.priority) || 0,
+            shortDesc: created.shortDesc || '',
+            tags: created.tags || '',
+            scheduled: created.scheduled === true || created.scheduled === 'true',
+            showFrom: created.showFrom || '',
+            showUntil: created.showUntil || '',
+            relatedIds: (() => { try { return Array.isArray(created.relatedIds) ? created.relatedIds : JSON.parse(created.relatedIds || '[]'); } catch { return []; } })(),
             salePercent: Number(created.salePercent) || 0,
             saleEnd: created.saleEnd || '',
             saleStart: created.saleStart || '',
@@ -4476,477 +6301,436 @@ function AdminProductsScreen({ products = [], setProducts, showToast }) {
       try { await api.updateProduct(prod.id, { featured: next }); } catch (err) { console.warn('featured toggle:', err); }
     }
   };
-  return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      {/* Sticky header — stays at top when scrolling the products list */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 10,
-        background: T.bg,
-        padding: "52px 16px 12px",
-        boxShadow: "0 1px 0 rgba(0,0,0,0.06)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontSize: 22, fontWeight: 800, color: T.text, letterSpacing: -0.4 }}>{t.products}</div>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 460, damping: 24 }}
-            onClick={addProd}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: "10px 16px",
-              borderRadius: 999,
-              border: "none",
-              background: "#111",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              letterSpacing: -0.1,
-              boxShadow: "0 6px 16px rgba(17,17,17,0.18), 0 1px 3px rgba(0,0,0,0.08)",
-            }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            {t.add}
-          </motion.button>
-        </div>
-        {/* Search — icon on left, clear (×) on right */}
-        <div style={{ position: "relative", display: "flex", alignItems: "center", background: "#F2F2F7", borderRadius: 12, padding: "0 12px" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder={t.search || "Поиск"}
-            style={{
-              flex: 1, border: "none", outline: "none",
-              background: "transparent",
-              fontSize: 14, fontWeight: 500, color: "#111",
-              padding: "10px 8px",
-              fontFamily: "inherit",
-              letterSpacing: -0.1,
-            }}
+
+  // Toggle ALL variants inStock on/off at once
+  const toggleAllStock = async (e, prod) => {
+    e.stopPropagation();
+    haptic('medium');
+    const anyInStock = (prod.variants || []).some(v => v.inStock);
+    const nextStock = !anyInStock;
+    const updatedVariants = (prod.variants || []).map(v => ({ ...v, inStock: nextStock }));
+    setProducts(prev => prev.map(p => p.id === prod.id ? { ...p, variants: updatedVariants } : p));
+    if (prod.collectionId) {
+      try { await api.updateProduct(prod.id, { variants: JSON.stringify(updatedVariants) }); } catch (err) { console.warn('stock toggle:', err); }
+    }
+    showToast?.(nextStock ? 'В наличии ✓' : 'Снято с продажи');
+  };
+
+  // ── PRO: Sort, filter, bulk, desktop detection ──
+  const [sortBy, setSortBy] = useState('newest'); // 'newest','name','priceAsc','priceDesc','stock'
+  const [filterCat, setFilterCat] = useState('all');
+  const [filterStock, setFilterStock] = useState('all'); // 'all','inStock','outOfStock','sale'
+  const [selected, setSelected] = useState(new Set());
+  const [previewMode, setPreviewMode] = useState('card'); // 'card' | 'detail'
+  const [deskW, setDeskW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+  useEffect(() => { const h = () => setDeskW(window.innerWidth); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const isDesk = deskW >= 1024;
+
+  // Toggle selection
+  const toggleSel = (id, e) => { e.stopPropagation(); setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; }); };
+  const selectAll = () => { if (selected.size === processedProducts.length) setSelected(new Set()); else setSelected(new Set(processedProducts.map(p => p.id))); };
+
+  // Duplicate
+  const duplicateProd = (e, prod) => {
+    e.stopPropagation();
+    haptic('medium');
+    const np = {
+      ...prod,
+      id: Date.now(),
+      collectionId: undefined,
+      name: (prod.name || '') + ' (копия)',
+      name_kg: prod.name_kg ? prod.name_kg + ' (көчүрмө)' : '',
+      variants: (prod.variants || []).map(v => ({ ...v, id: Date.now() + Math.random() * 1000 })),
+    };
+    setProducts(p => [...p, np]);
+    setEditing(np.id);
+    showToast?.('Копия создана');
+  };
+
+  // Bulk actions — update local state + persist to PocketBase
+  const [bulkDeleteStep, setBulkDeleteStep] = useState(0); // 0=off, 1/2/3 = confirmation steps
+  const bulkDelete = () => { if (!selected.size) return; setBulkDeleteStep(1); };
+  const bulkDeleteConfirm = async () => {
+    if (bulkDeleteStep < 3) { haptic('light'); setBulkDeleteStep(bulkDeleteStep + 1); return; }
+    const count = selected.size;
+    for (const id of selected) { await delProd(id); }
+    setSelected(new Set());
+    setBulkDeleteStep(0);
+    haptic('medium');
+    showToast?.(`Удалено: ${count}`);
+  };
+  const bulkDeleteCancel = () => { setBulkDeleteStep(0); };
+  const bulkToggleStock = async (inStock) => {
+    const ids = [...selected];
+    setProducts(prev => prev.map(p => {
+      if (!ids.includes(p.id)) return p;
+      return { ...p, variants: (p.variants || []).map(v => ({ ...v, inStock })) };
+    }));
+    // Persist to PB
+    for (const id of ids) {
+      const prod = products.find(p => p.id === id);
+      if (prod?.collectionId) {
+        const updatedV = (prod.variants || []).map(v => ({ ...v, inStock }));
+        try { await api.updateProduct(id, { variants: JSON.stringify(updatedV) }); } catch (e) { console.warn('bulk stock:', e); }
+      }
+    }
+    setSelected(new Set());
+    showToast?.(inStock ? `${ids.length} товаров → В наличии` : `${ids.length} товаров → Нет в наличии`);
+  };
+  const bulkSetCategory = async (cat) => {
+    const ids = [...selected];
+    setProducts(prev => prev.map(p => ids.includes(p.id) ? { ...p, category: cat } : p));
+    // Persist to PB
+    for (const id of ids) {
+      const prod = products.find(p => p.id === id);
+      if (prod?.collectionId) {
+        try { await api.updateProduct(id, { category: cat }); } catch (e) { console.warn('bulk cat:', e); }
+      }
+    }
+    setSelected(new Set());
+    showToast?.(`${ids.length} товаров → ${cat}`);
+  };
+
+  // CSV Export
+  const exportCSV = () => {
+    const rows = [['Название','Бренд','Категория','Варианты','Мин. цена','В наличии','Популярный','Скидка %']];
+    products.forEach(p => {
+      const stockV = (p.variants||[]).filter(v=>v.inStock);
+      const prices = stockV.map(v=>v.price).filter(Boolean);
+      rows.push([
+        p.name||'', p.brand||'', p.category||'',
+        (p.variants||[]).map(v=>v.label).join('; '),
+        prices.length ? Math.min(...prices) : 'Нет',
+        stockV.length + '/' + (p.variants||[]).length,
+        p.isPopular ? 'Да' : 'Нет',
+        p.salePercent || 0,
+      ]);
+    });
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `products_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    showToast?.('CSV экспортирован');
+  };
+
+  // Process: filter + sort
+  const processedProducts = useMemo(() => {
+    let list = [...products];
+    // Text search
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(p => (p.name||'').toLowerCase().includes(q) || (p.brand||'').toLowerCase().includes(q));
+    }
+    // Category filter — "Новинки" checks isNew flag, others check category field
+    if (filterCat === 'Новинки') list = list.filter(p => p.isNew);
+    else if (filterCat !== 'all') list = list.filter(p => p.category === filterCat);
+    // Stock filter
+    if (filterStock === 'inStock') list = list.filter(p => (p.variants||[]).some(v => v.inStock && v.price > 0));
+    else if (filterStock === 'outOfStock') list = list.filter(p => !(p.variants||[]).some(v => v.inStock));
+    else if (filterStock === 'sale') list = list.filter(p => p.salePercent > 0);
+    else if (filterStock === 'noPrice') list = list.filter(p => (p.variants||[]).every(v => !v.price || v.price === 0));
+    // Sort
+    if (sortBy === 'name') list.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    else if (sortBy === 'priceAsc') list.sort((a,b) => {
+      const pa = Math.min(...(a.variants||[]).map(v=>v.price||Infinity));
+      const pb = Math.min(...(b.variants||[]).map(v=>v.price||Infinity));
+      return pa - pb;
+    });
+    else if (sortBy === 'priceDesc') list.sort((a,b) => {
+      const pa = Math.min(...(a.variants||[]).map(v=>v.price||0));
+      const pb = Math.min(...(b.variants||[]).map(v=>v.price||0));
+      return pb - pa;
+    });
+    else if (sortBy === 'stock') list.sort((a,b) => {
+      const sa = (a.variants||[]).filter(v=>v.inStock).length;
+      const sb = (b.variants||[]).filter(v=>v.inStock).length;
+      return sb - sa;
+    });
+    // newest = default order (most recently added last, but we want newest first)
+    else if (sortBy === 'newest') list.reverse();
+    return list;
+  }, [products, search, filterCat, filterStock, sortBy]);
+
+  // Summary stats
+  const summaryStats = useMemo(() => {
+    const total = products.length;
+    const inStock = products.filter(p => (p.variants||[]).some(v => v.inStock && v.price > 0)).length;
+    const outStock = products.filter(p => !(p.variants||[]).some(v => v.inStock)).length;
+    const noPrice = products.filter(p => (p.variants||[]).every(v => !v.price || v.price === 0)).length;
+    const onSale = products.filter(p => p.salePercent > 0).length;
+    const allPrices = products.flatMap(p => (p.variants||[]).filter(v => v.inStock).map(v => v.price)).filter(Boolean);
+    const avgPrice = allPrices.length ? Math.round(allPrices.reduce((a,b)=>a+b,0) / allPrices.length) : 0;
+    return { total, inStock, outStock, noPrice, onSale, avgPrice };
+  }, [products]);
+
+  // ── Stable sub-components — defined at component level so React keeps
+  // the same reference across renders. Previously defined inside an IIFE
+  // which recreated them every render, causing inputs to lose focus. ──
+  const baseInput = {
+    width: "100%",
+    padding: "12px 14px",
+    background: "#F5F5F7",
+    border: "0.5px solid transparent",
+    borderRadius: 10,
+    fontSize: 15,
+    fontWeight: 500,
+    color: "#111",
+    outline: "none",
+    fontFamily: "inherit",
+    letterSpacing: -0.1,
+    boxSizing: "border-box",
+    transition: "background 0.18s, border-color 0.18s, box-shadow 0.22s",
+  };
+
+  // ── Reusable focus/blur handlers for inputs ──
+  const inputFocus = (e) => { e.target.style.background = "#fff"; e.target.style.borderColor = "rgba(10,132,255,0.35)"; e.target.style.boxShadow = "0 0 0 3px rgba(10,132,255,0.12)"; };
+  const inputBlur = (e) => { e.target.style.background = "#F5F5F7"; e.target.style.borderColor = "transparent"; e.target.style.boxShadow = "none"; };
+
+  // ── CATEGORIES constant ──
+  const CATEGORIES = ["Женские", "Мужские", "Унисекс", "Премиум", "Новинки"];
+
+  // ── Variant presets ──
+  const VARIANT_PRESETS = [
+    { label: '5 мл', price: 120 },
+    { label: '10 мл', price: 220 },
+    { label: '20 мл', price: 400 },
+    { label: '50 мл', price: 850 },
+  ];
+  const addPresetVariants = (pId) => {
+    const existing = (editProd?.variants || []).map(v => v.label);
+    const toAdd = VARIANT_PRESETS.filter(p => !existing.includes(p.label));
+    if (!toAdd.length) { showToast?.('Все варианты уже добавлены'); return; }
+    setProducts(prev => prev.map(p => p.id === pId ? {
+      ...p,
+      variants: [...(p.variants || []), ...toAdd.map((v, i) => ({ id: Date.now() + i, label: v.label, price: v.price, type: 'ml', inStock: true }))]
+    } : p));
+    haptic('medium');
+  };
+
+  // ── Move variant up/down ──
+  const moveVar = (pId, vId, dir) => {
+    setProducts(prev => prev.map(p => {
+      if (p.id !== pId) return p;
+      const arr = [...(p.variants || [])];
+      const idx = arr.findIndex(v => v.id === vId);
+      if (idx < 0) return p;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= arr.length) return p;
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return { ...p, variants: arr };
+    }));
+    haptic('light');
+  };
+
+  // ── Editor form renderer (extracted for 2-panel layout) ──
+  const renderEditorForm = () => {
+    if (!editProd) return null;
+    const nameField = editLang === 'ru' ? 'name' : 'name_kg';
+    const descField = editLang === 'ru' ? 'desc' : 'desc_kg';
+    const namePlaceholder = editLang === 'ru' ? (t.productName || "Название") : "Аталышы";
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {/* ── Изображения ── */}
+        <EditSection title="Изображения" hint="до 3 фото">
+          <MultiImageUpload
+            images={editProd.images || []}
+            coverImg={editProd.img}
+            onImagesChange={imgs => upd(editProd.id, "images", imgs)}
+            onCoverChange={url => upd(editProd.id, "img", url)}
           />
-          <AnimatePresence>
-            {search && (
-              <motion.button
-                key="clear"
-                initial={{ scale: 0.6, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.6, opacity: 0 }}
-                transition={{ type: "spring", stiffness: 420, damping: 24 }}
-                onClick={() => setSearch("")}
-                aria-label="clear"
-                style={{
-                  background: "rgba(0,0,0,0.18)",
-                  color: "#fff",
-                  border: "none",
-                  width: 18, height: 18, borderRadius: "50%",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  cursor: "pointer", flexShrink: 0,
-                  padding: 0,
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-      {editProd && (() => {
-        // Section card — bold title + light grouped surface, generous spacing.
-        const Section = ({ title, hint, children, last, padded = true }) => (
-          <div style={{ marginBottom: last ? 0 : 24 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10, padding: "0 2px" }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.25 }}>{title}</div>
-              {hint && <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>{hint}</div>}
-            </div>
-            <div style={{ background: "#FAFAFA", borderRadius: 14, padding: padded ? 14 : 0, border: "0.5px solid rgba(0,0,0,0.04)" }}>
-              {children}
-            </div>
-          </div>
-        );
+        </EditSection>
 
-        const baseInput = {
-          width: "100%",
-          padding: "12px 14px",
-          background: "#F5F5F7",
-          border: "0.5px solid transparent",
-          borderRadius: 10,
-          fontSize: 15,
-          fontWeight: 500,
-          color: "#111",
-          outline: "none",
-          fontFamily: "inherit",
-          letterSpacing: -0.1,
-          boxSizing: "border-box",
-          transition: "background 0.18s, border-color 0.18s, box-shadow 0.22s",
-        };
-
-        // Inline language segmented control — single source for which RU/KG field shows.
-        const LangSeg = () => (
-          <div style={{ display: "inline-flex", background: "rgba(120,120,128,0.14)", borderRadius: 9, padding: 2, position: "relative" }}>
-            {['ru','kg'].map(l => {
-              const active = editLang === l;
-              return (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => { haptic('light'); setEditLang(l); }}
-                  style={{
-                    position: "relative",
-                    padding: "5px 16px",
-                    minWidth: 44,
-                    border: "none",
-                    background: "transparent",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: active ? "#111" : "#8E8E93",
-                    cursor: "pointer",
-                    zIndex: 1,
-                    letterSpacing: 0.5,
-                    fontFamily: "inherit",
-                  }}
-                >
-                  {l.toUpperCase()}
-                  {active && (
-                    <motion.div
-                      layoutId="edit-lang-pill"
-                      transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                      style={{
-                        position: "absolute", inset: 0,
-                        background: "#fff",
-                        borderRadius: 7,
-                        boxShadow: "0 1px 2px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.04)",
-                        zIndex: -1,
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        );
-
-        const CATEGORIES = ["Женские", "Мужские", "Унисекс", "Премиум", "Новинки"];
-        const nameField = editLang === 'ru' ? 'name' : 'name_kg';
-        const descField = editLang === 'ru' ? 'desc' : 'desc_kg';
-        const namePlaceholder = editLang === 'ru' ? (t.productName || "Название") : "Аталышы";
-        const descPlaceholder = editLang === 'ru' ? (t.description || "Описание") : "Сүрөттөмөсү";
-
-        return (
-        <div style={{ margin: "12px 16px 16px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)", border: "0.5px solid rgba(0,0,0,0.05)" }}>
-          {/* ── Sticky header — back · title · save ── */}
-          <div style={{
-            position: "sticky", top: 96, zIndex: 5,
-            background: "rgba(255,255,255,0.92)",
-            backdropFilter: "blur(20px) saturate(180%)",
-            WebkitBackdropFilter: "blur(20px) saturate(180%)",
-            padding: "12px 14px",
-            borderBottom: "0.5px solid rgba(0,0,0,0.06)",
-            borderRadius: "20px 20px 0 0",
-            display: "flex", alignItems: "center", gap: 10,
-          }}>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              transition={{ type: "spring", stiffness: 500, damping: 28 }}
-              onClick={() => setEditing(null)}
-              aria-label="back"
-              style={{ background: "rgba(0,0,0,0.05)", border: "none", color: "#111", cursor: "pointer", width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </motion.button>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: "#111", fontWeight: 700, fontSize: 16, letterSpacing: -0.3, lineHeight: 1.15 }}>
-                {editProd.collectionId ? "Редактирование" : t.newProduct}
-              </div>
-              {editProd.name && (
-                <div style={{ color: "#8E8E93", fontWeight: 500, fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: -0.1 }}>
-                  {editProd.name}
-                </div>
-              )}
-            </div>
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              transition={{ type: "spring", stiffness: 460, damping: 24 }}
-              onClick={() => saveProd(editProd.id)}
-              disabled={saving}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "9px 18px",
-                borderRadius: 999,
-                border: "none",
-                background: "#111",
-                color: "#fff",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: saving ? "default" : "pointer",
-                opacity: saving ? 0.85 : 1,
-                letterSpacing: -0.1,
-                boxShadow: "0 4px 12px rgba(17,17,17,0.18)",
-                flexShrink: 0,
-                fontFamily: "inherit",
-              }}
-            >
-              {saving && (
-                <motion.span
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-                  style={{ width: 12, height: 12, border: "1.6px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block" }}
-                />
-              )}
-              {saving ? "Сохранение" : t.save}
-            </motion.button>
-          </div>
-
-          <div style={{ padding: "20px 14px 22px" }}>
-            {/* ── LIVE PREVIEW ─────────────────────────────────────────────
-                Renders the SAME ProductCard component the catalog uses, fed by
-                the editor's form state. Any change (name, brand, image, popular
-                toggle, variants, in-stock) is reflected here instantly — no
-                save round-trip. WYSIWYG: admin sees what client sees. */}
-            <Section title="Превью" hint="вид на витрине">
-              <div style={{ maxWidth: 280, margin: "0 auto" }}>
-                <ProductCard p={editProd} preview />
-              </div>
-            </Section>
-
-            {/* ── Изображения ── */}
-            <Section title="Изображения" hint="до 3 фото">
-              <MultiImageUpload
-                images={editProd.images || []}
-                coverImg={editProd.img}
-                onImagesChange={imgs => upd(editProd.id, "images", imgs)}
-                onCoverChange={url => upd(editProd.id, "img", url)}
-              />
-            </Section>
-
-            {/* ── Основная информация ── */}
-            <Section title="Основная информация">
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {/* Language toggle row */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Язык</div>
-                  <LangSeg />
-                </div>
-
-                {/* Name input — single field, swaps via lang toggle */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 6, marginLeft: 2, letterSpacing: 0.3 }}>Название</div>
-                  <motion.input
-                    key={`name-${editLang}`}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18 }}
-                    style={baseInput}
-                    placeholder={namePlaceholder}
-                    value={editProd[nameField] || ""}
-                    onChange={e => upd(editProd.id, nameField, e.target.value)}
-                    onFocus={e => { e.target.style.background = "#fff"; e.target.style.borderColor = "rgba(10,132,255,0.35)"; e.target.style.boxShadow = "0 0 0 3px rgba(10,132,255,0.12)"; }}
-                    onBlur={e => { e.target.style.background = "#F5F5F7"; e.target.style.borderColor = "transparent"; e.target.style.boxShadow = "none"; }}
-                  />
-                </div>
-
-                {/* Brand */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 6, marginLeft: 2, letterSpacing: 0.3 }}>Бренд</div>
-                  <input
-                    style={baseInput}
-                    placeholder={t.brand}
-                    value={editProd.brand || ""}
-                    onChange={e => upd(editProd.id, "brand", e.target.value)}
-                    onFocus={e => { e.target.style.background = "#fff"; e.target.style.borderColor = "rgba(10,132,255,0.35)"; e.target.style.boxShadow = "0 0 0 3px rgba(10,132,255,0.12)"; }}
-                    onBlur={e => { e.target.style.background = "#F5F5F7"; e.target.style.borderColor = "transparent"; e.target.style.boxShadow = "none"; }}
-                  />
-                </div>
-
-                {/* Category — chip selector */}
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 8, marginLeft: 2, letterSpacing: 0.3 }}>Категория</div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                    {CATEGORIES.map(c => {
-                      const active = (editProd.category || "Женские") === c;
-                      return (
-                        <motion.button
-                          key={c}
-                          type="button"
-                          whileTap={{ scale: 0.95 }}
-                          transition={{ type: "spring", stiffness: 500, damping: 26 }}
-                          onClick={() => { haptic('light'); upd(editProd.id, "category", c); }}
-                          style={{
-                            padding: "8px 14px",
-                            borderRadius: 999,
-                            border: "none",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            letterSpacing: -0.1,
-                            background: active ? "#111" : "rgba(120,120,128,0.12)",
-                            color: active ? "#fff" : "#3A3A3C",
-                            fontFamily: "inherit",
-                            transition: "background 0.18s, color 0.18s",
-                          }}
-                        >
-                          {c}
-                        </motion.button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </Section>
-
-            {/* ── Описание ── */}
-            <Section title="Описание">
-              <motion.textarea
-                key={`desc-${editLang}`}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.18 }}
-                style={{ ...baseInput, minHeight: 84, resize: "vertical", lineHeight: 1.45 }}
-                placeholder={descPlaceholder}
-                value={editProd[descField] || ""}
-                onChange={e => upd(editProd.id, descField, e.target.value)}
-                onFocus={e => { e.target.style.background = "#fff"; e.target.style.borderColor = "rgba(10,132,255,0.35)"; e.target.style.boxShadow = "0 0 0 3px rgba(10,132,255,0.12)"; }}
-                onBlur={e => { e.target.style.background = "#F5F5F7"; e.target.style.borderColor = "transparent"; e.target.style.boxShadow = "none"; }}
-              />
-            </Section>
-
-            {/* ── Аудио ── */}
-            <Section title="🎧 Аромат" hint="10 сек">
-              <ProductAudioRecorder productId={editProd.id} />
-            </Section>
-
-            {/* ── Варианты ── */}
-            <Section title="Варианты" hint={`${editProd.variants?.length || 0}`}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Column headers — only show when variants exist */}
-                {(editProd.variants || []).length > 0 && (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "0 2px" }}>
-                    <div style={{ flex: 2, fontSize: 10, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Размер</div>
-                    <div style={{ flex: 2, fontSize: 10, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Цена</div>
-                    <div style={{ width: 42, fontSize: 10, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.3, textAlign: "center", flexShrink: 0 }}>Есть</div>
-                    <div style={{ width: 32, flexShrink: 0 }} />
-                  </div>
-                )}
-                {(editProd.variants || []).map(v => (
-                  <div key={v.id} style={{ display: "flex", gap: 8, alignItems: "center", background: "#fff", borderRadius: 12, padding: "8px 10px", border: "0.5px solid rgba(0,0,0,0.04)" }}>
-                    <input style={{ ...baseInput, flex: 2, padding: "10px 12px", fontSize: 14, background: "#F5F5F7" }} placeholder="5 мл / Полный" value={v.label} onChange={e => updVar(editProd.id, v.id, "label", e.target.value)} />
-                    <div style={{ flex: 2, position: "relative", display: "flex", alignItems: "center" }}>
-                      <input style={{ ...baseInput, padding: "10px 40px 10px 12px", fontSize: 14, background: "#F5F5F7" }} type="number" min={0} placeholder="0" value={v.price} onChange={e => updVar(editProd.id, v.id, "price", Math.max(0, +e.target.value))} />
-                      <span style={{ position: "absolute", right: 10, fontSize: 12, color: "#8E8E93", fontWeight: 500, pointerEvents: "none" }}>сом</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => { haptic('light'); updVar(editProd.id, v.id, "inStock", !v.inStock); }}
-                      aria-label="in stock"
-                      style={{
-                        position: "relative",
-                        width: 42, height: 26,
-                        borderRadius: 13,
-                        background: v.inStock ? "#34C759" : "rgba(120,120,128,0.32)",
-                        border: "none", padding: 0,
-                        cursor: "pointer", flexShrink: 0,
-                        transition: "background 0.22s",
-                      }}
-                    >
-                      <motion.div
-                        animate={{ x: v.inStock ? 18 : 2 }}
-                        transition={{ type: "spring", stiffness: 540, damping: 32 }}
-                        style={{
-                          position: "absolute", top: 2,
-                          width: 22, height: 22, borderRadius: "50%",
-                          background: "#fff",
-                          boxShadow: "0 2px 4px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.06)",
-                        }}
-                      />
+        {/* ── Основная информация ── */}
+        <EditSection title="Основная информация">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Язык</div>
+              <div style={{ display: "inline-flex", background: "rgba(120,120,128,0.14)", borderRadius: 9, padding: 2, position: "relative" }}>
+                {['ru','kg'].map(l => {
+                  const active = editLang === l;
+                  return (
+                    <button key={l} type="button" onClick={() => { haptic('light'); setEditLang(l); }}
+                      style={{ position: "relative", padding: "5px 16px", minWidth: 44, border: "none", background: "transparent", fontSize: 11, fontWeight: 700, color: active ? "#111" : "#8E8E93", cursor: "pointer", zIndex: 1, letterSpacing: 0.5, fontFamily: "inherit" }}>
+                      {l.toUpperCase()}
+                      {active && (
+                        <motion.div layoutId="edit-lang-pill" transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                          style={{ position: "absolute", inset: 0, background: "#fff", borderRadius: 7, boxShadow: "0 1px 2px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.04)", zIndex: -1 }} />
+                      )}
                     </button>
-                    <motion.button whileTap={{ scale: 0.88 }} onClick={() => delVar(editProd.id, v.id)} aria-label="delete variant"
-                      style={{ background: "rgba(229,57,53,0.10)", border: "none", color: "#E53935", cursor: "pointer", width: 32, height: 32, borderRadius: 10, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 6, marginLeft: 2, letterSpacing: 0.3 }}>Название</div>
+              <motion.input key={`name-${editLang}`} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
+                style={baseInput} placeholder={namePlaceholder} value={editProd[nameField] || ""} onChange={e => upd(editProd.id, nameField, e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 6, marginLeft: 2, letterSpacing: 0.3 }}>Бренд</div>
+              <input style={baseInput} placeholder={t.brand} value={editProd.brand || ""} onChange={e => upd(editProd.id, "brand", e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 8, marginLeft: 2, letterSpacing: 0.3 }}>Категория</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {CATEGORIES.map(c => {
+                  const active = (editProd.category || "Женские") === c;
+                  return (
+                    <motion.button key={c} type="button" whileTap={{ scale: 0.95 }} onClick={() => { haptic('light'); upd(editProd.id, "category", c); }}
+                      style={{ padding: "8px 14px", borderRadius: 999, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: -0.1, background: active ? "#111" : "rgba(120,120,128,0.12)", color: active ? "#fff" : "#3A3A3C", fontFamily: "inherit", transition: "background 0.18s, color 0.18s" }}>
+                      {c}
                     </motion.button>
-                  </div>
-                ))}
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  transition={{ type: "spring", stiffness: 460, damping: 24 }}
-                  onClick={() => addVar(editProd.id)}
-                  style={{
-                    background: "rgba(0,0,0,0.04)",
-                    border: "0.5px dashed rgba(0,0,0,0.18)",
-                    borderRadius: 10, padding: "10px",
-                    color: "#3A3A3C", fontSize: 13, fontWeight: 600,
-                    cursor: "pointer", letterSpacing: -0.1,
-                    fontFamily: "inherit",
-                  }}
-                >
-                  + Добавить вариант
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </EditSection>
+
+        {/* ── Описание ── */}
+        <EditSection title="Описание">
+          {(() => {
+            const raw = editProd[descField] || "";
+            const parseNotes = (txt) => {
+              const m = { top: '', mid: '', base: '', info: '', body: '' };
+              txt.split('\n').forEach(l => {
+                const t = l.trim();
+                if (t.startsWith('🔝')) { const c = t.indexOf(':'); m.top = c > -1 ? t.slice(c+1).trim() : ''; }
+                else if (t.startsWith('💎')) { const c = t.indexOf(':'); m.mid = c > -1 ? t.slice(c+1).trim() : ''; }
+                else if (t.startsWith('🌿')) { const c = t.indexOf(':'); m.base = c > -1 ? t.slice(c+1).trim() : ''; }
+                else if (t.startsWith('📋')) m.info = t.replace('📋', '').trim();
+                else if (t.length > 10 && !t.startsWith('🔝') && !t.startsWith('💎') && !t.startsWith('🌿') && !t.startsWith('📋')) {
+                  m.body = m.body ? m.body + ' ' + t : t;
+                }
+              });
+              return m;
+            };
+            const notes = parseNotes(raw);
+            const buildDesc = (n) => {
+              let lines = [];
+              if (n.top) lines.push(`🔝 Верхние: ${n.top}`);
+              if (n.mid) lines.push(`💎 Средние: ${n.mid}`);
+              if (n.base) lines.push(`🌿 Базовые: ${n.base}`);
+              if (n.info) lines.push('', `📋 ${n.info}`);
+              if (n.body) lines.push('', n.body);
+              return lines.join('\n').trim();
+            };
+            const updNote = (key, val) => { const n = { ...notes, [key]: val }; upd(editProd.id, descField, buildDesc(n)); };
+            const noteInput = (icon, color, label, key) => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+                <input style={{ ...baseInput, flex: 1, fontSize: 13 }} placeholder={label} value={notes[key] || ''} onChange={e => updNote(key, e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
+              </div>
+            );
+            return (
+              <div>
+                {noteInput(<svg width="14" height="14" viewBox="0 0 24 24" fill="#FF9500"><path d="M12 3L20 11H15V21H9V11H4L12 3Z"/></svg>, '#FF9500', 'бергамот, перец, лимон...', 'top')}
+                {noteInput(<svg width="14" height="14" viewBox="0 0 24 24" fill="#AF52DE"><path d="M6 3H18L21 9L12 21L3 9L6 3Z"/></svg>, '#AF52DE', 'жасмин, роза, ирис...', 'mid')}
+                {noteInput(<svg width="14" height="14" viewBox="0 0 24 24" fill="#34C759"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22L6.66 19.7C7.14 19.87 7.64 20 8 20C19 20 22 3 22 3C21 5 14 5.25 9 6.25C4 7.25 2 11.5 2 13.5C2 15.5 3.75 17.25 3.75 17.25C7 8 17 8 17 8Z"/></svg>, '#34C759', 'ваниль, мускус, кедр...', 'base')}
+                {noteInput(<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="2" stroke="#8E8E93" strokeWidth="1.5"/><path d="M9 2V4H15V2" stroke="#8E8E93" strokeWidth="1.5"/></svg>, '#8E8E93', 'Тип: EDP · Стойкость: 8-10 ч · Шлейф: сильный', 'info')}
+                <textarea style={{ ...baseInput, minHeight: 60, resize: "vertical", lineHeight: 1.45, marginTop: 4, fontSize: 13 }} placeholder="Описание аромата (2-3 предложения)" value={notes.body || ''} onChange={e => updNote('body', e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
+              </div>
+            );
+          })()}
+        </EditSection>
+
+        {/* ── Аудио ── */}
+        <EditSection title="Аромат" hint="10 сек">
+          <ProductAudioRecorder productId={editProd.id} />
+        </EditSection>
+
+        {/* ── Варианты (with drag reorder + presets) ── */}
+        <EditSection title="Варианты" hint={`${editProd.variants?.length || 0}`}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {(editProd.variants || []).length > 0 && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "0 2px 0 30px" }}>
+                <div style={{ flex: 2, fontSize: 10, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Размер</div>
+                <div style={{ flex: 2, fontSize: 10, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Цена</div>
+                <div style={{ width: 42, fontSize: 10, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.3, textAlign: "center", flexShrink: 0 }}>Есть</div>
+                <div style={{ width: 32, flexShrink: 0 }} />
+              </div>
+            )}
+            {(editProd.variants || []).map((v, vi) => (
+              <div key={v.id} style={{ display: "flex", gap: 6, alignItems: "center", background: "#fff", borderRadius: 12, padding: "6px 8px", border: "0.5px solid rgba(0,0,0,0.04)" }}>
+                {/* Drag reorder buttons */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                  <button type="button" onClick={() => moveVar(editProd.id, v.id, -1)} disabled={vi === 0}
+                    style={{ width: 22, height: 14, border: "none", background: "transparent", cursor: vi === 0 ? "default" : "pointer", color: vi === 0 ? "#D1D1D6" : "#8E8E93", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 5L5 1L9 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                  <button type="button" onClick={() => moveVar(editProd.id, v.id, 1)} disabled={vi === (editProd.variants||[]).length - 1}
+                    style={{ width: 22, height: 14, border: "none", background: "transparent", cursor: vi === (editProd.variants||[]).length - 1 ? "default" : "pointer", color: vi === (editProd.variants||[]).length - 1 ? "#D1D1D6" : "#8E8E93", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1L5 5L9 1" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                </div>
+                <input style={{ ...baseInput, flex: 2, padding: "10px 12px", fontSize: 14, background: "#F5F5F7" }} placeholder="5 мл / Полный" value={v.label} onChange={e => updVar(editProd.id, v.id, "label", e.target.value)} />
+                <div style={{ flex: 2, position: "relative", display: "flex", alignItems: "center" }}>
+                  <input style={{ ...baseInput, padding: "10px 40px 10px 12px", fontSize: 14, background: "#F5F5F7" }} type="number" min={0} placeholder="0" value={v.price} onChange={e => updVar(editProd.id, v.id, "price", Math.max(0, +e.target.value))} />
+                  <span style={{ position: "absolute", right: 10, fontSize: 12, color: "#8E8E93", fontWeight: 500, pointerEvents: "none" }}>сом</span>
+                </div>
+                <button type="button" onClick={() => { haptic('light'); updVar(editProd.id, v.id, "inStock", !v.inStock); }} aria-label="in stock"
+                  style={{ position: "relative", width: 42, height: 26, borderRadius: 13, background: v.inStock ? "#34C759" : "rgba(120,120,128,0.32)", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, transition: "background 0.22s" }}>
+                  <motion.div animate={{ x: v.inStock ? 18 : 2 }} transition={{ type: "spring", stiffness: 540, damping: 32 }}
+                    style={{ position: "absolute", top: 2, width: 22, height: 22, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.06)" }} />
+                </button>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={() => delVar(editProd.id, v.id)} aria-label="delete variant"
+                  style={{ background: "rgba(229,57,53,0.10)", border: "none", color: "#E53935", cursor: "pointer", width: 30, height: 30, borderRadius: 10, padding: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </motion.button>
               </div>
-            </Section>
+            ))}
+            <div style={{ display: "flex", gap: 6 }}>
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => addVar(editProd.id)}
+                style={{ flex: 1, background: "rgba(0,0,0,0.04)", border: "0.5px dashed rgba(0,0,0,0.18)", borderRadius: 10, padding: "10px", color: "#3A3A3C", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: -0.1, fontFamily: "inherit" }}>
+                + Добавить вариант
+              </motion.button>
+              <motion.button whileTap={{ scale: 0.97 }} onClick={() => addPresetVariants(editProd.id)}
+                style={{ background: "rgba(10,132,255,0.08)", border: "0.5px solid rgba(10,132,255,0.20)", borderRadius: 10, padding: "10px 14px", color: "#0A84FF", fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: -0.1, fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                5/10/20/50 мл
+              </motion.button>
+            </div>
+          </div>
+        </EditSection>
 
-            {/* ── Акция / скидка ── */}
-            <Section title="🏷 Акция">
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Sale toggle + percent */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>Скидка %</div>
-                    <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>0 = нет скидки</div>
-                  </div>
-                  <input
-                    type="number"
-                    min="0" max="90" step="5"
-                    style={{ ...baseInput, width: 80, textAlign: "center", flexShrink: 0, padding: "8px 10px" }}
-                    placeholder="0"
-                    value={editProd.salePercent || ''}
-                    onChange={e => upd(editProd.id, "salePercent", e.target.value === "" ? "" : Math.min(90, Math.max(0, +e.target.value)))}
-                  />
+        {/* ── Акция (toggle-based) ── */}
+        <EditSection title="Акция">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {/* Toggle + percent in one row */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: (editProd.salePercent > 0) ? "rgba(255,59,48,0.04)" : "#fff", borderRadius: 12, border: "0.5px solid " + ((editProd.salePercent > 0) ? "rgba(255,59,48,0.15)" : "rgba(0,0,0,0.04)"), transition: "all 0.22s" }}>
+              <button type="button" onClick={() => { haptic('light'); upd(editProd.id, "salePercent", editProd.salePercent > 0 ? 0 : 10); }}
+                style={{ position: "relative", width: 48, height: 28, borderRadius: 14, background: editProd.salePercent > 0 ? "#FF3B30" : "rgba(120,120,128,0.32)", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, transition: "background 0.22s" }}>
+                <motion.div animate={{ x: editProd.salePercent > 0 ? 22 : 2 }} transition={{ type: "spring", stiffness: 540, damping: 32 }}
+                  style={{ position: "absolute", top: 2, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.20)" }} />
+              </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>Скидка</div>
+                <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 1 }}>{editProd.salePercent > 0 ? 'Активна' : 'Выключена'}</div>
+              </div>
+              {editProd.salePercent > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <input type="number" min="1" max="90" step="5" style={{ ...baseInput, width: 60, textAlign: "center", padding: "8px 6px", fontSize: 16, fontWeight: 700 }}
+                    value={editProd.salePercent || ''} onChange={e => upd(editProd.id, "salePercent", e.target.value === "" ? "" : Math.min(90, Math.max(0, +e.target.value)))} />
+                  <span style={{ fontSize: 16, fontWeight: 700, color: "#FF3B30" }}>%</span>
                 </div>
-                {/* Sale end — datetime picker */}
-                {(editProd.salePercent > 0) && (
-                  <div style={{ padding: "12px 14px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111", letterSpacing: -0.1, marginBottom: 8 }}>Окончание акции</div>
-                    <input
-                      type="datetime-local"
-                      style={{ ...baseInput, width: "100%", padding: "10px 12px", fontSize: 14 }}
-                      value={editProd.saleEnd ? editProd.saleEnd.slice(0, 16) : ''}
-                      onChange={e => upd(editProd.id, "saleEnd", e.target.value ? new Date(e.target.value).toISOString() : '')}
-                    />
-                    {/* Quick buttons */}
+              )}
+            </div>
+            {/* Sale timer — only when sale is on */}
+            <AnimatePresence>
+              {editProd.salePercent > 0 && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }}
+                  style={{ overflow: "hidden" }}>
+                  <div style={{ padding: "12px 14px", background: "#fff", borderRadius: 12, border: "0.5px solid rgba(0,0,0,0.04)" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111", letterSpacing: -0.1, marginBottom: 8 }}>Окончание акции</div>
+                    <input type="datetime-local" style={{ ...baseInput, width: "100%", padding: "10px 12px", fontSize: 14 }}
+                      value={editProd.saleEnd ? editProd.saleEnd.slice(0, 16) : ''} onChange={e => upd(editProd.id, "saleEnd", e.target.value ? new Date(e.target.value).toISOString() : '')} />
                     <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                      {[
-                        { label: "1 соат", hours: 1 },
-                        { label: "3 соат", hours: 3 },
-                        { label: "6 соат", hours: 6 },
-                        { label: "12 соат", hours: 12 },
-                        { label: "1 кун", hours: 24 },
-                        { label: "3 кун", hours: 72 },
-                        { label: "7 кун", hours: 168 },
-                      ].map(q => (
-                        <motion.button
-                          key={q.label}
-                          type="button"
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => {
-                            haptic('light');
-                            const end = new Date(Date.now() + q.hours * 3600000).toISOString();
-                            upd(editProd.id, "saleEnd", end);
-                            upd(editProd.id, "saleStart", new Date().toISOString());
-                          }}
-                          style={{
-                            padding: "6px 12px", borderRadius: 20, border: "none",
-                            fontSize: 12, fontWeight: 600, cursor: "pointer",
-                            background: "rgba(255,59,48,0.08)", color: "#FF3B30",
-                            fontFamily: "inherit",
-                          }}
-                        >
+                      {[{ label: "1ч", hours: 1 }, { label: "3ч", hours: 3 }, { label: "6ч", hours: 6 }, { label: "12ч", hours: 12 }, { label: "1д", hours: 24 }, { label: "3д", hours: 72 }, { label: "7д", hours: 168 }].map(q => (
+                        <motion.button key={q.label} type="button" whileTap={{ scale: 0.95 }}
+                          onClick={() => { haptic('light'); upd(editProd.id, "saleEnd", new Date(Date.now() + q.hours * 3600000).toISOString()); upd(editProd.id, "saleStart", new Date().toISOString()); }}
+                          style={{ padding: "5px 10px", borderRadius: 20, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "rgba(255,59,48,0.08)", color: "#FF3B30", fontFamily: "inherit" }}>
                           {q.label}
                         </motion.button>
                       ))}
@@ -4958,389 +6742,1049 @@ function AdminProductsScreen({ products = [], setProducts, showToast }) {
                       return <div style={{ fontSize: 12, color: "#34C759", marginTop: 8, fontWeight: 600 }}>Осталось: {pad(info.remaining.h)}ч {pad(info.remaining.m)}м {pad(info.remaining.s)}с</div>;
                     })()}
                   </div>
-                )}
-              </div>
-            </Section>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </EditSection>
 
-            {/* ── Топ-товар ── */}
-            <Section title="Топ-товар" last>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* 🔥 Популярно — independent of sort order; controls only the badge */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
+        {/* ── Бейджи и продвижение ── */}
+        <EditSection title={t.badges_title}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {[
+              { key: "isAuthor", label: t.badge_author, sub: t.badge_author_sub, color: "#111", iconFn: () => IC.crown(18, editProd.isAuthor ? "#FFD700" : "#999") },
+              { key: "isPopular", label: t.badge_popular, sub: t.badge_popular_sub, color: "#FF3B30", iconFn: () => IC.flame(18, editProd.isPopular ? "#FF3B30" : "#999") },
+              { key: "isHit", label: t.badge_hit, sub: t.badge_hit_sub, color: "#FF9500", iconFn: () => IC.bolt(18, editProd.isHit ? "#FF9500" : "#999") },
+              { key: "isNew", label: t.badge_new, sub: t.badge_new_sub, color: "#34C759", iconFn: () => IC.sparkle(18, editProd.isNew ? "#34C759" : "#999") },
+              { key: "featured", label: t.badge_featured, sub: t.badge_featured_sub, color: "#007AFF", iconFn: () => IC.pin(18, editProd.featured ? "#007AFF" : "#999") },
+            ].map(item => (
+              <div key={item.key} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "11px 14px", background: editProd[item.key] ? (item.color + '08') : "#fff",
+                borderRadius: 12, border: "0.5px solid " + (editProd[item.key] ? item.color + '20' : "rgba(0,0,0,0.04)"),
+                transition: "all 0.22s",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 8, background: editProd[item.key] ? (item.color + '12') : "rgba(0,0,0,0.03)", transition: "all 0.22s" }}>{item.iconFn()}</span>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>🔥 Популярно</div>
-                    <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>Бейдж на карточке товара</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>{item.label}</div>
+                    <div style={{ fontSize: 10, color: "#8E8E93", marginTop: 1 }}>{item.sub}</div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { haptic('light'); upd(editProd.id, "isPopular", !editProd.isPopular); }}
-                    style={{
-                      position: "relative",
-                      width: 48, height: 28,
-                      borderRadius: 14,
-                      background: editProd.isPopular ? "#FF3B30" : "rgba(120,120,128,0.32)",
-                      border: "none", padding: 0,
-                      cursor: "pointer", flexShrink: 0,
-                      transition: "background 0.22s",
-                    }}
-                  >
-                    <motion.div
-                      animate={{ x: editProd.isPopular ? 22 : 2 }}
-                      transition={{ type: "spring", stiffness: 540, damping: 32 }}
-                      style={{
-                        position: "absolute", top: 2,
-                        width: 24, height: 24, borderRadius: "50%",
-                        background: "#fff",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.06)",
-                      }}
-                    />
+                </div>
+                <button type="button" onClick={() => { haptic('light'); upd(editProd.id, item.key, !editProd[item.key]); }}
+                  style={{ position: "relative", width: 48, height: 28, borderRadius: 14, background: editProd[item.key] ? item.color : "rgba(120,120,128,0.32)", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, transition: "background 0.22s" }}>
+                  <motion.div animate={{ x: editProd[item.key] ? 22 : 2 }} transition={{ type: "spring", stiffness: 540, damping: 32 }}
+                    style={{ position: "absolute", top: 2, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.20)" }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </EditSection>
+
+        {/* ── Приоритет ── */}
+        <EditSection title={t.priority_title}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: "#fff", borderRadius: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>{t.priority_label}</div>
+              <div style={{ fontSize: 10, color: "#8E8E93", marginTop: 1 }}>{t.priority_sub}</div>
+            </div>
+            <input type="number" style={{ ...baseInput, width: 80, textAlign: "center", flexShrink: 0, padding: "8px 10px" }}
+              placeholder="0" value={editProd.priority ?? 0} onChange={e => upd(editProd.id, "priority", e.target.value === "" ? "" : +e.target.value)} />
+          </div>
+        </EditSection>
+
+        {/* ── SEO / Marketing ── */}
+        <EditSection title={t.seo_title}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 6, marginLeft: 2, letterSpacing: 0.3 }}>{t.seo_short_desc}</div>
+              <input style={{ ...baseInput, fontSize: 13 }} placeholder={t.seo_short_desc_placeholder} maxLength={100}
+                value={editProd.shortDesc || ''} onChange={e => upd(editProd.id, "shortDesc", e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
+              <div style={{ fontSize: 10, color: "#C7C7CC", marginTop: 3, textAlign: "right" }}>{(editProd.shortDesc||'').length}/100</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", marginBottom: 6, marginLeft: 2, letterSpacing: 0.3 }}>{t.seo_tags}</div>
+              <input style={{ ...baseInput, fontSize: 13 }} placeholder={t.seo_tags_placeholder}
+                value={editProd.tags || ''} onChange={e => upd(editProd.id, "tags", e.target.value)} onFocus={inputFocus} onBlur={inputBlur} />
+              {editProd.tags && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                  {editProd.tags.split(',').map((tag, i) => tag.trim() && (
+                    <span key={i} style={{ fontSize: 10, fontWeight: 600, color: "#0A84FF", background: "rgba(10,132,255,0.08)", padding: "3px 8px", borderRadius: 8 }}>
+                      #{tag.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </EditSection>
+
+        {/* ── Видимость по времени ── */}
+        <EditSection title={t.visibility_title}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{t.visibility_schedule}</div>
+                <div style={{ fontSize: 10, color: "#8E8E93", marginTop: 1 }}>{t.visibility_from}</div>
+              </div>
+              <button type="button" onClick={() => { haptic('light'); upd(editProd.id, "scheduled", !editProd.scheduled); }}
+                style={{ position: "relative", width: 48, height: 28, borderRadius: 14, background: editProd.scheduled ? "#007AFF" : "rgba(120,120,128,0.32)", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, transition: "background 0.22s" }}>
+                <motion.div animate={{ x: editProd.scheduled ? 22 : 2 }} transition={{ type: "spring", stiffness: 540, damping: 32 }}
+                  style={{ position: "absolute", top: 2, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.20)" }} />
+              </button>
+            </div>
+            <AnimatePresence>
+              {editProd.scheduled && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: "hidden" }}>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "#8E8E93", marginBottom: 4 }}>{t.visibility_from}</div>
+                      <input type="datetime-local" style={{ ...baseInput, fontSize: 12, padding: "8px 10px" }}
+                        value={editProd.showFrom ? editProd.showFrom.slice(0, 16) : ''} onChange={e => upd(editProd.id, "showFrom", e.target.value ? new Date(e.target.value).toISOString() : '')} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: "#8E8E93", marginBottom: 4 }}>{t.visibility_until}</div>
+                      <input type="datetime-local" style={{ ...baseInput, fontSize: 12, padding: "8px 10px" }}
+                        value={editProd.showUntil ? editProd.showUntil.slice(0, 16) : ''} onChange={e => upd(editProd.id, "showUntil", e.target.value ? new Date(e.target.value).toISOString() : '')} />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </EditSection>
+
+        {/* ── Похожие товары ── */}
+        <EditSection title={t.related_title} hint={t.related_max} last>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500 }}>
+              {t.related_add}
+            </div>
+            {/* Selected related products */}
+            {(editProd.relatedIds || []).map((rid, ri) => {
+              const rp = products.find(pp => pp.id === rid);
+              if (!rp) return null;
+              return (
+                <div key={rid} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, overflow: "hidden", background: "#F5F5F7", flexShrink: 0 }}>
+                    {rp.img ? <img src={rp.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" /> : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#C7C7CC" }}>{IC.camera}</div>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#111", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rp.name}</div>
+                    <div style={{ fontSize: 10, color: "#8E8E93" }}>{rp.brand}</div>
+                  </div>
+                  <button type="button" onClick={() => upd(editProd.id, "relatedIds", (editProd.relatedIds||[]).filter(x => x !== rid))}
+                    style={{ width: 26, height: 26, borderRadius: 8, border: "none", background: "rgba(229,57,53,0.08)", color: "#E53935", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>Показывать первым</div>
-                    <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>Закрепить в начале каталога</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { haptic('light'); upd(editProd.id, "featured", !editProd.featured); }}
-                    style={{
-                      position: "relative",
-                      width: 48, height: 28,
-                      borderRadius: 14,
-                      background: editProd.featured ? "#34C759" : "rgba(120,120,128,0.32)",
-                      border: "none", padding: 0,
-                      cursor: "pointer", flexShrink: 0,
-                      transition: "background 0.22s",
-                    }}
-                  >
-                    <motion.div
-                      animate={{ x: editProd.featured ? 22 : 2 }}
-                      transition={{ type: "spring", stiffness: 540, damping: 32 }}
-                      style={{
-                        position: "absolute", top: 2,
-                        width: 24, height: 24, borderRadius: "50%",
-                        background: "#fff",
-                        boxShadow: "0 2px 4px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.06)",
-                      }}
-                    />
-                  </button>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#fff", borderRadius: 10, border: "0.5px solid rgba(0,0,0,0.04)" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#111", letterSpacing: -0.1 }}>Приоритет</div>
-                    <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>Чем выше — тем раньше в списке</div>
-                  </div>
-                  <input
-                    type="number"
-                    style={{ ...baseInput, width: 80, textAlign: "center", flexShrink: 0, padding: "8px 10px" }}
-                    placeholder="0"
-                    value={editProd.priority ?? 0}
-                    onChange={e => upd(editProd.id, "priority", e.target.value === "" ? "" : +e.target.value)}
-                  />
-                </div>
-              </div>
-            </Section>
+              );
+            })}
+            {/* Add related product dropdown */}
+            {(editProd.relatedIds || []).length < 3 && (
+              <select
+                value=""
+                onChange={e => {
+                  if (!e.target.value) return;
+                  const current = editProd.relatedIds || [];
+                  if (current.includes(e.target.value)) return;
+                  upd(editProd.id, "relatedIds", [...current, e.target.value]);
+                  e.target.value = '';
+                }}
+                style={{ ...baseInput, fontSize: 12, padding: "10px 12px", color: "#8E8E93", cursor: "pointer" }}>
+                <option value="">+ {t.related_add}...</option>
+                {products.filter(pp => pp.id !== editProd.id && !(editProd.relatedIds||[]).includes(pp.id) && pp.name).map(pp => (
+                  <option key={pp.id} value={pp.id}>{pp.brand ? `${pp.brand} — ` : ''}{pp.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        </EditSection>
 
-            {/* Delete */}
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setDeleteConfirmId(editProd.id)}
-              style={{
-                width: "100%",
-                marginTop: 18,
-                padding: "13px",
-                borderRadius: 12,
-                border: "none",
-                background: "rgba(229,57,53,0.10)",
-                color: "#E53935",
-                fontWeight: 600, fontSize: 14,
-                cursor: "pointer",
-                letterSpacing: -0.1,
-                fontFamily: "inherit",
-              }}
-            >
-              {t.delete}
+        {/* Delete */}
+        <motion.button whileTap={{ scale: 0.98 }} onClick={() => setDeleteConfirmId(editProd.id)}
+          style={{ width: "100%", marginTop: 18, padding: "13px", borderRadius: 12, border: "none", background: "rgba(229,57,53,0.10)", color: "#E53935", fontWeight: 600, fontSize: 14, cursor: "pointer", letterSpacing: -0.1, fontFamily: "inherit" }}>
+          {t.delete}
+        </motion.button>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
+      {/* ═══ HEADER ═══ */}
+      <div style={{
+        position: "sticky", top: 0, zIndex: 10,
+        background: "rgba(250,250,250,0.92)",
+        backdropFilter: "blur(20px) saturate(180%)",
+        WebkitBackdropFilter: "blur(20px) saturate(180%)",
+        padding: "20px 20px 0",
+        borderBottom: "0.5px solid rgba(0,0,0,0.06)",
+      }}>
+        {/* Title row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 28, fontWeight: 800, color: T.text, letterSpacing: -0.6 }}>{t.products}</div>
+            <div style={{ fontSize: 13, color: "#8E8E93", fontWeight: 500, marginTop: 2 }}>
+              {summaryStats.total} товаров · {summaryStats.inStock} в наличии{summaryStats.noPrice > 0 ? ` · ${summaryStats.noPrice} без цен` : ''}{summaryStats.onSale > 0 ? ` · ${summaryStats.onSale} со скидкой` : ''}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Export CSV */}
+            <motion.button whileTap={{ scale: 0.94 }} onClick={exportCSV} title="Экспорт CSV"
+              style={{ width: 38, height: 38, borderRadius: 12, border: "none", background: "rgba(0,0,0,0.05)", color: "#3A3A3C", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </motion.button>
+            {/* Add product */}
+            <motion.button whileTap={{ scale: 0.96 }} onClick={addProd}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 18px", borderRadius: 999, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: -0.1, boxShadow: "0 6px 16px rgba(17,17,17,0.18), 0 1px 3px rgba(0,0,0,0.08)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              {t.add}
             </motion.button>
           </div>
         </div>
-        );
-      })()}
 
-      {/* Delete confirmation modal */}
+        {/* Search */}
+        <div style={{ position: "relative", display: "flex", alignItems: "center", background: "#F2F2F7", borderRadius: 12, padding: "0 12px", marginBottom: 12 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search || "Поиск парфюма..."}
+            style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, fontWeight: 500, color: "#111", padding: "10px 8px", fontFamily: "inherit", letterSpacing: -0.1 }} />
+          <AnimatePresence>
+            {search && (
+              <motion.button key="clear" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}
+                onClick={() => setSearch("")} aria-label="clear"
+                style={{ background: "rgba(0,0,0,0.18)", color: "#fff", border: "none", width: 18, height: 18, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </motion.button>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Filter chips row */}
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 12, WebkitOverflowScrolling: "touch" }}>
+          {/* Category filter */}
+          {['all', ...CATEGORIES].map(c => {
+            const active = filterCat === c;
+            const label = c === 'all' ? 'Все' : c;
+            return (
+              <motion.button key={c} whileTap={{ scale: 0.95 }} onClick={() => { haptic('light'); setFilterCat(c); }}
+                style={{ padding: "6px 14px", borderRadius: 999, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", letterSpacing: -0.1, background: active ? "#111" : "rgba(120,120,128,0.10)", color: active ? "#fff" : "#3A3A3C", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.18s" }}>
+                {label}
+              </motion.button>
+            );
+          })}
+          <div style={{ width: 1, background: "rgba(0,0,0,0.08)", margin: "4px 2px", flexShrink: 0 }} />
+          {/* Stock filter */}
+          {[{id:'all',l:'Все'},{id:'inStock',l:'В наличии'},{id:'outOfStock',l:'Нет'},{id:'noPrice',l:'Без цен'},{id:'sale',l:'Скидки'}].map(f => {
+            const active = filterStock === f.id;
+            const chipColor = active
+              ? (f.id === 'sale' ? { bg: "rgba(255,59,48,0.12)", fg: "#FF3B30" }
+                : f.id === 'outOfStock' ? { bg: "rgba(255,149,0,0.12)", fg: "#FF9500" }
+                : f.id === 'noPrice' ? { bg: "rgba(142,142,147,0.18)", fg: "#636366" }
+                : { bg: "rgba(10,132,255,0.12)", fg: "#0A84FF" })
+              : { bg: "rgba(120,120,128,0.08)", fg: "#8E8E93" };
+            return (
+              <motion.button key={f.id} whileTap={{ scale: 0.95 }} onClick={() => { haptic('light'); setFilterStock(f.id); }}
+                style={{ padding: "6px 12px", borderRadius: 999, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: chipColor.bg, color: chipColor.fg, fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.18s" }}>
+                {f.l}{active && f.id !== 'all' ? ` (${f.id === 'inStock' ? summaryStats.inStock : f.id === 'outOfStock' ? summaryStats.outStock : f.id === 'noPrice' ? summaryStats.noPrice : summaryStats.onSale})` : ''}
+              </motion.button>
+            );
+          })}
+          <div style={{ width: 1, background: "rgba(0,0,0,0.08)", margin: "4px 2px", flexShrink: 0 }} />
+          {/* Sort dropdown */}
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            style={{ padding: "6px 10px", borderRadius: 999, border: "none", fontSize: 12, fontWeight: 600, background: "rgba(120,120,128,0.10)", color: "#3A3A3C", fontFamily: "inherit", cursor: "pointer", flexShrink: 0, outline: "none" }}>
+            <option value="newest">Новые</option>
+            <option value="name">По имени</option>
+            <option value="priceAsc">Цена ↑</option>
+            <option value="priceDesc">Цена ↓</option>
+            <option value="stock">По наличию</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ═══ BULK ACTIONS BAR ═══ */}
       <AnimatePresence>
-        {deleteConfirmId && (
-          <motion.div
-            key="del-backdrop"
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-            onClick={() => setDeleteConfirmId(null)}
-            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
-          >
-            <motion.div
-              key="del-card"
-              initial={{ scale: 0.92, opacity: 0, y: 12 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 380, damping: 28 }}
-              onClick={e => e.stopPropagation()}
-              style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.30)" }}
-            >
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(229,57,53,0.12)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E53935" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                </svg>
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "#111", textAlign: "center", letterSpacing: -0.2, marginBottom: 6 }}>{t.confirmDelete}</div>
-              <div style={{ fontSize: 13, color: "#8E8E93", textAlign: "center", lineHeight: 1.45, marginBottom: 18 }}>
-                {lang === 'kg' ? 'Бул иш-аракет кайтарылбайт.' : 'Это действие нельзя отменить.'}
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => setDeleteConfirmId(null)}
-                  style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#F2F2F7", color: "#111", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                >
-                  {lang === 'kg' ? 'Жокко чыгаруу' : 'Отмена'}
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={async () => { const id = deleteConfirmId; setDeleteConfirmId(null); haptic('medium'); await delProd(id); }}
-                  style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#E53935", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}
-                >
-                  {t.delete}
-                </motion.button>
-              </div>
-            </motion.div>
+        {selected.size > 0 && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22 }}
+            style={{ overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", background: "rgba(10,132,255,0.06)", borderBottom: "0.5px solid rgba(10,132,255,0.15)" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0A84FF", marginRight: 6 }}>Выбрано: {selected.size}</div>
+              <motion.button whileTap={{ scale: 0.95 }} onClick={() => bulkToggleStock(true)}
+                style={{ padding: "6px 12px", borderRadius: 20, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "rgba(52,199,89,0.12)", color: "#34C759", fontFamily: "inherit" }}>В наличии</motion.button>
+              <motion.button whileTap={{ scale: 0.95 }} onClick={() => bulkToggleStock(false)}
+                style={{ padding: "6px 12px", borderRadius: 20, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "rgba(255,149,0,0.12)", color: "#FF9500", fontFamily: "inherit" }}>Нет в наличии</motion.button>
+              {/* Bulk category */}
+              <select onChange={e => { if (e.target.value) { bulkSetCategory(e.target.value); e.target.value = ''; } }}
+                style={{ padding: "6px 10px", borderRadius: 20, border: "none", fontSize: 12, fontWeight: 600, background: "rgba(120,120,128,0.10)", color: "#3A3A3C", fontFamily: "inherit", cursor: "pointer", outline: "none" }}>
+                <option value="">Категория...</option>
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <div style={{ flex: 1 }} />
+              <motion.button whileTap={{ scale: 0.95 }} onClick={bulkDelete}
+                style={{ padding: "6px 12px", borderRadius: 20, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "rgba(229,57,53,0.10)", color: "#E53935", fontFamily: "inherit" }}>Удалить</motion.button>
+              <motion.button whileTap={{ scale: 0.95 }} onClick={() => setSelected(new Set())}
+                style={{ padding: "6px 10px", borderRadius: 20, border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer", background: "rgba(0,0,0,0.06)", color: "#8E8E93", fontFamily: "inherit" }}>Отмена</motion.button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
-      <div style={{ padding: "12px 16px 0", display: "flex", flexDirection: "column", gap: 10 }}>
-        {filtered.map(p => {
+
+      {/* ═══ EDITOR (2-panel on desktop) ═══ */}
+      {editProd && (
+        <div style={{ margin: isDesk ? "16px 20px" : "12px 16px 16px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)", border: "0.5px solid rgba(0,0,0,0.05)" }}>
+          {/* ── Sticky header — back · title · save ── */}
+          <div style={{
+            position: "sticky", top: isDesk ? 0 : 0, zIndex: 5,
+            background: "rgba(255,255,255,0.94)", backdropFilter: "blur(24px) saturate(180%)", WebkitBackdropFilter: "blur(24px) saturate(180%)",
+            padding: isDesk ? "14px 20px" : "12px 14px", borderBottom: "0.5px solid rgba(0,0,0,0.06)", borderRadius: "20px 20px 0 0",
+            display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <motion.button whileTap={{ scale: 0.92 }} onClick={() => setEditing(null)} aria-label="back"
+              style={{ background: "rgba(0,0,0,0.05)", border: "none", color: "#111", cursor: "pointer", width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </motion.button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: "#111", fontWeight: 700, fontSize: 16, letterSpacing: -0.3, lineHeight: 1.15 }}>
+                {editProd.collectionId ? "Редактирование" : t.newProduct}
+              </div>
+              {editProd.name && (
+                <div style={{ color: "#8E8E93", fontWeight: 500, fontSize: 12, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: -0.1 }}>
+                  {editProd.name}
+                </div>
+              )}
+            </div>
+            <motion.button whileTap={{ scale: 0.96 }} onClick={() => saveProd(editProd.id)} disabled={saving}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 999, border: "none", background: "#111", color: "#fff", fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1, letterSpacing: -0.1, boxShadow: "0 4px 12px rgba(17,17,17,0.18)", flexShrink: 0, fontFamily: "inherit" }}>
+              {saving && (
+                <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+                  style={{ width: 12, height: 12, border: "1.6px solid rgba(255,255,255,0.35)", borderTopColor: "#fff", borderRadius: "50%", display: "inline-block" }} />
+              )}
+              {saving ? "Сохранение" : t.save}
+            </motion.button>
+          </div>
+
+          {/* ── 2-panel layout (desktop) / single scroll (mobile) ── */}
+          {isDesk ? (
+            <div style={{ display: "flex", gap: 0 }}>
+              {/* Left — sticky live preview with iPhone mockup */}
+              <div style={{ width: 370, flexShrink: 0, padding: "20px 16px", borderRight: "0.5px solid rgba(0,0,0,0.06)", position: "sticky", top: 60, alignSelf: "flex-start", maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}>
+                {/* Preview mode toggle */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Превью</div>
+                  <div style={{ display: "inline-flex", background: "rgba(120,120,128,0.12)", borderRadius: 8, padding: 2 }}>
+                    {[{ id: 'card', l: 'Каталог' }, { id: 'detail', l: 'Товар' }].map(m => {
+                      const active = previewMode === m.id;
+                      return (
+                        <button key={m.id} type="button" onClick={() => { haptic('light'); setPreviewMode(m.id); }}
+                          style={{ position: "relative", padding: "4px 12px", border: "none", background: "transparent", fontSize: 11, fontWeight: 600, color: active ? "#111" : "#8E8E93", cursor: "pointer", zIndex: 1, fontFamily: "inherit", letterSpacing: -0.1 }}>
+                          {m.l}
+                          {active && (
+                            <motion.div layoutId="preview-mode-pill" transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                              style={{ position: "absolute", inset: 0, background: "#fff", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.10)", zIndex: -1 }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* iPhone mockup frame */}
+                <div style={{
+                  position: "relative", margin: "0 auto", width: 260,
+                  background: "#000", borderRadius: 36, padding: "12px 10px",
+                  boxShadow: "0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08), inset 0 0 0 1.5px rgba(255,255,255,0.08)",
+                }}>
+                  {/* Notch / Dynamic Island */}
+                  <div style={{ width: 80, height: 22, background: "#000", borderRadius: 12, margin: "0 auto 8px", position: "relative", zIndex: 2 }}>
+                    <div style={{ position: "absolute", top: 7, left: "50%", transform: "translateX(-50%)", width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }} />
+                  </div>
+                  {/* Screen content */}
+                  <div style={{
+                    background: "#FAFAFA", borderRadius: 24, overflow: "hidden",
+                    minHeight: previewMode === 'detail' ? 360 : 260,
+                    transition: "min-height 0.3s ease",
+                  }}>
+                    <AnimatePresence mode="wait">
+                      {previewMode === 'card' ? (
+                        <motion.div key="card-preview" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.2 }}
+                          style={{ padding: 16 }}>
+                          <ProductCard p={editProd} preview />
+                        </motion.div>
+                      ) : (
+                        <motion.div key="detail-preview" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+                          {/* Mini product detail page */}
+                          <div style={{ position: "relative" }}>
+                            {/* Hero image */}
+                            <div style={{ width: "100%", aspectRatio: "1/1", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                              {editProd.img ? (
+                                <img src={editProd.img} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="" />
+                              ) : (
+                                <div style={{ color: "#C7C7CC", fontSize: 32 }}>📷</div>
+                              )}
+                            </div>
+                            {/* Sale badge */}
+                            {editProd.salePercent > 0 && (
+                              <div style={{ position: "absolute", top: 8, right: 8, background: "#FF3B30", color: "#fff", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 8 }}>
+                                -{editProd.salePercent}%
+                              </div>
+                            )}
+                            {/* Image dots */}
+                            {(editProd.images||[]).length > 1 && (
+                              <div style={{ position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 4 }}>
+                                {(editProd.images||[]).slice(0,3).map((_,i) => (
+                                  <div key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: i === 0 ? "#111" : "rgba(0,0,0,0.20)" }} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          {/* Product info */}
+                          <div style={{ padding: "12px 14px 16px" }}>
+                            <div style={{ fontSize: 9, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 500 }}>{editProd.brand || 'БРЕНД'}</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "#111", marginTop: 2, letterSpacing: -0.3, lineHeight: 1.2 }}>{editProd.name || 'Название'}</div>
+                            {/* Variant chips */}
+                            <div style={{ display: "flex", gap: 4, marginTop: 8, flexWrap: "wrap" }}>
+                              {(editProd.variants||[]).slice(0,3).map((v,i) => (
+                                <div key={i} style={{
+                                  padding: "4px 8px", borderRadius: 6, fontSize: 9, fontWeight: 600,
+                                  background: v.inStock ? (i === 0 ? "#111" : "rgba(0,0,0,0.06)") : "rgba(229,57,53,0.08)",
+                                  color: v.inStock ? (i === 0 ? "#fff" : "#3A3A3C") : "#E53935",
+                                  border: i === 0 ? "none" : "0.5px solid rgba(0,0,0,0.06)",
+                                }}>
+                                  {v.label} {v.inStock && v.price > 0 ? `· ${v.price}` : ''}
+                                </div>
+                              ))}
+                              {(editProd.variants||[]).length > 3 && (
+                                <div style={{ padding: "4px 6px", fontSize: 9, color: "#8E8E93", fontWeight: 500 }}>+{(editProd.variants||[]).length - 3}</div>
+                              )}
+                            </div>
+                            {/* Price */}
+                            {(() => {
+                              const ps = (editProd.variants||[]).filter(v=>v.inStock).map(v=>v.price).filter(Boolean);
+                              const min = ps.length ? Math.min(...ps) : 0;
+                              return (
+                                <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 10 }}>
+                                  {editProd.salePercent > 0 && min > 0 && (
+                                    <span style={{ fontSize: 11, color: "#8E8E93", textDecoration: "line-through" }}>{formatSum(min)}</span>
+                                  )}
+                                  <span style={{ fontSize: 16, fontWeight: 800, color: "#111", letterSpacing: -0.3 }}>
+                                    {min > 0 ? (editProd.salePercent > 0 ? formatSum(Math.round(min * (1 - editProd.salePercent/100))) : formatSum(min)) : 'Нет в наличии'}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+                            {/* Description preview */}
+                            {(editProd.desc || editProd.desc_kg) && (
+                              <div style={{ marginTop: 8, fontSize: 9, color: "#8E8E93", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                                {(editProd.desc || editProd.desc_kg || '').replace(/🔝|💎|🌿|📋/g, '').replace(/Верхние:|Средние:|Базовые:/g, '').trim().slice(0, 100)}
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                  {/* Home indicator */}
+                  <div style={{ width: 100, height: 4, background: "rgba(255,255,255,0.25)", borderRadius: 2, margin: "8px auto 2px" }} />
+                </div>
+
+                {/* Quick stats — with icons */}
+                <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 6 }}>
+                  {[
+                    { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>, l: "Варианты", v: `${(editProd.variants||[]).filter(v=>v.inStock).length} из ${(editProd.variants||[]).length}`, c: (editProd.variants||[]).some(v=>v.inStock) ? "#34C759" : "#FF3B30" },
+                    { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>, l: "Цена", v: (() => { const ps = (editProd.variants||[]).filter(v=>v.inStock).map(v=>v.price).filter(Boolean); return ps.length ? (ps.length === 1 ? formatSum(ps[0]) : `${Number(Math.min(...ps)).toLocaleString()} – ${formatSum(Math.max(...ps))}`) : '—'; })(), c: "#111" },
+                    { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>, l: "Категория", v: editProd.category || '—', c: "#3A3A3C" },
+                    { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={editProd.salePercent > 0 ? "#FF3B30" : "#8E8E93"} strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>, l: "Скидка", v: editProd.salePercent > 0 ? `${editProd.salePercent}%` : 'Нет', c: editProd.salePercent > 0 ? "#FF3B30" : "#8E8E93" },
+                    { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>, l: "Фото", v: `${(editProd.images||[]).filter(Boolean).length} из 3`, c: (editProd.images||[]).filter(Boolean).length > 0 ? "#34C759" : "#FF9500" },
+                  ].map((s, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: "#FAFAFA", borderRadius: 10 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 7, background: "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.icon}</div>
+                      <span style={{ fontSize: 12, color: "#8E8E93", fontWeight: 500, flex: 1 }}>{s.l}</span>
+                      <span style={{ fontSize: 12, color: s.c, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{s.v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* Right — form */}
+              <div style={{ flex: 1, padding: "20px 20px 24px", minWidth: 0 }}>
+                {renderEditorForm()}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: "16px 14px 22px" }}>
+              {/* Mobile: compact horizontal preview — card + mini detail side by side */}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, padding: "0 4px" }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#111", letterSpacing: -0.3 }}>Превью</div>
+                  <div style={{ display: "inline-flex", background: "rgba(120,120,128,0.12)", borderRadius: 8, padding: 2 }}>
+                    {[{ id: 'card', l: 'Каталог' }, { id: 'detail', l: 'Товар' }].map(m => {
+                      const active = previewMode === m.id;
+                      return (
+                        <button key={m.id} type="button" onClick={() => { haptic('light'); setPreviewMode(m.id); }}
+                          style={{ position: "relative", padding: "4px 12px", border: "none", background: "transparent", fontSize: 11, fontWeight: 600, color: active ? "#111" : "#8E8E93", cursor: "pointer", zIndex: 1, fontFamily: "inherit", letterSpacing: -0.1 }}>
+                          {m.l}
+                          {active && (
+                            <motion.div layoutId="mob-preview-pill" transition={{ type: "spring", stiffness: 500, damping: 32 }}
+                              style={{ position: "absolute", inset: 0, background: "#fff", borderRadius: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.10)", zIndex: -1 }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div style={{ background: "#F2F2F7", borderRadius: 16, padding: 12, overflow: "hidden" }}>
+                  <AnimatePresence mode="wait">
+                    {previewMode === 'card' ? (
+                      <motion.div key="mob-card" initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 15 }} transition={{ duration: 0.18 }}
+                        style={{ maxWidth: 220, margin: "0 auto" }}>
+                        <ProductCard p={editProd} preview />
+                      </motion.div>
+                    ) : (
+                      <motion.div key="mob-detail" initial={{ opacity: 0, x: 15 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -15 }} transition={{ duration: 0.18 }}>
+                        <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                          {/* Mini image */}
+                          <div style={{ width: 100, height: 120, borderRadius: 12, background: "#fff", overflow: "hidden", flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+                            {editProd.img ? (
+                              <img src={editProd.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                            ) : (
+                              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#C7C7CC", fontSize: 24 }}>📷</div>
+                            )}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 9, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 500 }}>{editProd.brand || 'БРЕНД'}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#111", marginTop: 2, letterSpacing: -0.2, lineHeight: 1.2 }}>{editProd.name || 'Название'}</div>
+                            <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+                              {(editProd.variants||[]).slice(0,3).map((v,vi) => (
+                                <div key={vi} style={{ padding: "3px 7px", borderRadius: 6, fontSize: 9, fontWeight: 600, background: v.inStock ? (vi === 0 ? "#111" : "rgba(0,0,0,0.06)") : "rgba(229,57,53,0.08)", color: v.inStock ? (vi === 0 ? "#fff" : "#3A3A3C") : "#E53935" }}>
+                                  {v.label}
+                                </div>
+                              ))}
+                            </div>
+                            {(() => {
+                              const ps = (editProd.variants||[]).filter(v=>v.inStock).map(v=>v.price).filter(Boolean);
+                              const min = ps.length ? Math.min(...ps) : 0;
+                              return (
+                                <div style={{ marginTop: 8, fontSize: 15, fontWeight: 800, color: "#111", letterSpacing: -0.3 }}>
+                                  {min > 0 ? (editProd.salePercent > 0 ? formatSum(Math.round(min * (1 - editProd.salePercent/100))) : formatSum(min)) : 'Нет в наличии'}
+                                </div>
+                              );
+                            })()}
+                            {editProd.salePercent > 0 && (
+                              <div style={{ marginTop: 2, display: "inline-block", fontSize: 10, fontWeight: 700, color: "#FF3B30", background: "rgba(255,59,48,0.08)", padding: "2px 8px", borderRadius: 6 }}>
+                                -{editProd.salePercent}% скидка
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+              {renderEditorForm()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ DELETE CONFIRMATION MODAL — 3-STEP ═══ */}
+      <AnimatePresence>
+        {deleteConfirmId && deleteStep > 0 && (() => {
+          const delProdName = products.find(p => p.id === deleteConfirmId)?.name || '';
+          const stepConfig = {
+            1: {
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF9500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+              iconBg: "rgba(255,149,0,0.12)",
+              title: lang === 'kg' ? 'Товарды өчүрүүнү каалайсызбы?' : 'Удалить товар?',
+              subtitle: delProdName ? `«${delProdName}»` : '',
+              desc: lang === 'kg' ? 'Товар каталогдон жок болот.' : 'Товар будет удалён из каталога.',
+              confirmText: lang === 'kg' ? 'Ооба, өчүрүү' : 'Да, удалить',
+              confirmBg: '#FF9500',
+            },
+            2: {
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E53935" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+              iconBg: "rgba(229,57,53,0.12)",
+              title: lang === 'kg' ? 'Чындап өчүрөсүзбү?' : 'Точно удалить?',
+              subtitle: '',
+              desc: lang === 'kg' ? 'Бул иш-аракет кайтарылбайт!' : 'Все данные товара, фото и варианты будут потеряны!',
+              confirmText: lang === 'kg' ? 'Ооба, чындап' : 'Да, точно',
+              confirmBg: '#E53935',
+            },
+            3: {
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>,
+              iconBg: "#E53935",
+              title: lang === 'kg' ? 'АКЫРКЫ ЭСКЕРТҮҮ!' : 'ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!',
+              subtitle: '',
+              desc: lang === 'kg' ? 'Бул товар биротоло жок кылынат. Кайтаруу мүмкүн эмес!' : 'Это действие необратимо! Товар будет удалён навсегда.',
+              confirmText: lang === 'kg' ? 'ӨЧҮРҮҮ' : 'УДАЛИТЬ НАВСЕГДА',
+              confirmBg: '#B71C1C',
+            },
+          };
+          const cfg = stepConfig[deleteStep];
+          return (
+            <motion.div key="del-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+              onClick={() => { setDeleteConfirmId(null); setDeleteStep(0); }}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+              <motion.div key={`del-step-${deleteStep}`} initial={{ scale: 0.92, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 28 }} onClick={e => e.stopPropagation()}
+                style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.30)" }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: cfg.iconBg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  {cfg.icon}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#111", textAlign: "center", letterSpacing: -0.2, marginBottom: cfg.subtitle ? 2 : 6 }}>{cfg.title}</div>
+                {cfg.subtitle && <div style={{ fontSize: 13, fontWeight: 600, color: "#333", textAlign: "center", marginBottom: 6 }}>{cfg.subtitle}</div>}
+                <div style={{ fontSize: 13, color: "#8E8E93", textAlign: "center", lineHeight: 1.45, marginBottom: 16 }}>{cfg.desc}</div>
+                {/* Step indicator */}
+                <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 16 }}>
+                  {[1,2,3].map(s => (
+                    <div key={s} style={{ width: 8, height: 8, borderRadius: '50%', background: s <= deleteStep ? cfg.confirmBg : '#E5E5EA', transition: 'background 0.2s' }} />
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <motion.button whileTap={{ scale: 0.97 }} onClick={() => { setDeleteConfirmId(null); setDeleteStep(0); }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#F2F2F7", color: "#111", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    {lang === 'kg' ? 'Жокко чыгаруу' : 'Отмена'}
+                  </motion.button>
+                  <motion.button whileTap={{ scale: 0.97 }}
+                    onClick={async () => {
+                      if (deleteStep < 3) { haptic('light'); setDeleteStep(deleteStep + 1); }
+                      else { const id = deleteConfirmId; setDeleteConfirmId(null); setDeleteStep(0); haptic('medium'); await delProd(id); showToast?.('Товар удалён'); }
+                    }}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: cfg.confirmBg, color: "#fff", fontSize: deleteStep === 3 ? 12 : 14, fontWeight: 700, cursor: "pointer", letterSpacing: deleteStep === 3 ? 0.5 : 0 }}>
+                    {cfg.confirmText}
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ═══ BULK DELETE CONFIRMATION MODAL — 3-STEP ═══ */}
+      <AnimatePresence>
+        {bulkDeleteStep > 0 && (() => {
+          const count = selected.size;
+          const stepConfig = {
+            1: {
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FF9500" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+              iconBg: "rgba(255,149,0,0.12)",
+              title: `Удалить ${count} ${count === 1 ? 'товар' : count < 5 ? 'товара' : 'товаров'}?`,
+              desc: 'Выбранные товары будут удалены из каталога.',
+              confirmText: 'Да, удалить',
+              confirmBg: '#FF9500',
+            },
+            2: {
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#E53935" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+              iconBg: "rgba(229,57,53,0.12)",
+              title: 'Точно удалить все выбранные?',
+              desc: `${count} товаров, все фото и варианты будут потеряны навсегда!`,
+              confirmText: 'Да, точно',
+              confirmBg: '#E53935',
+            },
+            3: {
+              icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>,
+              iconBg: "#E53935",
+              title: 'ПОСЛЕДНЕЕ ПРЕДУПРЕЖДЕНИЕ!',
+              desc: `Вы удаляете ${count} товаров. Это действие НЕОБРАТИМО!`,
+              confirmText: 'УДАЛИТЬ НАВСЕГДА',
+              confirmBg: '#B71C1C',
+            },
+          };
+          const cfg = stepConfig[bulkDeleteStep];
+          return (
+            <motion.div key="bulk-del-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}
+              onClick={bulkDeleteCancel}
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+              <motion.div key={`bulk-del-step-${bulkDeleteStep}`} initial={{ scale: 0.92, opacity: 0, y: 12 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 380, damping: 28 }} onClick={e => e.stopPropagation()}
+                style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 320, boxShadow: "0 20px 60px rgba(0,0,0,0.30)" }}>
+                <div style={{ width: 48, height: 48, borderRadius: "50%", background: cfg.iconBg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  {cfg.icon}
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#111", textAlign: "center", letterSpacing: -0.2, marginBottom: 6 }}>{cfg.title}</div>
+                <div style={{ fontSize: 13, color: "#8E8E93", textAlign: "center", lineHeight: 1.45, marginBottom: 16 }}>{cfg.desc}</div>
+                <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 16 }}>
+                  {[1,2,3].map(s => (
+                    <div key={s} style={{ width: 8, height: 8, borderRadius: '50%', background: s <= bulkDeleteStep ? cfg.confirmBg : '#E5E5EA', transition: 'background 0.2s' }} />
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <motion.button whileTap={{ scale: 0.97 }} onClick={bulkDeleteCancel}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: "#F2F2F7", color: "#111", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    Отмена
+                  </motion.button>
+                  <motion.button whileTap={{ scale: 0.97 }} onClick={bulkDeleteConfirm}
+                    style={{ flex: 1, padding: "12px", borderRadius: 12, border: "none", background: cfg.confirmBg, color: "#fff", fontSize: bulkDeleteStep === 3 ? 12 : 14, fontWeight: 700, cursor: "pointer", letterSpacing: bulkDeleteStep === 3 ? 0.5 : 0 }}>
+                    {cfg.confirmText}
+                  </motion.button>
+                </div>
+              </motion.div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* ═══ PRODUCT LIST ═══ */}
+      <div style={{ padding: "12px 20px 0", display: "flex", flexDirection: "column", gap: 8 }}>
+        {/* Select all row */}
+        {processedProducts.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", marginBottom: 2 }}>
+            <button type="button" onClick={selectAll}
+              style={{ width: 20, height: 20, borderRadius: 6, border: "1.5px solid " + (selected.size === processedProducts.length && processedProducts.length > 0 ? "#0A84FF" : "#C7C7CC"), background: selected.size === processedProducts.length && processedProducts.length > 0 ? "#0A84FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, transition: "all 0.18s" }}>
+              {selected.size === processedProducts.length && processedProducts.length > 0 && (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              )}
+            </button>
+            <span style={{ fontSize: 12, color: "#8E8E93", fontWeight: 500 }}>
+              {processedProducts.length} {processedProducts.length === 1 ? 'товар' : 'товаров'}
+              {search || filterCat !== 'all' || filterStock !== 'all' ? ' (фильтр)' : ''}
+            </span>
+          </div>
+        )}
+
+        {processedProducts.map(p => {
           const stockPrices = (p.variants || []).filter(v => v.inStock).map(v => v.price).filter(Boolean);
           const minPrice = stockPrices.length ? Math.min(...stockPrices) : null;
+          const maxPrice = stockPrices.length ? Math.max(...stockPrices) : null;
           const inStockCount = (p.variants || []).filter(v => v.inStock).length;
           const totalVariants = (p.variants || []).length;
           const isFeatured = !!p.featured;
+          const isSelected = selected.has(p.id);
+          const hasSale = p.salePercent > 0;
+          const noStock = inStockCount === 0;
           return (
-            <motion.div
-              key={p.id}
-              whileTap={{ scale: 0.99 }}
-              transition={{ type: "spring", stiffness: 460, damping: 30 }}
+            <motion.div key={p.id} whileTap={{ scale: 0.995 }} transition={{ type: "spring", stiffness: 460, damping: 30 }}
               onClick={() => setEditing(editing === p.id ? null : p.id)}
               style={{
-                background: "#fff",
-                borderRadius: 16,
-                padding: "12px 14px",
-                display: "flex", alignItems: "center", gap: 12,
-                cursor: "pointer",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 6px 16px rgba(0,0,0,0.05)",
-                border: "0.5px solid rgba(0,0,0,0.05)",
-              }}
-            >
-              {/* Image */}
-              <div style={{
-                width: 52, height: 52, borderRadius: 12,
-                background: p.img ? "#fff" : T.accentPale,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                overflow: "hidden", flexShrink: 0,
-                border: "0.5px solid rgba(0,0,0,0.04)",
+                background: noStock ? "#FAFAFA" : "#fff", borderRadius: 16, padding: "10px 14px",
+                display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                boxShadow: isSelected ? "0 0 0 2px rgba(10,132,255,0.40)" : "0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.04)",
+                border: "0.5px solid " + (isSelected ? "rgba(10,132,255,0.30)" : noStock ? "rgba(255,59,48,0.15)" : "rgba(0,0,0,0.05)"),
+                borderLeft: noStock ? "3px solid #FF3B30" : hasSale ? "3px solid #FF9500" : "3px solid transparent",
+                opacity: noStock ? 0.7 : 1,
+                transition: "box-shadow 0.18s, border 0.18s, opacity 0.18s",
               }}>
+              {/* Checkbox */}
+              <button type="button" onClick={(e) => toggleSel(p.id, e)}
+                style={{ width: 20, height: 20, borderRadius: 6, border: "1.5px solid " + (isSelected ? "#0A84FF" : "#C7C7CC"), background: isSelected ? "#0A84FF" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0, flexShrink: 0, transition: "all 0.18s" }}>
+                {isSelected && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>
+              {/* Image */}
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: p.img ? "#fff" : T.accentPale, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, border: "0.5px solid rgba(0,0,0,0.04)" }}>
                 {p.img
-                  ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} />
-                  : React.cloneElement(IC.bottle, { style: { width: 22, height: 22, color: T.accent, opacity: 0.5 } })}
+                  ? <img src={p.img} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#fff" }} alt="" />
+                  : React.cloneElement(IC.bottle, { style: { width: 20, height: 20, color: T.accent, opacity: 0.5 } })}
               </div>
-
-              {/* Info — brand · name · price + variant counts */}
+              {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1, fontWeight: 500 }}>{p.brand || '—'}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 500 }}>{p.brand || '—'}</span>
+                  {isFeatured && <span style={{ fontSize: 9, fontWeight: 700, color: "#E5A100", background: "rgba(255,184,0,0.14)", padding: "1px 6px", borderRadius: 6 }}>TOP</span>}
+                  {hasSale && <span style={{ fontSize: 9, fontWeight: 700, color: "#FF3B30", background: "rgba(255,59,48,0.10)", padding: "1px 6px", borderRadius: 6 }}>-{p.salePercent}%</span>}
+                </div>
                 <div style={{ color: T.text, fontWeight: 700, fontSize: 14, letterSpacing: -0.2, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {p.name || t.newProduct}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
                   {minPrice !== null ? (
-                    <span style={{ color: "#111", fontSize: 13, fontWeight: 700, letterSpacing: -0.2 }}>
-                      {t.fromPrice} {formatSum(minPrice)}
+                    <span style={{ color: "#111", fontSize: 13, fontWeight: 700, letterSpacing: -0.2, fontVariantNumeric: "tabular-nums" }}>
+                      {minPrice === maxPrice ? formatSum(minPrice) : `${Number(minPrice).toLocaleString()} – ${formatSum(maxPrice)}`}
                     </span>
                   ) : (
                     <span style={{ color: T.danger, fontSize: 11, fontWeight: 600 }}>Нет в наличии</span>
                   )}
                   <span style={{ color: T.textMuted, fontSize: 11 }}>·</span>
-                  <span style={{ color: T.textSecond, fontSize: 11, fontVariantNumeric: "tabular-nums" }}>
-                    {inStockCount}/{totalVariants} {totalVariants === 1 ? 'вар.' : 'вар.'}
+                  <span style={{ color: noStock ? T.danger : T.textSecond, fontSize: 11, fontWeight: noStock ? 600 : 500, fontVariantNumeric: "tabular-nums" }}>
+                    {inStockCount}/{totalVariants} вар.
                   </span>
+                  <span style={{ color: T.textMuted, fontSize: 11 }}>·</span>
+                  <span style={{ fontSize: 10, color: "#8E8E93", padding: "1px 6px", background: "rgba(120,120,128,0.08)", borderRadius: 6, fontWeight: 500 }}>{p.category || '—'}</span>
                 </div>
               </div>
-
-              {/* Action buttons — featured / edit / delete — 36px for better tap targets */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  transition={{ type: "spring", stiffness: 460, damping: 22 }}
-                  onClick={(e) => toggleFeatured(e, p)}
-                  aria-label="featured"
-                  style={{
-                    width: 36, height: 36, borderRadius: 11, padding: 0,
-                    border: "none",
-                    background: isFeatured ? "rgba(255,184,0,0.16)" : "rgba(0,0,0,0.04)",
-                    color: isFeatured ? "#E5A100" : "#9A9AA0",
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill={isFeatured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
+              {/* Actions */}
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={(e) => toggleAllStock(e, p)} aria-label="stock" title={noStock ? "В наличии" : "Снять с продажи"}
+                  style={{ width: 34, height: 34, borderRadius: 10, padding: 0, border: "none", background: noStock ? "rgba(255,59,48,0.10)" : "rgba(52,199,89,0.12)", color: noStock ? "#FF3B30" : "#34C759", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {noStock
+                    ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  transition={{ type: "spring", stiffness: 460, damping: 22 }}
-                  onClick={(e) => { e.stopPropagation(); haptic('light'); setEditing(p.id); }}
-                  aria-label="edit"
-                  style={{
-                    width: 36, height: 36, borderRadius: 11, padding: 0,
-                    border: "none",
-                    background: "rgba(10,132,255,0.10)",
-                    color: "#0A84FF",
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 20h9"/>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                  </svg>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={(e) => toggleFeatured(e, p)} aria-label="featured" title="В топ"
+                  style={{ width: 34, height: 34, borderRadius: 10, padding: 0, border: "none", background: isFeatured ? "rgba(255,184,0,0.16)" : "rgba(0,0,0,0.04)", color: isFeatured ? "#E5A100" : "#C7C7CC", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill={isFeatured ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                 </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.88 }}
-                  transition={{ type: "spring", stiffness: 460, damping: 22 }}
-                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(p.id); }}
-                  aria-label="delete"
-                  style={{
-                    width: 36, height: 36, borderRadius: 11, padding: 0,
-                    border: "none",
-                    background: "rgba(229,57,53,0.10)",
-                    color: "#E53935",
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                    <path d="M10 11v6"/><path d="M14 11v6"/>
-                  </svg>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={(e) => duplicateProd(e, p)} aria-label="duplicate" title="Копия"
+                  style={{ width: 34, height: 34, borderRadius: 10, padding: 0, border: "none", background: "rgba(88,86,214,0.08)", color: "#5856D6", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={(e) => { e.stopPropagation(); haptic('light'); setEditing(p.id); }} aria-label="edit" title="Редактировать"
+                  style={{ width: 34, height: 34, borderRadius: 10, padding: 0, border: "none", background: "rgba(10,132,255,0.10)", color: "#0A84FF", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.88 }} onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(p.id); setDeleteStep(1); }} aria-label="delete" title="Удалить"
+                  style={{ width: 34, height: 34, borderRadius: 10, padding: 0, border: "none", background: "rgba(229,57,53,0.10)", color: "#E53935", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 </motion.button>
               </div>
             </motion.div>
           );
         })}
+
+        {/* Empty state */}
+        {processedProducts.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#8E8E93" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "#3A3A3C", marginBottom: 4 }}>
+              {search ? 'Ничего не найдено' : 'Нет товаров'}
+            </div>
+            <div style={{ fontSize: 13 }}>
+              {search ? `По запросу «${search}» ничего не найдено` : 'Добавьте первый товар'}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ─── ADMIN STATS ───────────────────────────────────────────────────────────────
+// PRO redesign: period selector, revenue chart, avg check, conversion, donut
 function AdminStatsScreen({ orders = [], products = [], registeredUsers = [], visitCount = 0 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
+  const [period, setPeriod] = useState('7d'); // '7d', '30d', 'all'
+
   const delivered = orders.filter(o => o.status === "delivered");
   const totalRevenue = delivered.reduce((s, o) => s + (o.total || 0), 0);
+  const avgCheck = delivered.length > 0 ? Math.round(totalRevenue / delivered.length) : 0;
+  const conversionRate = orders.length > 0 ? Math.round(delivered.length / orders.length * 100) : 0;
 
   // Today stats
-  const todayOrdersCount = orders.filter(o => {
-    try { return new Date(o.date).toDateString() === new Date().toDateString(); } catch { return false; }
-  }).length;
-  const todayRevenue = orders.filter(o => {
-    try { return new Date(o.date).toDateString() === new Date().toDateString() && o.status === "delivered"; } catch { return false; }
-  }).reduce((s, o) => s + (o.total || 0), 0);
+  const todayStr = new Date().toDateString();
+  const todayOrders = orders.filter(o => { try { return new Date(o.date).toDateString() === todayStr; } catch { return false; } });
+  const todayOrdersCount = todayOrders.length;
+  const todayRevenue = todayOrders.filter(o => o.status === 'delivered').reduce((s, o) => s + (o.total || 0), 0);
+  const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toDateString(); })();
+  const yesterdayCount = orders.filter(o => { try { return new Date(o.date).toDateString() === yesterdayStr; } catch { return false; } }).length;
+  const dayChange = yesterdayCount > 0 ? Math.round((todayOrdersCount - yesterdayCount) / yesterdayCount * 100) : todayOrdersCount > 0 ? 100 : 0;
 
   // Status counts
   const statusCounts = {};
   orders.forEach(o => { statusCounts[o.status] = (statusCounts[o.status] || 0) + 1; });
+  const statusOrder = ['new', 'confirmed', 'preparing', 'delivering', 'delivered', 'cancelled'];
 
-  // Top products
+  // Top products — with revenue
   const topProds = {};
-  orders.forEach(o => (o.items || []).forEach(it => { topProds[it.name] = (topProds[it.name] || 0) + it.qty; }));
-  const topList = Object.entries(topProds).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topRevenue = {};
+  orders.forEach(o => (o.items || []).forEach(it => {
+    topProds[it.name] = (topProds[it.name] || 0) + (it.qty || 0);
+    topRevenue[it.name] = (topRevenue[it.name] || 0) + ((it.price || 0) * (it.qty || 0));
+  }));
+  const topList = Object.entries(topProds).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const topMaxQty = topList.length > 0 ? topList[0][1] : 1;
 
-  // Last 7 days chart data
-  const days = Array.from({ length: 7 }, (_, i) => {
+  // Chart data — dynamic by period
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : Math.min(90, Math.max(7, Math.ceil((Date.now() - Math.min(...orders.map(o => { try { return new Date(o.date).getTime(); } catch { return Date.now(); } }))) / 86400000)));
+  const days = Array.from({ length: periodDays }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
+    d.setDate(d.getDate() - (periodDays - 1 - i));
     return d;
   });
-  const dayData = days.map(d => ({
-    label: d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
-    count: orders.filter(o => {
-      try { return new Date(o.date).toDateString() === d.toDateString(); } catch { return false; }
-    }).length,
-  }));
+  const dayData = days.map(d => {
+    const ds = d.toDateString();
+    const dayOrds = orders.filter(o => { try { return new Date(o.date).toDateString() === ds; } catch { return false; } });
+    const dayDel = dayOrds.filter(o => o.status === 'delivered');
+    return {
+      label: d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
+      count: dayOrds.length,
+      revenue: dayDel.reduce((s, o) => s + (o.total || 0), 0),
+    };
+  });
   const maxCount = Math.max(...dayData.map(d => d.count), 1);
+  const maxRevenue = Math.max(...dayData.map(d => d.revenue), 1);
+
+  // Donut chart data for status distribution
+  const donutData = statusOrder.filter(s => statusCounts[s] > 0).map(s => ({
+    status: s,
+    count: statusCounts[s] || 0,
+    color: (STATUS_COLORS[s] || {}).color || T.textMuted,
+  }));
+  const donutTotal = donutData.reduce((s, d) => s + d.count, 0);
 
   const stats = [
-    { label: t.totalRevenue, val: formatSum(totalRevenue), color: T.accent, bg: T.accentLight },
-    { label: t.totalOrders, val: orders.length, color: "#3B82F6", bg: "#EFF6FF" },
-    { label: t.registeredCount, val: registeredUsers.length, color: T.referral, bg: "#F5F3FF" },
-    { label: t.visits, val: visitCount, color: T.bonus, bg: "#FFF7ED" },
+    { label: t.totalRevenue || (lang === 'kg' ? 'Жалпы киреше' : 'Общая выручка'), val: formatSum(totalRevenue), color: "#2E7D32", bg: "#E8F5E9", icon: 'revenue' },
+    { label: t.totalOrders || (lang === 'kg' ? 'Заказдар' : 'Заказы'), val: orders.length, color: "#1565C0", bg: "#E3F2FD", icon: 'orders' },
+    { label: lang === 'kg' ? 'Орточо чек' : 'Средний чек', val: formatSum(avgCheck), color: "#7C5CBF", bg: "#EDE7F6", icon: 'avg' },
+    { label: lang === 'kg' ? 'Конверсия' : 'Конверсия', val: `${conversionRate}%`, color: "#FF6B00", bg: "#FFF3E0", icon: 'conversion' },
   ];
 
   const recentUsers = registeredUsers.slice(-5).reverse();
 
+  // SVG chart dimensions
+  const chartW = 320;
+  const chartH = 140;
+  const chartPadL = 40;
+  const chartPadR = 10;
+  const chartPadT = 10;
+  const chartPadB = 25;
+  const plotW = chartW - chartPadL - chartPadR;
+  const plotH = chartH - chartPadT - chartPadB;
+
+  // Build line path for revenue
+  const revenuePoints = dayData.map((d, i) => {
+    const x = chartPadL + (i / Math.max(dayData.length - 1, 1)) * plotW;
+    const y = chartPadT + plotH - (d.revenue / maxRevenue) * plotH;
+    return `${x},${y}`;
+  });
+  const revenueLine = revenuePoints.join(' ');
+  const areaPath = `M${chartPadL},${chartPadT + plotH} L${revenueLine} L${chartPadL + plotW},${chartPadT + plotH} Z`;
+
   try {
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      <div style={{ padding: "20px 16px 16px", fontSize: 22, fontWeight: 800, color: T.text }}>{t.stats}</div>
+      {/* Header */}
+      <div style={{ padding: "52px 16px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -0.5, color: T.text }}>{t.stats || (lang === 'kg' ? 'Статистика' : 'Статистика')}</div>
+            <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>
+              {new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })}
+            </div>
+          </div>
+        </div>
+      </div>
 
-      {/* Top 4 cards — PRO: spring entrance + count-up where numeric */}
-      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+      {/* Top 4 stat cards — PRO: better icons, spring entrance */}
+      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         {stats.map((s, i) => {
-          // s.val may be string ("123 456 сом") or number — count up only when number
           const numericVal = typeof s.val === 'number' ? s.val : null;
+          const iconMap = {
+            revenue: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+            orders: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+            avg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
+            conversion: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+          };
           return (
             <motion.div
               key={s.label}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.32, delay: i * 0.06, ease: [0.32, 0.72, 0, 1] }}
-              style={{ ...card({ padding: "16px" }) }}
+              style={{ ...card({ padding: "14px" }) }}
             >
-              <div style={{ width: 36, height: 36, borderRadius: 12, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-                {React.cloneElement(IC.stats, { style: { width: 18, height: 18, color: s.color } })}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {iconMap[s.icon] || React.cloneElement(IC.stats, { style: { width: 18, height: 18, color: s.color } })}
+                </div>
               </div>
-              <div style={{ color: s.color, fontSize: 20, fontWeight: 900 }}>
+              <div style={{ color: s.color, fontSize: 20, fontWeight: 900, letterSpacing: -0.3 }}>
                 {numericVal !== null ? <NumberCounter value={numericVal} duration={1.0} /> : s.val}
               </div>
-              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 4 }}>{s.label}</div>
+              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 3 }}>{s.label}</div>
             </motion.div>
           );
         })}
       </div>
 
-      {/* Today stats */}
+      {/* Today highlight card */}
       <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-        <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ color: T.textMuted, fontSize: 11 }}>{t.todayOrders}</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>{lang === 'kg' ? 'Бүгүн' : 'Сегодня'}</div>
+          {dayChange !== 0 && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 3,
+              fontSize: 11, fontWeight: 700, borderRadius: 6, padding: "3px 8px",
+              background: dayChange > 0 ? '#E8F5E9' : '#FFEBEE',
+              color: dayChange > 0 ? '#2E7D32' : '#C62828',
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ transform: dayChange < 0 ? 'rotate(180deg)' : 'none' }}>
+                <polyline points="18 15 12 9 6 15"/>
+              </svg>
+              {Math.abs(dayChange)}% {lang === 'kg' ? 'кечеге' : 'ко вчера'}
+            </div>
+          )}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
             <div style={{ color: T.accent, fontSize: 22, fontWeight: 900 }}>{todayOrdersCount}</div>
+            <div style={{ color: T.textMuted, fontSize: 10, marginTop: 2 }}>{lang === 'kg' ? 'Заказдар' : 'Заказов'}</div>
           </div>
-          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ color: T.textMuted, fontSize: 11 }}>{t.todayRevenue}</div>
-            <div style={{ color: T.accent, fontSize: 18, fontWeight: 900 }}>{formatSum(todayRevenue)}</div>
+          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+            <div style={{ color: T.accent, fontSize: 16, fontWeight: 900 }}>{formatSum(todayRevenue)}</div>
+            <div style={{ color: T.textMuted, fontSize: 10, marginTop: 2 }}>{lang === 'kg' ? 'Киреше' : 'Выручка'}</div>
+          </div>
+          <div style={{ background: T.accentPale, borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+            <div style={{ color: T.accent, fontSize: 22, fontWeight: 900 }}>{todayOrders.filter(o => o.status === 'new').length}</div>
+            <div style={{ color: T.textMuted, fontSize: 10, marginTop: 2 }}>{lang === 'kg' ? 'Жаңы' : 'Новых'}</div>
           </div>
         </div>
       </div>
 
-      {/* Last 7 days chart */}
+      {/* Revenue chart — PRO line + area chart */}
       <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-        <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{t.last7days}</div>
-        <svg width="100%" viewBox="0 0 280 120" style={{ display: "block" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 15 }}>{lang === 'kg' ? 'Киреше динамикасы' : 'Динамика выручки'}</div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {[{ key: '7d', label: '7' }, { key: '30d', label: '30' }, { key: 'all', label: lang === 'kg' ? 'Баары' : 'Все' }].map(p => (
+              <button key={p.key} onClick={() => setPeriod(p.key)} style={{
+                padding: "4px 10px", borderRadius: 6, border: "none",
+                background: period === p.key ? T.accent : "rgba(0,0,0,0.06)",
+                color: period === p.key ? "#fff" : T.textSecond,
+                fontSize: 11, fontWeight: 700, cursor: "pointer",
+              }}>{p.label}{p.key !== 'all' && 'd'}</button>
+            ))}
+          </div>
+        </div>
+        <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ display: "block" }}>
+          <defs>
+            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#2E7D32" stopOpacity="0.2"/>
+              <stop offset="100%" stopColor="#2E7D32" stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          {/* Grid lines */}
+          {[0.25, 0.5, 0.75, 1].map(f => (
+            <line key={f} x1={chartPadL} y1={chartPadT + plotH * (1 - f)} x2={chartW - chartPadR} y2={chartPadT + plotH * (1 - f)} stroke={T.border} strokeWidth="0.5" strokeDasharray="3,3"/>
+          ))}
+          {/* Y-axis labels */}
+          {[0, 0.5, 1].map(f => (
+            <text key={f} x={chartPadL - 4} y={chartPadT + plotH * (1 - f) + 3} textAnchor="end" fontSize="7" fill={T.textMuted}>{Math.round(maxRevenue * f / 1000)}k</text>
+          ))}
+          {/* Area fill */}
+          {dayData.some(d => d.revenue > 0) && <path d={areaPath} fill="url(#areaGrad)"/>}
+          {/* Line */}
+          {dayData.some(d => d.revenue > 0) && <polyline points={revenueLine} fill="none" stroke="#2E7D32" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>}
+          {/* Dots */}
           {dayData.map((d, i) => {
+            if (d.revenue <= 0) return null;
+            const x = chartPadL + (i / Math.max(dayData.length - 1, 1)) * plotW;
+            const y = chartPadT + plotH - (d.revenue / maxRevenue) * plotH;
+            return <circle key={i} cx={x} cy={y} r="2.5" fill="#2E7D32" stroke="#fff" strokeWidth="1"/>;
+          })}
+          {/* X-axis labels — show every nth */}
+          {dayData.filter((_, i) => i % Math.max(1, Math.floor(dayData.length / 7)) === 0 || i === dayData.length - 1).map((d, _, arr) => {
+            const i = dayData.indexOf(d);
+            const x = chartPadL + (i / Math.max(dayData.length - 1, 1)) * plotW;
+            return <text key={i} x={x} y={chartH - 4} textAnchor="middle" fontSize="7" fill={T.textMuted}>{d.label}</text>;
+          })}
+        </svg>
+      </div>
+
+      {/* Orders bar chart */}
+      <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
+        <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.last7days || (lang === 'kg' ? 'Акыркы 7 күн' : 'Последние 7 дней')}</div>
+        <svg width="100%" viewBox={`0 0 ${Math.min(periodDays * 40 + 20, 320)} 120`} style={{ display: "block" }}>
+          {dayData.slice(-7).map((d, i) => {
             const barH = Math.max((d.count / maxCount) * 80, d.count > 0 ? 4 : 0);
             const x = i * 40 + 10;
             return (
               <g key={i}>
-                <rect x={x} y={100 - barH} width={24} height={barH} rx={4} fill={T.accent} opacity={0.85} />
+                <rect x={x} y={100 - barH} width={24} height={barH} rx={6} fill={d.count > 0 ? T.accent : 'rgba(0,0,0,0.06)'} opacity={0.9} />
                 <text x={x + 12} y={115} textAnchor="middle" fontSize="8" fill={T.textMuted}>{d.label}</text>
                 {d.count > 0 && <text x={x + 12} y={96 - barH} textAnchor="middle" fontSize="9" fontWeight="700" fill={T.text}>{d.count}</text>}
               </g>
@@ -5349,20 +7793,72 @@ function AdminStatsScreen({ orders = [], products = [], registeredUsers = [], vi
         </svg>
       </div>
 
-      {/* Status distribution */}
-      {Object.keys(statusCounts).length > 0 && (
+      {/* Status distribution — PRO donut chart + legend */}
+      {donutData.length > 0 && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.ordersByStatus}</div>
-          {Object.entries(statusCounts).map(([s, cnt]) => {
-            const pct = orders.length ? Math.round(cnt / orders.length * 100) : 0;
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 16 }}>{t.ordersByStatus || (lang === 'kg' ? 'Статус боюнча' : 'По статусам')}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+            {/* Donut SVG */}
+            <svg width="100" height="100" viewBox="0 0 42 42" style={{ flexShrink: 0 }}>
+              <circle cx="21" cy="21" r="15.915" fill="none" stroke={T.border} strokeWidth="3"/>
+              {(() => {
+                let offset = 25; // Start at top (25% offset = 12 o'clock)
+                return donutData.map((d, i) => {
+                  const pct = (d.count / donutTotal) * 100;
+                  const dash = `${pct} ${100 - pct}`;
+                  const el = <circle key={i} cx="21" cy="21" r="15.915" fill="none" stroke={d.color} strokeWidth="3.5" strokeDasharray={dash} strokeDashoffset={-offset} strokeLinecap="round"/>;
+                  offset += pct;
+                  return el;
+                });
+              })()}
+              <text x="21" y="20" textAnchor="middle" fontSize="7" fontWeight="900" fill={T.text}>{donutTotal}</text>
+              <text x="21" y="25" textAnchor="middle" fontSize="3.5" fill={T.textMuted}>{lang === 'kg' ? 'заказ' : 'заказов'}</text>
+            </svg>
+            {/* Legend */}
+            <div style={{ flex: 1, minWidth: 140 }}>
+              {donutData.map(d => {
+                const pct = Math.round(d.count / donutTotal * 100);
+                return (
+                  <div key={d.status} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 3, background: d.color, flexShrink: 0 }} />
+                    <span style={{ flex: 1, fontSize: 12, color: T.textSecond }}>{t["status_" + d.status] || d.status}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{d.count}</span>
+                    <span style={{ fontSize: 10, color: T.textMuted, minWidth: 30, textAlign: "right" }}>{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top products — PRO with horizontal bar chart */}
+      {topList.length > 0 && (
+        <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.topProducts || (lang === 'kg' ? 'Топ товарлар' : 'Топ товары')}</div>
+          {topList.map(([name, qty], i) => {
+            const barPct = Math.round((qty / topMaxQty) * 100);
+            const rev = topRevenue[name] || 0;
             return (
-              <div key={s} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ color: T.textSecond, fontSize: 13 }}>{t["status_" + s] || s}</span>
-                  <span style={{ color: T.text, fontSize: 13, fontWeight: 700 }}>{cnt} ({pct}%)</span>
+              <div key={name} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: 8,
+                    background: i === 0 ? T.accent : i === 1 ? '#666' : i === 2 ? '#999' : T.accentLight,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    color: i < 3 ? "#fff" : T.accent, fontSize: 11, fontWeight: 900, flexShrink: 0,
+                  }}>{i + 1}</div>
+                  <div style={{ flex: 1, fontSize: 13, color: T.text, fontWeight: 600 }}>{name}</div>
+                  <div style={{ fontSize: 12, color: T.textMuted }}>{qty} {t.pcs || (lang === 'kg' ? 'даана' : 'шт')}</div>
+                  <div style={{ fontSize: 11, color: T.accent, fontWeight: 700, minWidth: 70, textAlign: 'right' }}>{formatSum(rev)}</div>
                 </div>
-                <div style={{ height: 8, borderRadius: 4, background: T.bg }}>
-                  <div style={{ height: "100%", borderRadius: 4, width: `${pct}%`, background: T.accent, transition: "width 0.5s" }} />
+                <div style={{ height: 4, borderRadius: 2, background: "rgba(0,0,0,0.06)", marginLeft: 34 }}>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${barPct}%` }}
+                    transition={{ duration: 0.6, delay: i * 0.05 }}
+                    style={{ height: "100%", borderRadius: 2, background: i === 0 ? T.accent : T.textMuted }}
+                  />
                 </div>
               </div>
             );
@@ -5370,24 +7866,26 @@ function AdminStatsScreen({ orders = [], products = [], registeredUsers = [], vi
         </div>
       )}
 
-      {/* Top 5 products */}
-      {topList.length > 0 && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.topProducts}</div>
-          {topList.map(([name, qty], i) => (
-            <div key={name} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 10, background: i === 0 ? T.accent : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", color: i === 0 ? "#fff" : T.accent, fontSize: 13, fontWeight: 900, flexShrink: 0 }}>{i + 1}</div>
-              <div style={{ flex: 1, color: T.text, fontSize: 13 }}>{name}</div>
-              <div style={{ color: T.accent, fontWeight: 700 }}>{qty} {t.pcs}</div>
-            </div>
-          ))}
+      {/* Quick metrics — registered users + visits */}
+      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+        <div style={{ ...card({ padding: "14px", textAlign: "center" }) }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: T.referral }}>
+            <NumberCounter value={registeredUsers.length} duration={1.0} />
+          </div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{t.registeredCount || (lang === 'kg' ? 'Катталгандар' : 'Зарегистрировано')}</div>
         </div>
-      )}
+        <div style={{ ...card({ padding: "14px", textAlign: "center" }) }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: T.bonus }}>
+            <NumberCounter value={visitCount} duration={1.0} />
+          </div>
+          <div style={{ fontSize: 11, color: T.textMuted, marginTop: 4 }}>{t.visits || (lang === 'kg' ? 'Кирүүлөр' : 'Посещения')}</div>
+        </div>
+      </div>
 
       {/* Recent registered users */}
       {recentUsers.length > 0 && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.recentUsers}</div>
+          <div style={{ color: T.text, fontWeight: 700, fontSize: 15, marginBottom: 14 }}>{t.recentUsers || (lang === 'kg' ? 'Жаңы колдонуучулар' : 'Новые пользователи')}</div>
           {recentUsers.map((u, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, paddingBottom: i < recentUsers.length - 1 ? 10 : 0, borderBottom: i < recentUsers.length - 1 ? `1px solid ${T.border}` : "none" }}>
               <div style={{ width: 34, height: 34, borderRadius: "50%", background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -5408,355 +7906,549 @@ function AdminStatsScreen({ orders = [], products = [], registeredUsers = [], vi
     return <div style={{ padding: 32, color: 'red', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>Stats crashed: {String(err?.message || err)}</div>;
   }
 }
+// ─── ADMIN CLIENTS (CRM) ──────────────────────────────────────────────────────
+// PRO: client database with order history, bonus status, total spent, search
+function AdminClientsScreen({ clients = [], orders = [], showToast }) {
+  const { t, lang } = useLang();
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("recent"); // 'recent', 'orders', 'spent', 'bonus'
+  const [selectedClient, setSelectedClient] = useState(null);
+
+  // Compute client stats
+  const clientStats = useMemo(() => {
+    const map = {};
+    clients.forEach(c => {
+      const phone = c.phone || '';
+      map[phone] = {
+        ...c,
+        orderCount: 0,
+        totalSpent: 0,
+        lastOrder: null,
+        deliveredCount: 0,
+      };
+    });
+    orders.forEach(o => {
+      const phone = o.clientPhone || '';
+      if (!map[phone]) {
+        map[phone] = { phone, name: o.clientName || '', bonusBalance: 0, orderCount: 0, totalSpent: 0, lastOrder: null, deliveredCount: 0 };
+      }
+      map[phone].orderCount += 1;
+      if (o.status === 'delivered') {
+        map[phone].totalSpent += (o.total || 0);
+        map[phone].deliveredCount += 1;
+      }
+      const oDate = o.date || o.created;
+      if (oDate && (!map[phone].lastOrder || oDate > map[phone].lastOrder)) {
+        map[phone].lastOrder = oDate;
+      }
+    });
+    return Object.values(map);
+  }, [clients, orders]);
+
+  // Search
+  const searchLower = search.trim().toLowerCase();
+  const searched = searchLower
+    ? clientStats.filter(c =>
+        (c.name || '').toLowerCase().includes(searchLower) ||
+        (c.phone || '').includes(searchLower) ||
+        (c.referralCode || '').toLowerCase().includes(searchLower)
+      )
+    : clientStats;
+
+  // Sort
+  const sorted = [...searched].sort((a, b) => {
+    if (sortBy === 'orders') return (b.orderCount || 0) - (a.orderCount || 0);
+    if (sortBy === 'spent') return (b.totalSpent || 0) - (a.totalSpent || 0);
+    if (sortBy === 'bonus') return (b.bonusBalance || 0) - (a.bonusBalance || 0);
+    // recent
+    const da = a.lastOrder || a.created || '';
+    const db = b.lastOrder || b.created || '';
+    return db > da ? 1 : db < da ? -1 : 0;
+  });
+
+  // Client detail modal
+  const clientOrders = selectedClient
+    ? orders.filter(o => o.clientPhone === selectedClient.phone).sort((a, b) => (b.date || b.created || '') > (a.date || a.created || '') ? 1 : -1)
+    : [];
+
+  // Summary stats
+  const totalClients = clientStats.length;
+  const activeClients = clientStats.filter(c => c.orderCount > 0).length;
+  const totalBonusOut = clientStats.reduce((s, c) => s + (c.bonusBalance || 0), 0);
+
+  try {
+  return (
+    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
+      {/* Header */}
+      <div style={{ padding: "52px 16px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: -0.5, color: T.text }}>{lang === 'kg' ? 'Кардарлар' : 'Клиенты'}</div>
+            <div style={{ fontSize: 12, color: T.textMuted, marginTop: 2 }}>
+              {totalClients} {lang === 'kg' ? 'катталган' : 'зарегистрировано'} · {activeClients} {lang === 'kg' ? 'активдүү' : 'активных'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ padding: "0 16px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+        <div style={{ ...card({ padding: "12px", textAlign: "center" }) }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: "#1565C0" }}>{totalClients}</div>
+          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{lang === 'kg' ? 'Баары' : 'Всего'}</div>
+        </div>
+        <div style={{ ...card({ padding: "12px", textAlign: "center" }) }}>
+          <div style={{ fontSize: 20, fontWeight: 900, color: "#2E7D32" }}>{activeClients}</div>
+          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{lang === 'kg' ? 'Заказ берген' : 'С заказами'}</div>
+        </div>
+        <div style={{ ...card({ padding: "12px", textAlign: "center" }) }}>
+          <div style={{ fontSize: 16, fontWeight: 900, color: T.bonus }}>{formatSum(totalBonusOut)}</div>
+          <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>{lang === 'kg' ? 'Бонустар' : 'Бонусы'}</div>
+        </div>
+      </div>
+
+      {/* Search + sort */}
+      <div style={{ padding: "0 16px", marginBottom: 12 }}>
+        <div style={{ position: "relative", marginBottom: 10 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder={lang === 'kg' ? 'Аты, телефон, реферал коду...' : 'Имя, телефон, реф. код...'}
+            style={{ width: "100%", padding: "11px 12px 11px 38px", borderRadius: 12, border: `1.5px solid ${T.border}`, background: T.card, fontSize: 14, outline: "none", boxSizing: "border-box", color: T.text, fontFamily: "inherit" }}
+          />
+        </div>
+        <div style={{ display: "flex", gap: 6, overflowX: "auto" }}>
+          {[
+            { key: 'recent', label: lang === 'kg' ? 'Жаңы' : 'Новые' },
+            { key: 'orders', label: lang === 'kg' ? 'Заказ боюнча' : 'По заказам' },
+            { key: 'spent', label: lang === 'kg' ? 'Чыгым' : 'По расходам' },
+            { key: 'bonus', label: lang === 'kg' ? 'Бонус' : 'По бонусам' },
+          ].map(s => (
+            <button key={s.key} onClick={() => setSortBy(s.key)} style={{
+              padding: "6px 12px", borderRadius: 8, border: "none",
+              background: sortBy === s.key ? T.accent : "rgba(0,0,0,0.06)",
+              color: sortBy === s.key ? "#fff" : T.textSecond,
+              fontSize: 11, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+            }}>{s.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Clients list */}
+      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {!sorted.length && (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: T.textMuted, fontSize: 14 }}>
+            {lang === 'kg' ? 'Кардарлар табылган жок' : 'Клиенты не найдены'}
+          </div>
+        )}
+        {sorted.map((client, idx) => (
+          <motion.div
+            key={client.phone || idx}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.2) }}
+            onClick={() => setSelectedClient(client)}
+            style={{
+              ...card({ padding: "14px", cursor: "pointer" }),
+              display: "flex", alignItems: "center", gap: 12,
+              transition: "transform 0.15s, box-shadow 0.15s",
+            }}
+          >
+            {/* Avatar */}
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: client.orderCount > 0 ? T.accent : T.accentLight,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: client.orderCount > 0 ? "#fff" : T.accent,
+              fontSize: 15, fontWeight: 800, flexShrink: 0,
+            }}>
+              {(client.name || client.phone || '?')[0].toUpperCase()}
+            </div>
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{client.name || (lang === 'kg' ? 'Аты жок' : 'Без имени')}</span>
+                {client.bonusBalance > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 700, background: "#FFF3E0", color: T.bonus, padding: "1px 6px", borderRadius: 4 }}>{client.bonusBalance} B</span>
+                )}
+              </div>
+              <div style={{ fontSize: 12, color: T.textMuted }}>{client.phone}</div>
+            </div>
+            {/* Stats */}
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{client.orderCount}</div>
+              <div style={{ fontSize: 10, color: T.textMuted }}>{lang === 'kg' ? 'заказ' : 'заказов'}</div>
+              {client.totalSpent > 0 && (
+                <div style={{ fontSize: 10, color: T.accent, fontWeight: 600, marginTop: 2 }}>{formatSum(client.totalSpent)}</div>
+              )}
+            </div>
+            {/* Arrow */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Client detail modal */}
+      {selectedClient && (
+        <div
+          onClick={() => setSelectedClient(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={e => e.stopPropagation()}
+            style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "85vh", overflow: "auto", padding: 0 }}
+          >
+            {/* Modal header */}
+            <div style={{ padding: "20px 20px 16px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{
+                width: 48, height: 48, borderRadius: "50%",
+                background: T.accent, display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff", fontSize: 20, fontWeight: 800,
+              }}>
+                {(selectedClient.name || selectedClient.phone || '?')[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: T.text }}>{selectedClient.name || (lang === 'kg' ? 'Аты жок' : 'Без имени')}</div>
+                <div style={{ fontSize: 13, color: T.textMuted }}>{selectedClient.phone}</div>
+              </div>
+              <button onClick={() => setSelectedClient(null)} style={{ background: "rgba(0,0,0,0.06)", border: "none", borderRadius: "50%", width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textSecond} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            {/* Client stats grid */}
+            <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+              <div style={{ background: "#E3F2FD", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: "#1565C0" }}>{selectedClient.orderCount}</div>
+                <div style={{ fontSize: 10, color: "#1565C0" }}>{lang === 'kg' ? 'Заказдар' : 'Заказов'}</div>
+              </div>
+              <div style={{ background: "#E8F5E9", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                <div style={{ fontSize: 14, fontWeight: 900, color: "#2E7D32" }}>{formatSum(selectedClient.totalSpent)}</div>
+                <div style={{ fontSize: 10, color: "#2E7D32" }}>{lang === 'kg' ? 'Жыйынтык' : 'Потрачено'}</div>
+              </div>
+              <div style={{ background: "#FFF3E0", borderRadius: 12, padding: "12px 10px", textAlign: "center" }}>
+                <div style={{ fontSize: 18, fontWeight: 900, color: T.bonus }}>{selectedClient.bonusBalance || 0}</div>
+                <div style={{ fontSize: 10, color: T.bonus }}>{lang === 'kg' ? 'Бонус' : 'Бонусы'}</div>
+              </div>
+            </div>
+
+            {/* Referral info */}
+            {(selectedClient.referralCode || selectedClient.referredBy) && (
+              <div style={{ padding: "0 20px 12px", display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {selectedClient.referralCode && (
+                  <div style={{ background: "#EDE7F6", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: T.referral }}>
+                    {lang === 'kg' ? 'Реф. код' : 'Реф. код'}: {selectedClient.referralCode}
+                  </div>
+                )}
+                {selectedClient.referredBy && (
+                  <div style={{ background: "#F3E5F5", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 600, color: "#8E24AA" }}>
+                    {lang === 'kg' ? 'Кимден' : 'Привёл'}: {selectedClient.referredBy}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Order history */}
+            <div style={{ padding: "0 20px 20px" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: T.text, marginBottom: 10 }}>
+                {lang === 'kg' ? 'Заказ тарыхы' : 'История заказов'} ({clientOrders.length})
+              </div>
+              {clientOrders.length === 0 && (
+                <div style={{ fontSize: 13, color: T.textMuted, padding: "16px 0", textAlign: "center" }}>
+                  {lang === 'kg' ? 'Заказдар жок' : 'Заказов нет'}
+                </div>
+              )}
+              {clientOrders.slice(0, 20).map((o, i) => {
+                const osc = STATUS_COLORS[o.status] || { bg: "rgba(0,0,0,0.04)", color: T.textMuted };
+                return (
+                  <div key={o.id || i} style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "10px 0",
+                    borderBottom: i < clientOrders.length - 1 ? `1px solid ${T.border}` : "none",
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 11, color: T.textMuted }}>#{(o.id || '').slice(-6).toUpperCase()}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, background: osc.bg, color: osc.color, padding: "2px 8px", borderRadius: 4 }}>{t["status_" + o.status] || o.status}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+                        {(() => { try { const d = new Date(o.date || o.created); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } })()}
+                        {o.items && ` · ${o.items.length} ${lang === 'kg' ? 'товар' : 'товар'}`}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: T.text }}>{formatSum(o.total || 0)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+  } catch (err) {
+    console.error('[Clients CRASH]', err);
+    return <div style={{ padding: 32, color: 'red', fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>Clients crashed: {String(err?.message || err)}</div>;
+  }
+}
+
 // ─── ADMIN BANNERS ─────────────────────────────────────────────────────────────
 function AdminBannersScreen({ banners = [], setBanners, products = [] }) {
   const { t, lang } = useLang();
   const [editing, setEditing] = useState(null);
   const bannerFileRef = useRef(null);
   const [bannerCropSrc, setBannerCropSrc] = useState(null);
-  const addBanner = () => { const nb = { id: Date.now(), title: "", subtitle: "", img: null, bg: BG_PRESETS[0], active: true, textX: 50, textY: 50, textAlign: 'center', btnText: '', linkedProductId: '', overlayTop: 0.08, overlayBottom: 0.45 }; setBanners(p => [...p, nb]); setEditing(nb.id); };
-  const textDragRef = useRef(null);
+  const MAX_BANNERS = 5;
+  const addBanner = () => { if (banners.length >= MAX_BANNERS) return; const nb = { id: Date.now(), title: "", subtitle: "", img: null, bg: BG_PRESETS[0], active: true, textX: 50, textY: 50, textAlign: 'center', btnText: '', linkedProductId: '', overlayTop: 0.08, overlayBottom: 0.45 }; setBanners(p => [...p, nb]); setEditing(nb.id); };
   const previewRef = useRef(null);
   const upd = (id, f, v) => setBanners(prev => prev.map(b => b.id === id ? { ...b, [f]: v } : b));
-  const del = (id) => { setBanners(p => p.filter(b => b.id !== id)); if (editing === id) setEditing(null); };
+  const del = (id) => { api.deleteBannerImage(id).catch(() => {}); setBanners(p => p.filter(b => b.id !== id)); if (editing === id) setEditing(null); };
   const editB = banners.find(b => b.id === editing);
+
+  // Drag reorder
+  const [dragIdx, setDragIdx] = useState(null);
+  const handleDragStart = (idx) => { setDragIdx(idx); };
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) return;
+    setBanners(prev => {
+      const arr = [...prev];
+      const [moved] = arr.splice(dragIdx, 1);
+      arr.splice(idx, 0, moved);
+      return arr;
+    });
+    setDragIdx(idx);
+  };
+  const handleDragEnd = () => setDragIdx(null);
+
+  // Section label helper
+  const SL = ({ children }) => (
+    <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, marginTop: 16 }}>{children}</div>
+  );
+
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      <div style={{ padding: "52px 16px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: T.text }}>{t.banners}</div>
-        <button onClick={addBanner} style={{ ...btnGreen({ width: "auto", padding: "10px 18px", borderRadius: 14, fontSize: 13 }) }}>+ {t.add}</button>
-      </div>
-      <div style={{ margin: "0 16px 16px", background: '#FFFBF0', borderRadius: 12, padding: 14, border: '1px solid #FFE0B2' }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#FF6B00', marginBottom: 6 }}>
-          {lang === 'kg' ? 'Фото боюнча сунуштар' : 'Рекомендации по фото'}
-        </div>
-        <div style={{ fontSize: 12, color: '#888', lineHeight: 1.8 }}>
-          • {lang === 'kg' ? 'Өлчөмү' : 'Размер'}: 1400 × 540 px ({lang === 'kg' ? 'идеалдуу' : 'идеально'})<br/>
-          • {lang === 'kg' ? 'Формат' : 'Формат'}: JPG {lang === 'kg' ? 'же' : 'или'} PNG<br/>
-          • {lang === 'kg' ? 'Файл өлчөмү' : 'Размер файла'}: {lang === 'kg' ? '2MB чейин' : 'до 2MB'}<br/>
-          • {lang === 'kg' ? 'Затемнение слайдерлери менен жарыкты тууралаңыз' : 'Настройте затемнение слайдерами ниже'}<br/>
-          • {lang === "ru" ? "Создайте на Canva.com" : "Canva.com'до жасаңыз"}
-        </div>
-      </div>
-      {editB && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ color: T.text, fontWeight: 800, fontSize: 16 }}>{t.editBanner}</div>
-            <button onClick={() => setEditing(null)} style={{ background: "none", border: "none", color: T.textMuted, cursor: "pointer", fontSize: 22 }}>×</button>
-          </div>
-          {/* Banner Preview — haqiqiy banner ko'rinishi */}
-          <div style={{ marginBottom: 14 }}>
-            {/* Preview label */}
-            <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-              {lang === 'kg' ? 'Баннер алдын ала көрүнүшү' : 'Предпросмотр баннера'}
+      {/* ── Side panel layout for desktop ── */}
+      <div style={{ display: "flex", minHeight: "calc(100vh - 80px)", gap: 0 }}>
+
+        {/* ═══ LEFT: Banner list ═══ */}
+        <div style={{ width: 320, minWidth: 320, borderRight: `1px solid ${T.border}`, background: "#FAFAFA", padding: "20px 0", overflowY: "auto" }}>
+          <div style={{ padding: "0 20px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{lang === 'kg' ? 'Баннерлер' : 'Баннеры'}</div>
+              <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{banners.length}/{MAX_BANNERS}</div>
             </div>
+            {banners.length < MAX_BANNERS && (
+              <motion.button
+                whileTap={{ scale: 0.93 }}
+                onClick={addBanner}
+                style={{ width: 34, height: 34, borderRadius: 10, border: "none", background: T.accent, color: "#fff", fontSize: 20, fontWeight: 500, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              >+</motion.button>
+            )}
+          </div>
 
-            {/* Banner shablon — haqiqiy o'lchamda */}
-            <div style={{
-              width: "100%",
-              height: 160,
-              borderRadius: 14,
-              overflow: "hidden",
-              position: "relative",
-              background: editB.img ? "transparent" : editB.bg || "#111",
-              border: `2px dashed ${T.border}`,
-              cursor: "pointer"
-            }}
-              onClick={() => bannerFileRef.current?.click()}
-            >
-              {/* Rasm */}
-              {editB.img && (
-                <img
-                  src={editB.img}
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "center top"
-                  }}
-                />
-              )}
+          {/* Hint */}
+          <div style={{ padding: "0 20px 12px" }}>
+            <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.5 }}>
+              {lang === 'kg' ? 'Тартипти өзгөртүү үчүн сүйрөңүз' : 'Перетащите для изменения порядка'}
+            </div>
+          </div>
 
-              {/* Gradient overlay — real-time preview with admin overlay settings */}
-              <div style={{
-                position: "absolute",
-                inset: 0,
-                background: editB.img
-                  ? `linear-gradient(to bottom, rgba(0,0,0,${editB.overlayTop ?? 0.08}) 0%, rgba(0,0,0,${editB.overlayBottom ?? 0.45}) 100%)`
-                  : "transparent",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-                padding: "0 22px"
-              }}>
-                {editB.img ? (
-                  <>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: 600, letterSpacing: 1, marginBottom: 4 }}>{lang === 'kg' ? 'АКЦИЯ' : 'АКЦИЯ'}</div>
-                    <div style={{ color: "#fff", fontSize: 18, fontWeight: 800 }}>{editB.title || "Kemal Usman"}</div>
-                    <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 2 }}>{editB.subtitle || ""}</div>
-                  </>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: "rgba(255,255,255,0.6)" }}>
-                    {React.cloneElement(IC.camera, { style: { width: 28, height: 28 } })}
-                    <span style={{ fontSize: 12 }}>{lang === 'kg' ? 'Сүрөт жүктөө' : 'Загрузить фото'}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* Rasm bor bo'lsa — ustiga bosib almashtirish belgisi */}
-              {editB.img && (
-                <div style={{
-                  position: "absolute", top: 8, right: 8,
-                  background: "rgba(0,0,0,0.5)", borderRadius: 8,
-                  padding: "4px 8px", color: "#fff", fontSize: 11, fontWeight: 600,
-                  cursor: "pointer"
-                }}>
-                  {lang === 'kg' ? '↑ Алмаштыруу' : '↑ Заменить'}
+          {/* Banner cards — draggable */}
+          <div style={{ padding: "0 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+            {banners.map((b, idx) => (
+              <motion.div
+                key={b.id}
+                draggable
+                onDragStart={() => handleDragStart(idx)}
+                onDragOver={e => handleDragOver(e, idx)}
+                onDragEnd={handleDragEnd}
+                onClick={() => setEditing(b.id)}
+                whileTap={{ scale: 0.98 }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 12px", borderRadius: 12, cursor: "grab",
+                  background: editing === b.id ? "#fff" : "transparent",
+                  border: editing === b.id ? `2px solid ${T.accent}` : "2px solid transparent",
+                  boxShadow: editing === b.id ? T.shadowSm : "none",
+                  transition: "all 0.15s",
+                  opacity: dragIdx === idx ? 0.5 : 1,
+                }}
+              >
+                {/* Drag handle */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0, cursor: "grab" }}>
+                  <div style={{ width: 12, height: 2, borderRadius: 1, background: T.textMuted }} />
+                  <div style={{ width: 12, height: 2, borderRadius: 1, background: T.textMuted }} />
+                  <div style={{ width: 12, height: 2, borderRadius: 1, background: T.textMuted }} />
                 </div>
-              )}
-            </div>
-
-            {/* Hidden file input */}
-            <input
-              ref={bannerFileRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={e => {
-                const f = e.target.files[0]; if (!f) return;
-                const r = new FileReader();
-                r.onload = ev => setBannerCropSrc(ev.target.result);
-                r.readAsDataURL(f);
-                e.target.value = '';
-              }}
-            />
-
-            {/* Crop modal — BannerCropModal exports 1200×480 for desktop quality */}
-            {bannerCropSrc && (
-              <BannerCropModal
-                src={bannerCropSrc}
-                onDone={v => { upd(editB.id, "img", v); setBannerCropSrc(null); }}
-                onCancel={() => setBannerCropSrc(null)}
-              />
-            )}
-
-            {/* O'chirish tugmasi — rasm bor bo'lsa */}
-            {editB.img && (
-              <button
-                onClick={() => upd(editB.id, "img", null)}
-                style={{ marginTop: 6, width: "100%", padding: "8px 0", borderRadius: 10, border: `1px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-              >
-                {lang === 'kg' ? 'Сүрөттү өчүрүү' : 'Удалить фото'}
-              </button>
-            )}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-            <input style={inputStyle} placeholder={t.bannerTitle} value={editB.title} onChange={e => upd(editB.id, "title", e.target.value)} />
-            <input style={inputStyle} placeholder={t.bannerSubtitle} value={editB.subtitle} onChange={e => upd(editB.id, "subtitle", e.target.value)} />
-          </div>
-
-          {/* ── TEXT POSITION — drag label around mini preview ── */}
-          {(editB.title || editB.subtitle) && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ color: T.textSecond, fontSize: 12, marginBottom: 8 }}>
-                Позиция текста — перетащите метку:
+                {/* Thumbnail */}
+                <div style={{ width: 64, height: 36, borderRadius: 8, background: b.img ? "transparent" : b.bg || "#111", overflow: "hidden", flexShrink: 0, border: `1px solid ${T.border}` }}>
+                  {b.img && <img src={b.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                </div>
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.title || (lang === 'kg' ? 'Аталышсыз' : 'Без названия')}</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>{b.subtitle || ''}</div>
+                </div>
+                {/* Status dot */}
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: b.active ? "#34C759" : T.border, flexShrink: 0 }} />
+              </motion.div>
+            ))}
+            {banners.length === 0 && (
+              <div style={{ textAlign: "center", padding: "40px 16px", color: T.textMuted, fontSize: 13 }}>
+                {lang === 'kg' ? 'Баннерлер жок' : 'Нет баннеров'}
+                <br/>
+                <motion.button whileTap={{ scale: 0.95 }} onClick={addBanner} style={{ marginTop: 12, padding: "8px 20px", borderRadius: 10, border: "none", background: T.accent, color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                  + {lang === 'kg' ? 'Кошуу' : 'Добавить'}
+                </motion.button>
               </div>
-              {/* Mini 16:5 preview with draggable text dot */}
-              <div
-                ref={previewRef}
-                style={{ position: 'relative', width: '100%', height: 100,
-                  borderRadius: 10, overflow: 'hidden', background: editB.bg || '#111',
-                  border: `1px solid ${T.border}`, cursor: 'crosshair', touchAction: 'none' }}
-                onMouseDown={e => {
-                  const rect = previewRef.current.getBoundingClientRect();
-                  const move = (ev) => {
-                    const x = Math.min(100, Math.max(0, ((ev.clientX - rect.left) / rect.width) * 100));
-                    const y = Math.min(100, Math.max(0, ((ev.clientY - rect.top) / rect.height) * 100));
-                    upd(editB.id, 'textX', Math.round(x));
-                    upd(editB.id, 'textY', Math.round(y));
-                  };
-                  const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-                  window.addEventListener('mousemove', move);
-                  window.addEventListener('mouseup', up);
-                  move(e);
-                }}
-                onTouchStart={e => {
-                  e.preventDefault();
-                  const rect = previewRef.current.getBoundingClientRect();
-                  const move = (ev) => {
-                    const t = ev.touches[0];
-                    const x = Math.min(100, Math.max(0, ((t.clientX - rect.left) / rect.width) * 100));
-                    const y = Math.min(100, Math.max(0, ((t.clientY - rect.top) / rect.height) * 100));
-                    upd(editB.id, 'textX', Math.round(x));
-                    upd(editB.id, 'textY', Math.round(y));
-                  };
-                  const up = () => { window.removeEventListener('touchmove', move); window.removeEventListener('touchend', up); };
-                  window.addEventListener('touchmove', move, { passive: false });
-                  window.addEventListener('touchend', up);
-                  move(e);
-                }}
+            )}
+          </div>
+        </div>
+
+        {/* ═══ RIGHT: Editor panel ═══ */}
+        <div style={{ flex: 1, overflowY: "auto", background: "#fff" }}>
+          {!editB ? (
+            /* Empty state */
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 12, color: T.textMuted, padding: 40 }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={T.border} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2.5" /><circle cx="8.5" cy="8.5" r="1.5" fill={T.border} stroke="none" /><path d="M21 15l-5-5L5 21" />
+              </svg>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{lang === 'kg' ? 'Баннерди тандаңыз' : 'Выберите баннер'}</div>
+              <div style={{ fontSize: 12, maxWidth: 240, textAlign: "center", lineHeight: 1.5 }}>
+                {lang === 'kg' ? 'Сол жактан баннерди тандаңыз же жаңысын кошуңуз' : 'Выберите баннер слева или добавьте новый'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: "24px 32px", maxWidth: 720 }}>
+              {/* ── REAL PREVIEW — how it looks on site ── */}
+              <SL>{lang === 'kg' ? 'Алдын ала көрүнүш' : 'Предпросмотр'}</SL>
+              <div style={{
+                width: "100%", aspectRatio: "2.6 / 1", borderRadius: 16,
+                overflow: "hidden", position: "relative",
+                background: editB.img ? "transparent" : editB.bg || "#111",
+                border: !editB.img ? `2px dashed ${T.border}` : "none",
+                cursor: !editB.img ? "pointer" : "default",
+                boxShadow: T.shadow,
+              }}
+                onClick={() => !editB.img && bannerFileRef.current?.click()}
               >
-                {editB.img && (
-                  <img src={editB.img} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
-                )}
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.3)', pointerEvents: 'none' }} />
-                {/* Grid lines */}
-                {[33,66].map(p => (
-                  <React.Fragment key={p}>
-                    <div style={{ position: 'absolute', left: `${p}%`, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.1)', pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: `${p}%`, left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.1)', pointerEvents: 'none' }} />
-                  </React.Fragment>
-                ))}
-                {/* Draggable text label */}
+                {editB.img && <img src={editB.img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />}
                 <div style={{
-                  position: 'absolute',
-                  left: `${editB.textX ?? 50}%`, top: `${editB.textY ?? 50}%`,
-                  transform: 'translate(-50%, -50%)',
-                  pointerEvents: 'none',
-                  textAlign: editB.textAlign || 'center',
-                  maxWidth: '80%',
+                  position: "absolute", inset: 0,
+                  background: editB.img ? `linear-gradient(to bottom, rgba(0,0,0,${editB.overlayTop ?? 0.08}) 0%, rgba(0,0,0,${editB.overlayBottom ?? 0.45}) 100%)` : "transparent",
+                  display: "flex", flexDirection: "column", justifyContent: "flex-end", padding: "0 32px 28px",
                 }}>
-                  <div style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1, textShadow: '0 1px 3px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>
-                    {editB.title || 'Заголовок'}
-                  </div>
-                  {editB.subtitle && (
-                    <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 8, textShadow: '0 1px 2px rgba(0,0,0,0.8)', whiteSpace: 'nowrap' }}>
-                      {editB.subtitle}
+                  {editB.img ? (<>
+                    {editB.title && <div style={{ color: "#fff", fontSize: 22, fontWeight: 800, textShadow: "0 2px 8px rgba(0,0,0,0.4)" }}>{editB.title}</div>}
+                    {editB.subtitle && <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 14, marginTop: 4 }}>{editB.subtitle}</div>}
+                    {editB.btnText && <div style={{ marginTop: 12, display: "inline-block", padding: "8px 20px", borderRadius: 8, background: "#fff", color: "#111", fontSize: 12, fontWeight: 700, letterSpacing: 0.5 }}>{editB.btnText}</div>}
+                  </>) : (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: "rgba(255,255,255,0.6)" }}>
+                      {React.cloneElement(IC.camera, { style: { width: 32, height: 32 } })}
+                      <span style={{ fontSize: 13 }}>{lang === 'kg' ? 'Сүрөт жүктөө үчүн басыңыз' : 'Нажмите чтобы загрузить фото'}</span>
                     </div>
                   )}
-                  {/* Drag handle dot */}
-                  <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 28, height: 28, borderRadius: '50%', border: '2px solid #C9A84C', background: 'rgba(201,168,76,0.2)', zIndex: -1 }} />
+                </div>
+                {editB.img && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); bannerFileRef.current?.click(); }}
+                    style={{ position: "absolute", top: 12, right: 12, background: "rgba(0,0,0,0.6)", borderRadius: 8, padding: "6px 12px", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", backdropFilter: "blur(8px)" }}
+                  >{lang === 'kg' ? 'Алмаштыруу' : 'Заменить'}</button>
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              <input ref={bannerFileRef} type="file" accept="image/*" style={{ display: "none" }}
+                onChange={e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = ev => setBannerCropSrc(ev.target.result); r.readAsDataURL(f); e.target.value = ''; }}
+              />
+              {bannerCropSrc && (
+                <BannerCropModal src={bannerCropSrc}
+                  onDone={async (v) => { const pbUrl = await api.saveBannerImage(editB.id, v); upd(editB.id, "img", pbUrl || v); setBannerCropSrc(null); }}
+                  onCancel={() => setBannerCropSrc(null)}
+                />
+              )}
+
+              {editB.img && (
+                <button onClick={() => upd(editB.id, "img", null)}
+                  style={{ marginTop: 8, padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.danger}`, background: "transparent", color: T.danger, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  {lang === 'kg' ? 'Сүрөттү өчүрүү' : 'Удалить фото'}
+                </button>
+              )}
+
+              {/* ── TEXT FIELDS ── */}
+              <SL>{lang === 'kg' ? 'Тексттер' : 'Тексты'}</SL>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textSecond, marginBottom: 4, display: "block" }}>{lang === 'kg' ? 'Аталышы' : 'Заголовок'}</label>
+                  <input style={{ ...inputStyle, borderRadius: 10 }} placeholder={lang === 'kg' ? 'Баннер аталышы' : 'Заголовок баннера'} value={editB.title} onChange={e => upd(editB.id, "title", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textSecond, marginBottom: 4, display: "block" }}>{lang === 'kg' ? 'Чакан аталыш' : 'Подзаголовок'}</label>
+                  <input style={{ ...inputStyle, borderRadius: 10 }} placeholder={lang === 'kg' ? 'Кошумча текст' : 'Дополнительный текст'} value={editB.subtitle} onChange={e => upd(editB.id, "subtitle", e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: T.textSecond, marginBottom: 4, display: "block" }}>{lang === 'kg' ? 'Баскыч тексти' : 'Текст кнопки'}</label>
+                  <input style={{ ...inputStyle, borderRadius: 10 }} placeholder={lang === 'kg' ? 'мис. АРОМАТ ТАНДОО' : 'напр. ВЫБРАТЬ АРОМАТ'} value={editB.btnText || ''} onChange={e => upd(editB.id, 'btnText', e.target.value)} />
                 </div>
               </div>
-              {/* Text alignment buttons */}
-              <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                {[['left','←'], ['center','↔'], ['right','→']].map(([a, icon]) => (
-                  <button key={a} onClick={() => upd(editB.id, 'textAlign', a)}
-                    style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: `1px solid ${editB.textAlign === a ? T.text : T.border}`,
-                      background: editB.textAlign === a ? T.text : 'transparent', color: editB.textAlign === a ? '#fff' : T.textSecond,
-                      fontSize: 14, cursor: 'pointer', fontWeight: 600 }}>
-                    {icon}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* ── OVERLAY CONTROL — затемнение баннера ── */}
-          {editB.img && (
-            <div style={{ marginTop: 14, background: '#F9F8F6', borderRadius: 12, padding: 14 }}>
-              <div style={{ color: T.textSecond, fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-                {lang === 'kg' ? 'Караңгылатуу деңгээли' : 'Затемнение фото'}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: T.textMuted, minWidth: 40 }}>Верх</span>
-                <input
-                  type="range" min="0" max="80" step="5"
-                  value={Math.round((editB.overlayTop ?? 0.08) * 100)}
-                  onChange={e => upd(editB.id, 'overlayTop', parseInt(e.target.value) / 100)}
-                  style={{ flex: 1, accentColor: '#111' }}
-                />
-                <span style={{ fontSize: 11, color: T.text, fontWeight: 600, minWidth: 32, textAlign: 'right' }}>
-                  {Math.round((editB.overlayTop ?? 0.08) * 100)}%
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 11, color: T.textMuted, minWidth: 40 }}>Низ</span>
-                <input
-                  type="range" min="0" max="80" step="5"
-                  value={Math.round((editB.overlayBottom ?? 0.45) * 100)}
-                  onChange={e => upd(editB.id, 'overlayBottom', parseInt(e.target.value) / 100)}
-                  style={{ flex: 1, accentColor: '#111' }}
-                />
-                <span style={{ fontSize: 11, color: T.text, fontWeight: 600, minWidth: 32, textAlign: 'right' }}>
-                  {Math.round((editB.overlayBottom ?? 0.45) * 100)}%
-                </span>
-              </div>
-              <div style={{ fontSize: 10, color: T.textMuted, marginTop: 8, lineHeight: 1.5 }}>
-                {lang === 'kg' ? '0% = караңгылатуусуз, 80% = максимум' : '0% = без затемнения, 80% = максимум'}
-              </div>
-            </div>
-          )}
-
-          <div style={{ marginTop: 14 }}>
-            <div style={{ color: T.textSecond, fontSize: 12, marginBottom: 8 }}>{t.background}:</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {BG_PRESETS.map(bg => <div key={bg} onClick={() => upd(editB.id, "bg", bg)} style={{ width: 40, height: 40, borderRadius: 12, background: bg, cursor: "pointer", border: `3px solid ${editB.bg === bg ? T.text : "transparent"}` }} />)}
-            </div>
-          </div>
-          {/* ── CTA BUTTON & PRODUCT LINK ── */}
-          <div style={{ marginTop: 14 }}>
-            <div style={{ color: T.textSecond, fontSize: 12, marginBottom: 8, fontWeight: 600 }}>
-              Кнопка «Выбрать аромат»
-            </div>
-            <input
-              style={{ ...inputStyle, marginBottom: 8 }}
-              placeholder="Текст кнопки (напр. ВЫБРАТЬ АРОМАТ)"
-              value={editB.btnText || ''}
-              onChange={e => upd(editB.id, 'btnText', e.target.value)}
-            />
-            {/* Product selector */}
-            <div style={{ color: T.textSecond, fontSize: 11, marginBottom: 6 }}>
-              Открыть товар при нажатии (необязательно):
-            </div>
-            <div style={{ maxHeight: 180, overflowY: 'auto', borderRadius: 10, border: `1px solid ${T.border}` }}>
-              {/* Clear selection */}
-              <div
-                onClick={() => upd(editB.id, 'linkedProductId', '')}
-                style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                  background: !editB.linkedProductId ? T.accent : 'transparent',
-                  color: !editB.linkedProductId ? '#fff' : T.text, fontSize: 13, fontWeight: 600 }}>
-                <span>↓ Перейти в каталог (по умолчанию)</span>
-              </div>
-              {products.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() => upd(editB.id, 'linkedProductId', p.id)}
-                  style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-                    borderTop: `1px solid ${T.border}`,
-                    background: editB.linkedProductId === p.id ? T.accent : 'transparent',
-                    color: editB.linkedProductId === p.id ? '#fff' : T.text }}>
-                  {(p.img || p.images?.[0]) && (
-                    <img src={p.img || p.images?.[0]} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
-                  )}
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</div>
-                    <div style={{ fontSize: 11, opacity: 0.6 }}>{p.brand}</div>
+              {/* ── OVERLAY SLIDERS ── */}
+              {editB.img && (<>
+                <SL>{lang === 'kg' ? 'Караңгылатуу' : 'Затемнение'}</SL>
+                <div style={{ background: '#F9F8F6', borderRadius: 12, padding: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <span style={{ fontSize: 12, color: T.textSecond, minWidth: 50, fontWeight: 600 }}>{lang === 'kg' ? 'Үстү' : 'Верх'}</span>
+                    <input type="range" min="0" max="80" step="5" value={Math.round((editB.overlayTop ?? 0.08) * 100)}
+                      onChange={e => upd(editB.id, 'overlayTop', parseInt(e.target.value) / 100)} style={{ flex: 1, accentColor: '#111' }} />
+                    <span style={{ fontSize: 12, color: T.text, fontWeight: 700, minWidth: 36, textAlign: 'right' }}>{Math.round((editB.overlayTop ?? 0.08) * 100)}%</span>
                   </div>
-                  {editB.linkedProductId === p.id && <span style={{ marginLeft: 'auto', fontSize: 16 }}>✓</span>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ fontSize: 12, color: T.textSecond, minWidth: 50, fontWeight: 600 }}>{lang === 'kg' ? 'Асты' : 'Низ'}</span>
+                    <input type="range" min="0" max="80" step="5" value={Math.round((editB.overlayBottom ?? 0.45) * 100)}
+                      onChange={e => upd(editB.id, 'overlayBottom', parseInt(e.target.value) / 100)} style={{ flex: 1, accentColor: '#111' }} />
+                    <span style={{ fontSize: 12, color: T.text, fontWeight: 700, minWidth: 36, textAlign: 'right' }}>{Math.round((editB.overlayBottom ?? 0.45) * 100)}%</span>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
+              </>)}
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 14 }}>
-            <div style={{ color: T.textSecond, fontSize: 14 }}>{t.active}</div>
-            <div onClick={() => upd(editB.id, "active", !editB.active)} style={{ width: 48, height: 28, borderRadius: 14, background: editB.active ? T.accent : T.border, cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
-              <div style={{ position: "absolute", top: 3, left: editB.active ? 23 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+              {/* ── PRODUCT LINK ── */}
+              <SL>{lang === 'kg' ? 'Товарга шилтеме' : 'Ссылка на товар'}</SL>
+              <select
+                value={editB.linkedProductId || ''}
+                onChange={e => upd(editB.id, 'linkedProductId', e.target.value)}
+                style={{ ...inputStyle, borderRadius: 10, padding: "12px 14px", appearance: "auto" }}
+              >
+                <option value="">{lang === 'kg' ? 'Каталогго (демейки)' : 'В каталог (по умолчанию)'}</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} {p.brand ? `(${p.brand})` : ''}</option>
+                ))}
+              </select>
+
+              {/* ── ACTIVE TOGGLE + ACTIONS ── */}
+              <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: "#F9F8F6", borderRadius: 12 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>{lang === 'kg' ? 'Активдүү' : 'Активен'}</div>
+                  <div style={{ fontSize: 11, color: T.textMuted }}>{lang === 'kg' ? 'Сайтта көрүнөт' : 'Отображается на сайте'}</div>
+                </div>
+                <div onClick={() => upd(editB.id, "active", !editB.active)} style={{ width: 50, height: 30, borderRadius: 15, background: editB.active ? "#34C759" : "#E5E5EA", cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
+                  <div style={{ position: "absolute", top: 3, left: editB.active ? 23 : 3, width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.15)", transition: "left 0.2s" }} />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <button onClick={() => setEditing(null)} style={{ ...btnGreen({ flex: 1, padding: "13px 0", borderRadius: 12 }), fontSize: 14 }}>{lang === 'kg' ? 'Даяр' : 'Готово'}</button>
+                <button onClick={() => del(editB.id)} style={{ padding: "13px 20px", borderRadius: 12, border: "none", background: "rgba(229,57,53,0.08)", color: T.danger, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                  {lang === 'kg' ? 'Өчүрүү' : 'Удалить'}
+                </button>
+              </div>
             </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <button onClick={() => setEditing(null)} style={btnGreen({ flex: 1, padding: "13px 0", borderRadius: 14 })}>{t.save}</button>
-            <button onClick={() => del(editB.id)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: `1px solid ${T.danger}`, background: "#FFF5F5", color: T.danger, fontWeight: 700, cursor: "pointer" }}>{t.delete}</button>
-          </div>
+          )}
         </div>
-      )}
-      <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-        {banners.map(b => (
-          <div key={b.id} style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }} onClick={() => setEditing(editing === b.id ? null : b.id)}>
-            <div style={{ width: 56, height: 40, borderRadius: 10, background: b.img ? "transparent" : b.bg, overflow: "hidden", flexShrink: 0 }}>
-              {b.img && <img src={b.img} style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: T.text, fontWeight: 700 }}>{b.title || t.noTitle}</div>
-              <div style={{ color: T.textMuted, fontSize: 12 }}>{b.subtitle}</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: b.active ? T.accent : T.border }} />
-              <span style={{ color: T.textMuted }}>{editing === b.id ? "▲" : "▼"}</span>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -5960,7 +8652,7 @@ function SettingsSubScreen({ title, onBack, children }) {
         position: 'sticky', top: 0, zIndex: 10,
         background: 'rgba(247,247,247,0.92)', backdropFilter: 'saturate(180%) blur(20px)', WebkitBackdropFilter: 'saturate(180%) blur(20px)',
         borderBottom: '0.5px solid ' + SETTINGS_SEPARATOR,
-        padding: '52px 8px 10px',
+        padding: 'calc(var(--header-top, 20px) + 32px) 8px 10px',
         display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 8,
       }}>
         <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: '#007AFF', fontSize: 17, fontFamily: SETTINGS_FONT, padding: '4px 10px', justifySelf: 'start' }}>
@@ -5995,18 +8687,471 @@ function SettingsTextField({ label, value, onChange, placeholder, type = 'text' 
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN NOTIFICATIONS SCREEN
+// ═══════════════════════════════════════════════════════════════════════════════
+function AdminNotificationsScreen({ products = [], clients = [], showToast, lang }) {
+  const t = useLang();
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  // Form state
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [targetType, setTargetType] = useState("all"); // "all" | "one"
+  const [targetPhone, setTargetPhone] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [promoTag, setPromoTag] = useState("");
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [sendWhatsApp, setSendWhatsApp] = useState(true);
+  const [waSendProgress, setWaSendProgress] = useState(""); // "3/15" progress
+
+  // Load notifications
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await api.getNotifications();
+        setNotifications(data);
+      } catch (e) { console.warn("Load notifs:", e); }
+      setLoading(false);
+    })();
+  }, []);
+
+  // ── Green API WhatsApp sender ──
+  const GREEN_API_INSTANCE = "7105189394";
+  const GREEN_API_TOKEN = "adfaf904f03c4cb492566e23430559dbfda69af35b5a45d894";
+  const GREEN_API_URL = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE}`;
+
+  const sendWAMessage = async (phone, message) => {
+    const normalized = String(phone).replace(/\D/g, '');
+    if (!normalized || normalized.length < 9) return false;
+    const chatId = `${normalized}@c.us`;
+    try {
+      const r = await fetch(`${GREEN_API_URL}/sendMessage/${GREEN_API_TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, message }),
+      });
+      return r.ok;
+    } catch { return false; }
+  };
+
+  const sendWAImageWithText = async (phone, imageUrl, caption) => {
+    const normalized = String(phone).replace(/\D/g, '');
+    if (!normalized || normalized.length < 9) return false;
+    const chatId = `${normalized}@c.us`;
+    try {
+      const r = await fetch(`${GREEN_API_URL}/sendFileByUrl/${GREEN_API_TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId, urlFile: imageUrl, fileName: "photo.jpg", caption }),
+      });
+      return r.ok;
+    } catch { return false; }
+  };
+
+  // Send notification
+  const handleSend = async () => {
+    if (!title.trim() || !body.trim()) {
+      showToast(lang === 'kg' ? 'Аталыш жана текст толтуруңуз' : 'Заполните заголовок и текст', 'error');
+      return;
+    }
+    if (targetType === 'one' && !targetPhone) {
+      showToast(t.notifSelectClient, 'error');
+      return;
+    }
+    setSending(true);
+    try {
+      // 1. Save notification to PocketBase
+      const data = {
+        title: title.trim(),
+        body: body.trim(),
+        type: promoTag ? 'promo' : 'general',
+        productId: selectedProductId || "",
+        promoTag: promoTag || "",
+        targetPhone: targetType === 'one' ? targetPhone : "",
+        readBy: "[]",
+      };
+      const created = await api.createNotification(data);
+      setNotifications(prev => [created, ...prev]);
+
+      // 2. Send WhatsApp via Green API
+      if (sendWhatsApp) {
+        const product = selectedProductId ? products.find(p => p.id === selectedProductId) : null;
+        const promoEmoji = promoTag === 'sale' ? '🔥' : promoTag === 'new' ? '✨' : promoTag === 'limited' ? '⏰' : promoTag === 'gift' ? '🎁' : '';
+        const siteUrl = "https://kemalusman.kg";
+        const productLink = product ? `${siteUrl}/?product=${product.id}` : '';
+
+        // Build WA message
+        let waMessage = `${promoEmoji} *${title.trim()}*\n\n${body.trim()}`;
+        if (product) waMessage += `\n\n🔗 ${product.brand} — ${product.name}\n${productLink}`;
+        waMessage += `\n\n_Kemal Usman Parfum_`;
+
+        // Get product image URL for sending with image
+        const productImgUrl = product?.img || '';
+
+        // Determine recipients
+        const recipients = targetType === 'one'
+          ? [{ phone: targetPhone }]
+          : clients.filter(c => c.phone);
+
+        let sent = 0;
+        for (let i = 0; i < recipients.length; i++) {
+          const client = recipients[i];
+          setWaSendProgress(`${i + 1}/${recipients.length}`);
+
+          try {
+            if (productImgUrl) {
+              await sendWAImageWithText(client.phone, productImgUrl, waMessage);
+            } else {
+              await sendWAMessage(client.phone, waMessage);
+            }
+            sent++;
+          } catch { /* continue */ }
+
+          // Rate limit: Green API allows ~1 msg/sec
+          if (recipients.length > 1) await new Promise(r => setTimeout(r, 1500));
+        }
+
+        setWaSendProgress("");
+        showToast(`${t.notifSent} WhatsApp: ${sent}/${recipients.length}`, 'success');
+      } else {
+        showToast(t.notifSent, 'success');
+      }
+
+      // Reset form
+      setTitle(""); setBody(""); setSelectedProductId(""); setPromoTag(""); setTargetPhone(""); setTargetType("all");
+    } catch (e) {
+      console.warn("Send notif:", e);
+      showToast(lang === 'kg' ? 'Ката кетти' : 'Ошибка отправки', 'error');
+    }
+    setSending(false);
+  };
+
+  // Delete notification
+  const handleDelete = async (id) => {
+    try {
+      await api.deleteNotification(id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      showToast(lang === 'kg' ? 'Өчүрүлдү' : 'Удалено');
+    } catch (e) { console.warn("Del notif:", e); }
+  };
+
+  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const selectedClient = clients.find(c => c.phone === targetPhone);
+
+  const filteredProducts = products.filter(p =>
+    !productSearch || p.name?.toLowerCase().includes(productSearch.toLowerCase()) || p.brand?.toLowerCase().includes(productSearch.toLowerCase())
+  ).slice(0, 20);
+
+  const filteredClients = clients.filter(c =>
+    !clientSearch || c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)
+  ).slice(0, 20);
+
+  const PROMO_TAGS = [
+    { value: "", label: lang === 'kg' ? 'Жок' : 'Нет' },
+    { value: "sale", label: "🔥 " + (lang === 'kg' ? 'Чегирме' : 'Скидка') },
+    { value: "new", label: "✨ " + (lang === 'kg' ? 'Жаңылык' : 'Новинка') },
+    { value: "limited", label: "⏰ " + (lang === 'kg' ? 'Чектелген' : 'Ограничено') },
+    { value: "gift", label: "🎁 " + (lang === 'kg' ? 'Белек' : 'Подарок') },
+  ];
+
+  return (
+    <div style={{ padding: "0 16px 100px", maxWidth: 600, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ padding: "16px 0 12px", display: "flex", alignItems: "center", gap: 10 }}>
+        {React.cloneElement(IC.bell, { style: { width: 22, height: 22, color: T.accent } })}
+        <div style={{ fontSize: 20, fontWeight: 800, color: T.text }}>{t.notifications}</div>
+      </div>
+
+      {/* ── COMPOSE FORM ── */}
+      <div style={{ ...card({ padding: "20px 16px" }), marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 14 }}>
+          {lang === 'kg' ? 'Жаңы билдирүү' : 'Новое уведомление'}
+        </div>
+
+        {/* Target type */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {[
+            { id: "all", label: t.notifSendAll, icon: "👥" },
+            { id: "one", label: t.notifSendOne, icon: "👤" },
+          ].map(opt => (
+            <div key={opt.id}
+              onClick={() => { setTargetType(opt.id); if (opt.id === 'all') setTargetPhone(''); }}
+              style={{
+                flex: 1, padding: "10px 12px", borderRadius: 12, cursor: "pointer",
+                background: targetType === opt.id ? T.accent : T.cardBg,
+                color: targetType === opt.id ? "#fff" : T.text,
+                fontWeight: 600, fontSize: 13, textAlign: "center",
+                border: `1px solid ${targetType === opt.id ? T.accent : T.border}`,
+                transition: "all 0.2s",
+              }}
+            >
+              {opt.icon} {opt.label}
+            </div>
+          ))}
+        </div>
+
+        {/* Client picker (if targetType === 'one') */}
+        {targetType === 'one' && (
+          <div style={{ marginBottom: 14 }}>
+            <div
+              onClick={() => setShowClientPicker(!showClientPicker)}
+              style={{
+                ...inputStyle, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
+                color: selectedClient ? T.text : T.textMuted,
+              }}
+            >
+              <span>{selectedClient ? `${selectedClient.name || selectedClient.phone}` : t.notifSelectClient}</span>
+              {React.cloneElement(IC.chevron, { style: { width: 14, height: 14, color: T.textMuted, transform: showClientPicker ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' } })}
+            </div>
+            {showClientPicker && (
+              <div style={{ marginTop: 8, ...card({ padding: "8px" }), maxHeight: 200, overflowY: "auto" }}>
+                <input
+                  type="text" placeholder={lang === 'kg' ? 'Издөө...' : 'Поиск...'}
+                  value={clientSearch} onChange={e => setClientSearch(e.target.value)}
+                  style={{ ...inputStyle, marginBottom: 8, fontSize: 13 }}
+                />
+                {filteredClients.map(c => (
+                  <div key={c.id}
+                    onClick={() => { setTargetPhone(c.phone); setShowClientPicker(false); setClientSearch(""); }}
+                    style={{
+                      padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13,
+                      background: targetPhone === c.phone ? T.accentLight : "transparent",
+                      display: "flex", justifyContent: "space-between",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{c.name || '—'}</span>
+                    <span style={{ color: T.textMuted }}>{c.phone}</span>
+                  </div>
+                ))}
+                {filteredClients.length === 0 && (
+                  <div style={{ padding: 12, textAlign: "center", color: T.textMuted, fontSize: 13 }}>
+                    {lang === 'kg' ? 'Табылган жок' : 'Не найдено'}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Title */}
+        <input
+          type="text" placeholder={t.notifTitle}
+          value={title} onChange={e => setTitle(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 10, fontWeight: 600 }}
+        />
+
+        {/* Body */}
+        <textarea
+          placeholder={t.notifBody}
+          value={body} onChange={e => setBody(e.target.value)}
+          rows={3}
+          style={{ ...inputStyle, marginBottom: 14, resize: "vertical", minHeight: 60, lineHeight: 1.5 }}
+        />
+
+        {/* Product link */}
+        <div style={{ marginBottom: 14 }}>
+          <div
+            onClick={() => setShowProductPicker(!showProductPicker)}
+            style={{
+              ...inputStyle, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between",
+              color: selectedProduct ? T.text : T.textMuted,
+            }}
+          >
+            <span>{selectedProduct ? `🔗 ${selectedProduct.brand} — ${selectedProduct.name}` : `📎 ${t.notifSelectProduct}`}</span>
+            {selectedProduct && (
+              <span onClick={(e) => { e.stopPropagation(); setSelectedProductId(""); }} style={{ color: "#FF3B30", fontSize: 18, cursor: "pointer", padding: "0 4px" }}>×</span>
+            )}
+          </div>
+          {showProductPicker && (
+            <div style={{ marginTop: 8, ...card({ padding: "8px" }), maxHeight: 200, overflowY: "auto" }}>
+              <input
+                type="text" placeholder={lang === 'kg' ? 'Атыр издөө...' : 'Поиск товара...'}
+                value={productSearch} onChange={e => setProductSearch(e.target.value)}
+                style={{ ...inputStyle, marginBottom: 8, fontSize: 13 }}
+              />
+              {filteredProducts.map(p => (
+                <div key={p.id}
+                  onClick={() => { setSelectedProductId(p.id); setShowProductPicker(false); setProductSearch(""); }}
+                  style={{ padding: "8px 10px", borderRadius: 8, cursor: "pointer", fontSize: 13, background: selectedProductId === p.id ? T.accentLight : "transparent" }}
+                >
+                  <span style={{ fontWeight: 600 }}>{p.brand}</span> — {p.name}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Promo tag */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+          {PROMO_TAGS.map(tag => (
+            <div key={tag.value}
+              onClick={() => setPromoTag(promoTag === tag.value ? "" : tag.value)}
+              style={{
+                padding: "6px 14px", borderRadius: 20, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                background: promoTag === tag.value ? T.accent : T.cardBg,
+                color: promoTag === tag.value ? "#fff" : T.text,
+                border: `1px solid ${promoTag === tag.value ? T.accent : T.border}`,
+                transition: "all 0.2s",
+              }}
+            >
+              {tag.label}
+            </div>
+          ))}
+        </div>
+
+        {/* Preview */}
+        {(title || body) && (
+          <div style={{ ...card({ padding: "14px 16px" }), marginBottom: 16, background: T.accentLight, borderLeft: `3px solid ${T.accent}` }}>
+            <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1 }}>
+              {lang === 'kg' ? 'Алдын ала көрүү' : 'Предпросмотр'}
+            </div>
+            {promoTag && (
+              <div style={{ display: "inline-block", padding: "2px 8px", borderRadius: 6, background: promoTag === 'sale' ? '#FF3B30' : promoTag === 'new' ? '#34C759' : promoTag === 'limited' ? '#FF9500' : '#007AFF', color: "#fff", fontSize: 10, fontWeight: 700, marginBottom: 6 }}>
+                {PROMO_TAGS.find(t => t.value === promoTag)?.label || promoTag}
+              </div>
+            )}
+            <div style={{ fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 4 }}>{title || '...'}</div>
+            <div style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.4 }}>{body || '...'}</div>
+            {selectedProduct && (
+              <div style={{ marginTop: 8, padding: "6px 10px", borderRadius: 8, background: "rgba(0,0,0,0.04)", fontSize: 12, color: T.accent, fontWeight: 600 }}>
+                🔗 {selectedProduct.brand} — {selectedProduct.name}
+              </div>
+            )}
+            <div style={{ marginTop: 6, fontSize: 11, color: T.textMuted }}>
+              📤 {targetType === 'all' ? t.notifSendAll : (selectedClient?.name || targetPhone || t.notifSendOne)}
+            </div>
+          </div>
+        )}
+
+        {/* WhatsApp toggle */}
+        <label
+          onClick={() => setSendWhatsApp(!sendWhatsApp)}
+          style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "12px 0", cursor: "pointer", marginBottom: 8, userSelect: "none",
+          }}
+        >
+          <div style={{
+            width: 44, height: 26, borderRadius: 13, padding: 2,
+            background: sendWhatsApp ? '#25D366' : '#E0E0E0',
+            transition: 'background 0.2s', display: 'flex', alignItems: 'center',
+          }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: 11, background: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+              transform: sendWhatsApp ? 'translateX(18px)' : 'translateX(0)',
+              transition: 'transform 0.2s',
+            }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+            📱 WhatsApp {lang === 'kg' ? 'аркылуу жөнөтүү' : 'рассылка'}
+          </span>
+          {sendWhatsApp && (
+            <span style={{ fontSize: 11, color: '#25D366', fontWeight: 600 }}>
+              {targetType === 'one' ? '1' : clients.filter(c => c.phone).length} {lang === 'kg' ? 'кардар' : 'получат.'}
+            </span>
+          )}
+        </label>
+
+        {/* Send button */}
+        <div
+          onClick={sending ? undefined : handleSend}
+          style={{
+            ...btnGreen(),
+            opacity: sending ? 0.6 : 1,
+            pointerEvents: sending ? "none" : "auto",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          }}
+        >
+          {sending ? (
+            <>
+              <div style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.6s linear infinite" }} />
+              {waSendProgress ? `WhatsApp ${waSendProgress}...` : t.notifSend + '...'}
+            </>
+          ) : (
+            <>
+              {sendWhatsApp ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              ) : (
+                React.cloneElement(IC.bell, { style: { width: 16, height: 16, color: "#fff" } })
+              )}
+              {t.notifSend} {sendWhatsApp ? '+ WhatsApp' : ''}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── HISTORY ── */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+        {t.notifHistory} ({notifications.length})
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40, color: T.textMuted }}>
+          <div style={{ width: 24, height: 24, border: "2px solid rgba(0,0,0,0.1)", borderTopColor: T.accent, borderRadius: "50%", animation: "spin 0.6s linear infinite", margin: "0 auto 12px" }} />
+        </div>
+      ) : notifications.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 40, color: T.textMuted }}>
+          {React.cloneElement(IC.bell, { style: { width: 32, height: 32, color: T.textMuted, opacity: 0.3, margin: "0 auto 8px", display: "block" } })}
+          <div>{t.notifEmpty}</div>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {notifications.map(n => {
+            const targetLabel = n.targetPhone
+              ? (clients.find(c => c.phone === n.targetPhone)?.name || n.targetPhone)
+              : (lang === 'kg' ? 'Баарына' : 'Все');
+            const linkedProduct = n.productId ? products.find(p => p.id === n.productId) : null;
+            const readCount = (() => { try { return JSON.parse(n.readBy || '[]').length; } catch { return 0; } })();
+            const date = new Date(n.created);
+            const dateStr = `${date.getDate().toString().padStart(2,'0')}.${(date.getMonth()+1).toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+
+            return (
+              <div key={n.id} style={{ ...card({ padding: "14px 16px" }), position: "relative" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1 }}>
+                    {n.promoTag && (
+                      <span style={{ padding: "2px 6px", borderRadius: 4, background: n.promoTag === 'sale' ? '#FF3B30' : n.promoTag === 'new' ? '#34C759' : n.promoTag === 'limited' ? '#FF9500' : '#007AFF', color: "#fff", fontSize: 9, fontWeight: 700 }}>
+                        {n.promoTag.toUpperCase()}
+                      </span>
+                    )}
+                    <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{n.title}</div>
+                  </div>
+                  <div
+                    onClick={() => handleDelete(n.id)}
+                    style={{ color: "#FF3B30", fontSize: 18, cursor: "pointer", padding: "0 4px", lineHeight: 1 }}
+                  >×</div>
+                </div>
+                <div style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.4, marginBottom: 8 }}>{n.body}</div>
+                {linkedProduct && (
+                  <div style={{ padding: "4px 8px", borderRadius: 6, background: T.accentLight, fontSize: 11, color: T.accent, fontWeight: 600, display: "inline-block", marginBottom: 6 }}>
+                    🔗 {linkedProduct.brand} — {linkedProduct.name}
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: T.textMuted }}>
+                  <span>📤 {targetLabel} · 👁 {readCount}</span>
+                  <span>{dateStr}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminSettingsScreen({ banners = [], setBanners, products = [], settings = {}, setSettings, onLogout, showToast, lang }) {
   const { t, setLang } = useLang();
-  const [sub, setSub] = useState(null); // null | 'banners' | 'bonus' | 'whatsapp' | 'mbank' | 'obank' | 'shop' | 'loginBg'
+  const [sub, setSub] = useState(null); // null | 'banners' | 'bonus' | 'whatsapp' | 'shop' | 'loginBg'
 
-  // localStorage-backed credentials
-  const [mbankPhone, setMbankPhone]         = useState(() => localStorage.getItem('mbank_phone')     || '');
-  const [obankPhone, setObankPhone]         = useState(() => localStorage.getItem('obank_phone')     || '');
-  // The merchant's own WhatsApp number is the recipient for admin order
-  // notifications — not a credential, so it can stay in localStorage.
-  // GREEN_API_INSTANCE / GREEN_API_TOKEN are now PB env vars (see
-  // pb_hooks/whatsapp.pb.js); they no longer exist on the client at all.
-  const [whatsappAdmin, setWhatsappAdmin]   = useState(() => localStorage.getItem('whatsapp_admin')  || '');
+  // Payment phones + QR — loaded from PocketBase (site_media), synced to settings
+  const [whatsappAdmin, setWhatsappAdmin]   = useState(settings?.whatsappPhone || '');
   // adminPassword state removed — admin credentials are now managed in the
   // PocketBase admin UI at PB_URL/_/, not from inside the client app.
 
@@ -6024,8 +9169,6 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
     // green_instance / green_token deliberately NOT saved here — they are
     // managed by the PB host (env vars), never by the client.
   };
-  const saveMbank = () => localStorage.setItem('mbank_phone', mbankPhone);
-  const saveObank = () => localStorage.setItem('obank_phone', obankPhone);
 
   const handleLoginBgUpload = (e) => {
     const file = e.target.files[0];
@@ -6105,88 +9248,52 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
     </SettingsSubScreen>
   );
 
-  const renderMbank = () => (
-    <SettingsSubScreen title="M-Bank" onBack={() => setSub(null)}>
+  const renderDelivery = () => (
+    <SettingsSubScreen title={lang === 'kg' ? 'Жеткирүү' : 'Доставка'} onBack={() => setSub(null)}>
       <SettingsSection
-        header="Реквизиты"
-        footer="Клиенты переводят оплату на этот номер через M-Bank. Введите номер с кодом страны."
+        header={lang === 'kg' ? 'Жеткирүү баасы' : 'Стоимость доставки'}
+        footer={lang === 'kg' ? 'Бул сумма заказга кошулат (жеткирүү тандалганда).' : 'Эта сумма прибавляется к заказу при выборе доставки.'}
       >
-        <SettingsTextField label="Телефон" value={mbankPhone} onChange={setMbankPhone} placeholder="+996 700 000 000" />
+        <SettingsTextField
+          label={lang === 'kg' ? 'Баасы (сом)' : 'Цена (сом)'}
+          value={String(settings?.deliveryCost || '')}
+          onChange={v => setSettings(p => ({ ...p, deliveryCost: Number(v) || 0 }))}
+          placeholder="200"
+        />
       </SettingsSection>
-      <SettingsSection header="QR-код для оплаты" footer="Клиент отсканирует QR прямо из корзины на сайте">
-        {settings?.mbankQr && (
-          <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <img src={settings.mbankQr} alt="QR M-Bank"
-              style={{ width: 80, height: 80, objectFit: 'contain', border: '1px solid #E5E5E5' }} />
-            <div onClick={() => setSettings(p => ({ ...p, mbankQr: '' }))}
-              style={{ fontSize: 12, color: SETTINGS_DANGER, cursor: 'pointer', letterSpacing: 0.5 }}>
-              Удалить QR
-            </div>
-          </div>
-        )}
-        <div style={{ padding: '12px 16px' }}>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = ev => setSettings(p => ({ ...p, mbankQr: ev.target.result }));
-              reader.readAsDataURL(file);
-            }}
-            style={{ fontSize: 13 }}
-          />
-        </div>
+      <SettingsSection
+        header={lang === 'kg' ? 'Минималдуу заказ' : 'Минимальный заказ'}
+        footer={lang === 'kg' ? 'Бул суммадан аз заказ кабыл алынбайт.' : 'Заказы меньше этой суммы не принимаются.'}
+      >
+        <SettingsTextField
+          label={lang === 'kg' ? 'Сумма (сом)' : 'Сумма (сом)'}
+          value={String(settings?.minOrder || '')}
+          onChange={v => setSettings(p => ({ ...p, minOrder: Number(v) || 0 }))}
+          placeholder="500"
+        />
+      </SettingsSection>
+      <SettingsSection
+        header={lang === 'kg' ? 'Акысыз жеткирүү' : 'Бесплатная доставка'}
+        footer={lang === 'kg' ? 'Бул суммадан жогору заказдарга жеткирүү акысыз.' : 'Для заказов выше этой суммы доставка бесплатная.'}
+      >
+        <SettingsTextField
+          label={lang === 'kg' ? 'Суммадан (сом)' : 'От суммы (сом)'}
+          value={String(settings?.freeDeliveryFrom || '')}
+          onChange={v => setSettings(p => ({ ...p, freeDeliveryFrom: Number(v) || 0 }))}
+          placeholder="3000"
+        />
       </SettingsSection>
       <div style={{ padding: '0 16px' }}>
-        <button onClick={() => saveAndPop(saveMbank)} style={primarySaveBtn}>Сохранить</button>
+        <button onClick={() => { showToast?.(lang === 'kg' ? 'Сакталды' : 'Сохранено'); setSub(null); }} style={primarySaveBtn}>
+          {lang === 'kg' ? 'Сактоо' : 'Сохранить'}
+        </button>
       </div>
     </SettingsSubScreen>
   );
 
-  const renderObank = () => (
-    <SettingsSubScreen title="O!Bank" onBack={() => setSub(null)}>
-      <SettingsSection
-        header="Реквизиты"
-        footer="Клиенты переводят оплату на этот номер через O!Bank."
-      >
-        <SettingsTextField label="Телефон" value={obankPhone} onChange={setObankPhone} placeholder="+996 700 000 000" />
-      </SettingsSection>
-      <SettingsSection header="QR-код для оплаты" footer="Клиент отсканирует QR прямо из корзины на сайте">
-        {settings?.obankQr && (
-          <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <img src={settings.obankQr} alt="QR O!Bank"
-              style={{ width: 80, height: 80, objectFit: 'contain', border: '1px solid #E5E5E5' }} />
-            <div onClick={() => setSettings(p => ({ ...p, obankQr: '' }))}
-              style={{ fontSize: 12, color: SETTINGS_DANGER, cursor: 'pointer', letterSpacing: 0.5 }}>
-              Удалить QR
-            </div>
-          </div>
-        )}
-        <div style={{ padding: '12px 16px' }}>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = ev => setSettings(p => ({ ...p, obankQr: ev.target.result }));
-              reader.readAsDataURL(file);
-            }}
-            style={{ fontSize: 13 }}
-          />
-        </div>
-      </SettingsSection>
-      <div style={{ padding: '0 16px' }}>
-        <button onClick={() => saveAndPop(saveObank)} style={primarySaveBtn}>Сохранить</button>
-      </div>
-    </SettingsSubScreen>
-  );
-
-  const renderShop = () => (
-    <SettingsSubScreen title="Магазин" onBack={() => setSub(null)}>
+  /* ── 1. О магазине — базовая инфо, адрес, координаты, текст "О нас" ── */
+  const renderShopInfo = () => (
+    <SettingsSubScreen title="О магазине" onBack={() => setSub(null)}>
       <SettingsSection header="Информация">
         <SettingsTextField label="Название" value={settings?.shopName || ''} onChange={v => setSettings(p => ({ ...p, shopName: v }))} placeholder="Kemal Usman" />
         <SettingsTextField label="Адрес"    value={settings?.shopAddress || ''} onChange={v => setSettings(p => ({ ...p, shopAddress: v }))} placeholder="ул. Ленина, 45" />
@@ -6207,7 +9314,16 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
           />
         </div>
       </SettingsSection>
-      <SettingsSection header="Desktop — Hero баннер" footer="Тексты, отображаемые в главном баннере на десктопе.">
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => { showToast?.('Сохранено'); setSub(null); }} style={primarySaveBtn}>Готово</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  /* ── 2. Главная страница — Hero баннер, Announcement bar, CTA ── */
+  const renderHeroPage = () => (
+    <SettingsSubScreen title="Главная страница" onBack={() => setSub(null)}>
+      <SettingsSection header="Hero баннер" footer="Тексты, отображаемые в главном баннере на десктопе.">
         <SettingsTextField
           label="Подзаголовок (золотой текст)"
           value={settings?.heroSubtitle || ''}
@@ -6226,10 +9342,9 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
           onChange={v => setSettings(p => ({ ...p, heroButtonText: v }))}
           placeholder="ВЫБРАТЬ АРОМАТ"
         />
+      </SettingsSection>
+      <SettingsSection header="Бегущая строка" footer="Каждая строка = новое объявление. Показывается вверху сайта.">
         <div style={{ padding: '12px 16px', background: SETTINGS_CARD_BG }}>
-          <div style={{ fontSize: 12, marginBottom: 6, color: SETTINGS_SECTION_HEADER, letterSpacing: 0.3 }}>
-            Announcement Bar — каждая строка = новое объявление
-          </div>
           <textarea
             value={settings?.announcementTexts || ''}
             onChange={e => setSettings(p => ({ ...p, announcementTexts: e.target.value }))}
@@ -6243,7 +9358,16 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
           />
         </div>
       </SettingsSection>
-      <SettingsSection header="Соцсети" footer="Ссылки на страницы в соцсетях. Иконки без ссылки станут неактивными.">
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => { showToast?.('Сохранено'); setSub(null); }} style={primarySaveBtn}>Готово</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  /* ── 3. Соцсети — Instagram, TikTok, YouTube ── */
+  const renderSocials = () => (
+    <SettingsSubScreen title="Соцсети" onBack={() => setSub(null)}>
+      <SettingsSection header="Ссылки" footer="Иконки без ссылки станут неактивными в футере.">
         <SettingsTextField
           label="Instagram"
           value={settings?.instagramUrl || ''}
@@ -6255,6 +9379,7 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
           value={settings?.instagramToken || ''}
           onChange={v => setSettings(p => ({ ...p, instagramToken: v }))}
           placeholder="IGQ..."
+          type="password"
         />
         <SettingsTextField
           label="TikTok"
@@ -6269,7 +9394,16 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
           placeholder="https://youtube.com/@kemalusman"
         />
       </SettingsSection>
-      <SettingsSection header="Футер — Компания" footer="Каждая строка — отдельная ссылка в колонке «Компания».">
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={() => { showToast?.('Сохранено'); setSub(null); }} style={primarySaveBtn}>Готово</button>
+      </div>
+    </SettingsSubScreen>
+  );
+
+  /* ── 4. Футер — колонки ссылок, копирайт ── */
+  const renderFooterSettings = () => (
+    <SettingsSubScreen title="Футер" onBack={() => setSub(null)}>
+      <SettingsSection header="Колонка «Компания»" footer="Каждая строка — отдельная ссылка.">
         <div style={{ padding: '12px 16px', background: SETTINGS_CARD_BG }}>
           <textarea
             value={settings?.footerCompanyLinks || ''}
@@ -6282,7 +9416,7 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
           />
         </div>
       </SettingsSection>
-      <SettingsSection header="Футер — Помощь" footer="Каждая строка — отдельная ссылка в колонке «Помощь».">
+      <SettingsSection header="Колонка «Помощь»" footer="Каждая строка — отдельная ссылка.">
         <div style={{ padding: '12px 16px', background: SETTINGS_CARD_BG }}>
           <textarea
             value={settings?.footerHelpLinks || ''}
@@ -6605,101 +9739,137 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
   // has supplied a destination number; whether the server can actually send
   // depends on the env vars on the PB host (verified via the hook itself).
   const whatsappStatus = whatsappAdmin ? 'connected' : 'pending';
-  const mbankStatus = mbankPhone ? 'connected' : 'pending';
-  const obankStatus = obankPhone ? 'connected' : 'pending';
   const bannerCount = (banners || []).length;
   const adminInitial = (settings?.shopName || 'Admin').trim().charAt(0).toUpperCase() || 'A';
 
+  // ─── Quick-edit inline values (shown on root, no sub-screen needed) ─────────
+  const [editingDelivery, setEditingDelivery] = useState(false);
+  const [editingMinOrder, setEditingMinOrder] = useState(false);
+
   const renderRoot = () => (
     <div style={{ background: SETTINGS_PAGE_BG, minHeight: '100vh', paddingBottom: 'var(--nav-height)', fontFamily: SETTINGS_FONT }}>
-      {/* ── Compact header — title + admin avatar ── */}
+      {/* ── Header — iOS style ── */}
       <div style={{
         padding: 'calc(var(--header-top, 44px) + 6px) 16px 16px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#000', letterSpacing: -0.5, fontFamily: SETTINGS_FONT }}>Настройки</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: '#000', letterSpacing: -0.5, fontFamily: SETTINGS_FONT }}>{lang === 'kg' ? 'Жөндөөлөр' : 'Настройки'}</div>
           {settings?.shopName && (
-            <div style={{ fontSize: 12, color: SETTINGS_SECTION_HEADER, marginTop: 2, fontWeight: 500, letterSpacing: -0.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 13, color: SETTINGS_SECTION_HEADER, marginTop: 2, fontWeight: 500, letterSpacing: -0.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {settings.shopName}
             </div>
           )}
         </div>
         <div style={{
-          width: 38, height: 38, borderRadius: '50%',
+          width: 42, height: 42, borderRadius: '50%',
           background: 'linear-gradient(135deg, #1f1f22 0%, #111111 100%)',
           color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 600, fontSize: 14, letterSpacing: -0.2,
+          fontWeight: 700, fontSize: 16, letterSpacing: -0.2,
           boxShadow: '0 4px 12px rgba(17,17,17,0.20), 0 1px 2px rgba(0,0,0,0.06)',
           flexShrink: 0,
         }}>{adminInitial}</div>
       </div>
 
-      {/* ── Контент ── */}
-      <Card title="Контент">
+      {/* ══════ 1. ТЕЗКОР СОЗЛАМАЛАР (Quick Settings) ══════ */}
+      <Card title={lang === 'kg' ? 'Тез жөндөөлөр' : 'Быстрые настройки'}>
+        {/* WhatsApp — inline editable */}
         <PremiumRow
-          icon={SET_ICON.photo} iconBg="#FF9500"
-          label="Баннеры" hint={bannerCount ? `${bannerCount} активн.` : 'Не настроено'}
-          onClick={() => setSub('banners')} isFirst
+          icon={SET_ICON.chat} iconBg="#25D366"
+          label="WhatsApp"
+          hint={whatsappAdmin || (lang === 'kg' ? 'Номер киргизиңиз' : 'Введите номер')}
+          status={whatsappStatus}
+          onClick={() => setSub('whatsapp')} isFirst
         />
+        {/* Delivery cost — inline display */}
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>}
+          iconBg="#007AFF"
+          label={lang === 'kg' ? 'Жеткирүү баасы' : 'Доставка'}
+          hint={settings?.deliveryCost ? `${settings.deliveryCost} сом` : (lang === 'kg' ? 'Белгиленбеген' : 'Не указано')}
+          onClick={() => setSub('delivery')}
+        />
+        {/* Bonus % */}
         <PremiumRow
           icon={SET_ICON.gift} iconBg="#AF52DE"
-          label="Бонусы" hint={settings?.bonusPercent ? `${settings.bonusPercent}% начисление` : 'Стандарт'}
+          label={lang === 'kg' ? 'Бонус тутуму' : 'Бонусы'}
+          hint={settings?.bonusPercent ? `${settings.bonusPercent}% ${lang === 'kg' ? 'кайтарым' : 'начисление'}` : (lang === 'kg' ? 'Стандарт' : 'Стандарт')}
           onClick={() => setSub('bonus')} isLast
         />
       </Card>
 
-      {/* ── Интеграции ── */}
-      <Card title="Интеграции">
-        <PremiumRow
-          icon={SET_ICON.chat} iconBg="#34C759"
-          label="WhatsApp" status={whatsappStatus}
-          onClick={() => setSub('whatsapp')} isFirst
-        />
-        <PremiumRow
-          icon={SET_ICON.card} iconBg="#FF3B30"
-          label="M-Bank" status={mbankStatus}
-          onClick={() => setSub('mbank')}
-        />
-        <PremiumRow
-          icon={SET_ICON.card} iconBg="#FF2D92"
-          label="O!Bank" status={obankStatus}
-          onClick={() => setSub('obank')} isLast
-        />
+      {/* ══════ 2. ОПЛАТА (Payments) ══════ */}
+      <Card title={lang === 'kg' ? 'Төлөм' : 'Оплата'}>
       </Card>
 
-      {/* ── Магазин ── */}
-      <Card title="Магазин">
+      {/* ══════ 3. КОНТЕНТ (Content) ══════ */}
+      <Card title={lang === 'kg' ? 'Мазмун' : 'Контент'}>
         <PremiumRow
-          icon={SET_ICON.store} iconBg="#007AFF"
-          label="О магазине" hint={settings?.shopName || 'Не указан'}
-          onClick={() => setSub('shop')} isFirst
+          icon={SET_ICON.photo} iconBg="#FF9500"
+          label={lang === 'kg' ? 'Баннерлер' : 'Баннеры'}
+          hint={bannerCount ? `${bannerCount} ${lang === 'kg' ? 'активдүү' : 'активн.'}` : (lang === 'kg' ? 'Жөндөлбөгөн' : 'Не настроено')}
+          onClick={() => setSub('banners')} isFirst
+        />
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>}
+          iconBg="#5856D6"
+          label={lang === 'kg' ? 'Башкы бет' : 'Главная страница'}
+          hint={settings?.heroSubtitle ? (lang === 'kg' ? 'Жөндөлгөн' : 'Настроено') : 'Hero, CTA'}
+          onClick={() => setSub('heroPage')}
         />
         <PremiumRow
           icon={SET_ICON.loginBg} iconBg="#5AC8FA"
-          label="Фон экрана входа" hint={settings?.loginBg ? 'Кастомный' : 'Стандартный'}
+          label={lang === 'kg' ? 'Кирүү фону' : 'Фон входа'}
+          hint={settings?.loginBg ? (lang === 'kg' ? 'Кастомдук' : 'Кастомный') : (lang === 'kg' ? 'Стандарт' : 'Стандартный')}
           onClick={() => setSub('loginBg')}
         />
         <PremiumRow
           icon={SET_ICON.photo} iconBg="#C13584"
-          label="Instagram скриншот" hint={settings?.instagramScreen ? 'Загружен' : 'Не загружен'}
+          label="Instagram"
+          hint={settings?.instagramScreen ? (lang === 'kg' ? 'Жүктөлгөн' : 'Загружен') : (lang === 'kg' ? 'Жүктөлбөгөн' : 'Не загружен')}
           onClick={() => setSub('instaScreen')} isLast
         />
       </Card>
 
-      {/* ── Язык ── */}
-      <Card title="Язык интерфейса">
+      {/* ══════ 4. МАГАЗИН (Shop Info) ══════ */}
+      <Card title={lang === 'kg' ? 'Дүкөн' : 'Магазин'}>
+        <PremiumRow
+          icon={SET_ICON.store} iconBg="#007AFF"
+          label={lang === 'kg' ? 'Дүкөн жөнүндө' : 'О магазине'}
+          hint={settings?.shopName || (lang === 'kg' ? 'Белгиленбеген' : 'Не указан')}
+          onClick={() => setSub('shopInfo')} isFirst
+        />
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>}
+          iconBg="#FF6B35"
+          label={lang === 'kg' ? 'Соцтармактар' : 'Соцсети'}
+          hint={settings?.instagramUrl ? 'IG, TikTok, YT' : (lang === 'kg' ? 'Жөндөлбөгөн' : 'Не настроено')}
+          onClick={() => setSub('socials')}
+        />
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>}
+          iconBg="#8E8E93"
+          label={lang === 'kg' ? 'Футер' : 'Футер'}
+          hint={settings?.copyrightText ? (lang === 'kg' ? 'Жөндөлгөн' : 'Настроен') : (lang === 'kg' ? 'Мамычалар, копирайт' : 'Колонки, копирайт')}
+          onClick={() => setSub('footerSettings')} isLast
+        />
+      </Card>
+
+      {/* ══════ 5. ТИЛ / ЯЗЫК ══════ */}
+      <Card title={lang === 'kg' ? 'Тил' : 'Язык'}>
         <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, background: SETTINGS_CARD_BG, borderRadius: 16 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 9,
             background: '#5856D6',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0, fontSize: 16,
-          }}>🌐</div>
-          <div style={{ flex: 1, fontSize: 15, fontWeight: 500, color: '#000', letterSpacing: -0.2 }}>Язык</div>
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          </div>
+          <div style={{ flex: 1, fontSize: 15, fontWeight: 500, color: '#000', letterSpacing: -0.2, fontFamily: SETTINGS_FONT }}>{lang === 'kg' ? 'Тил' : 'Язык'}</div>
           <div style={{ display: 'inline-flex', background: 'rgba(120,120,128,0.14)', borderRadius: 9, padding: 2, position: 'relative' }}>
-            {[{ id: 'ru', label: 'Русский' }, { id: 'kg', label: 'Кыргызча' }].map(opt => {
+            {[{ id: 'ru', label: 'Рус' }, { id: 'kg', label: 'Кырг' }].map(opt => {
               const active = lang === opt.id;
               return (
                 <button
@@ -6708,10 +9878,10 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
                   onClick={() => { haptic('light'); setLang(opt.id); }}
                   style={{
                     position: 'relative',
-                    padding: '6px 14px',
+                    padding: '6px 16px',
                     border: 'none',
                     background: 'transparent',
-                    fontSize: 12,
+                    fontSize: 13,
                     fontWeight: 600,
                     color: active ? '#111' : '#8E8E93',
                     cursor: 'pointer',
@@ -6741,12 +9911,8 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
         </div>
       </Card>
 
-      {/* The "Безопасность → Пароль администратора" card was removed — admin
-          credentials live exclusively in the PocketBase admin panel now
-          (PB_URL/_/). The client must not be able to read or change them. */}
-
-      {/* ── Logout — standalone ── */}
-      <div style={{ padding: '0 14px', marginTop: 12 }}>
+      {/* ══════ ВЫХОД ══════ */}
+      <div style={{ padding: '0 14px', marginTop: 16 }}>
         <motion.button
           whileTap={{ scale: 0.98 }}
           transition={{ type: 'spring', stiffness: 500, damping: 28 }}
@@ -6756,21 +9922,24 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
             borderRadius: 14,
             background: SETTINGS_CARD_BG,
             color: SETTINGS_DANGER,
-            fontWeight: 600, fontSize: 15,
+            fontWeight: 600, fontSize: 16,
             cursor: 'pointer', fontFamily: SETTINGS_FONT,
             letterSpacing: -0.2,
             boxShadow: '0 1px 2px rgba(0,0,0,0.03), 0 6px 16px rgba(0,0,0,0.04)',
             border: '0.5px solid rgba(0,0,0,0.04)',
+            textAlign: 'center',
           }}
         >
-          {t.logout}
+          {lang === 'kg' ? 'Чыгуу' : t.logout}
         </motion.button>
       </div>
 
       {/* ── Footer ── */}
       <div style={{ padding: '24px 16px 12px', textAlign: 'center' }}>
-        <div style={{ fontSize: 11, color: '#8E8E93', fontWeight: 500, letterSpacing: 0.1, fontFamily: SETTINGS_FONT }}>Версия 1.0</div>
-        <div style={{ fontSize: 11, color: '#8E8E93', marginTop: 3, fontFamily: SETTINGS_FONT, letterSpacing: 0.1 }}>Смарт Центр</div>
+        <div style={{ fontSize: 11, color: '#8E8E93', fontWeight: 500, letterSpacing: 0.1, fontFamily: SETTINGS_FONT }}>
+          {lang === 'kg' ? 'Версия' : 'Версия'} 2.0 PRO
+        </div>
+        <div style={{ fontSize: 11, color: '#C7C7CC', marginTop: 3, fontFamily: SETTINGS_FONT, letterSpacing: 0.1 }}>Kemal Usman · Smart Center</div>
       </div>
     </div>
   );
@@ -6820,9 +9989,11 @@ function AdminSettingsScreen({ banners = [], setBanners, products = [], settings
             {sub === 'banners'  && renderBanners()}
             {sub === 'bonus'    && renderBonus()}
             {sub === 'whatsapp' && renderWhatsapp()}
-            {sub === 'mbank'    && renderMbank()}
-            {sub === 'obank'    && renderObank()}
-            {sub === 'shop'     && renderShop()}
+            {sub === 'delivery' && renderDelivery()}
+            {sub === 'shopInfo'       && renderShopInfo()}
+            {sub === 'heroPage'       && renderHeroPage()}
+            {sub === 'socials'        && renderSocials()}
+            {sub === 'footerSettings' && renderFooterSettings()}
             {sub === 'loginBg'  && renderLoginBg()}
             {sub === 'instaScreen' && renderInstaScreen()}
           </motion.div>
@@ -7171,215 +10342,371 @@ function AdminReviewsScreen({ reviews = [], setReviews, showToast }) {
   );
 }
 
-// ─── MBANK PAYMENT ────────────────────────────────────────────────────────────
-// FIX (CRITICAL): the original used `window.location.href = 'mbank://...'` which
-// silently fails inside Capacitor's WKWebView on iOS for non-http URL schemes.
-// Now uses Capacitor App.openUrl via the openPaymentApp helper, with proper
-// fallbacks (copy details / dial admin).
-function MBankPayment({ total, orderId, onConfirm, onCancel }) {
-  const phone = localStorage.getItem('mbank_phone') || '';
-  const cleanPhone = phone.replace(/\D/g, '');
-  const [step, setStep] = React.useState('pay');
-  const [opening, setOpening] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
-
-  const openMBank = async () => {
-    if (!cleanPhone) {
-      // Admin hasn't configured a payment phone yet — show details step.
-      setStep('confirm');
-      return;
-    }
-    setOpening(true);
-    haptic('light');
-    const result = await openPaymentApp('mbank', {
-      phone: cleanPhone,
-      amount: total,
-      comment: `Kemal Usman ${orderId}`,
-    });
-    setOpening(false);
-    // Whether the OS reported success or not, advance to the confirm step
-    // so the user can mark the payment as done.
-    setTimeout(() => setStep('confirm'), result.ok ? 1800 : 400);
-  };
-
-  const handleCopy = async () => {
-    const ok = await copyToClipboard(`${phone}\n${total.toLocaleString()} сом\nKemal Usman #${orderId}`);
-    if (ok) {
-      haptic('success');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    }
-  };
-
-  const handleDial = async () => {
-    haptic('light');
-    await dialPhone(cleanPhone);
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}>
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-        style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
-      >
-        {/* drag handle */}
-        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5E5', margin: '0 auto 16px' }} />
-
-        {step === 'pay' && <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
-            <MBankLogo size={36} />
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#111' }}>Оплата M-Bank</div>
-          </div>
-          <div style={{ textAlign: 'center', marginBottom: 22 }}>
-            <div style={{ fontSize: 30, fontWeight: 900, color: '#111', letterSpacing: -0.5 }}>{total.toLocaleString()} сом</div>
-            <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
-          </div>
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={openMBank}
-            disabled={opening}
-            style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #00B0AA 0%, #0E7A6E 100%)', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: opening ? 0.7 : 1, boxShadow: '0 8px 20px rgba(14,122,110,0.3)' }}>
-            {opening ? 'Открываем M-Bank…' : `Открыть M-Bank · ${total.toLocaleString()} сом`}
-          </motion.button>
-          <div style={{ background: '#f5f5f5', borderRadius: 14, padding: '14px 16px', marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: '#888', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Нет M-Bank? Переведите вручную:</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: 0.5 }}>{phone || 'Не указан'}</div>
-              {phone && <button onClick={handleCopy} style={{ padding: '6px 12px', borderRadius: 8, background: copied ? '#34C759' : '#111', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '✓ Скопир.' : 'Копировать'}</button>}
-            </div>
-            <div style={{ fontSize: 13, color: '#666' }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
-            <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
-            {phone && (
-              <button onClick={handleDial} style={{ width: '100%', marginTop: 10, padding: '10px', borderRadius: 10, background: 'transparent', color: '#0E7A6E', border: '1.5px solid #0E7A6E', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                📞 Позвонить администратору
-              </button>
-            )}
-          </div>
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setStep('confirm')}
-            style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}>
-            ✓ Я оплатил
-          </motion.button>
-          <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
-        </>}
-        {step === 'confirm' && <>
-          <div style={{ textAlign: 'center', padding: '12px 0 0' }}>
-            <motion.div initial={{ scale: 0.6, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-              style={{ width: 72, height: 72, margin: '0 auto 16px', borderRadius: 22, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 38 }}>⏳</div>
-            </motion.div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 24, lineHeight: 1.5 }}>Администратор проверит оплату и подтвердит заказ. Вы получите уведомление в WhatsApp.</div>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => onConfirm('mbank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-              Готово
-            </motion.button>
-          </div>
-        </>}
-      </motion.div>
-    </div>
-  );
-}
-
-// ─── OBANK PAYMENT ────────────────────────────────────────────────────────────
-// Same robust deep-link handling as MBankPayment (Capacitor App.openUrl + fallbacks).
-function OBankPayment({ total, orderId, onConfirm, onCancel }) {
-  const phone = localStorage.getItem('obank_phone') || '';
-  const cleanPhone = phone.replace(/\D/g, '');
-  const [step, setStep] = React.useState('pay');
-  const [opening, setOpening] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
-
-  const openOBank = async () => {
-    if (!cleanPhone) { setStep('confirm'); return; }
-    setOpening(true);
-    haptic('light');
-    const result = await openPaymentApp('obank', {
-      phone: cleanPhone,
-      amount: total,
-      comment: `Kemal Usman ${orderId}`,
-    });
-    setOpening(false);
-    setTimeout(() => setStep('confirm'), result.ok ? 1800 : 400);
-  };
-
-  const handleCopy = async () => {
-    const ok = await copyToClipboard(`${phone}\n${total.toLocaleString()} сом\nKemal Usman #${orderId}`);
-    if (ok) { haptic('success'); setCopied(true); setTimeout(() => setCopied(false), 1800); }
-  };
-
-  const handleDial = async () => { haptic('light'); await dialPhone(cleanPhone); };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}>
-      <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-        style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
-      >
-        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5E5', margin: '0 auto 16px' }} />
-        {step === 'pay' && <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 14 }}>
-            <OBankLogo size={36} />
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#111' }}>Оплата O!Bank</div>
-          </div>
-          <div style={{ textAlign: 'center', marginBottom: 22 }}>
-            <div style={{ fontSize: 30, fontWeight: 900, color: '#111', letterSpacing: -0.5 }}>{total.toLocaleString()} сом</div>
-            <div style={{ fontSize: 12, color: '#aaa', marginTop: 4 }}>Заказ #{orderId}</div>
-          </div>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={openOBank} disabled={opening}
-            style={{ width: '100%', padding: 16, background: 'linear-gradient(135deg, #FF5BAA 0%, #E5007E 100%)', color: '#fff', border: 'none', borderRadius: 14, fontSize: 16, fontWeight: 700, cursor: 'pointer', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: opening ? 0.7 : 1, boxShadow: '0 8px 20px rgba(229,0,126,0.3)' }}>
-            {opening ? 'Открываем O!Bank…' : `Открыть O!Bank · ${total.toLocaleString()} сом`}
-          </motion.button>
-          <div style={{ background: '#f5f5f5', borderRadius: 14, padding: '14px 16px', marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: '#888', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 1, fontWeight: 700 }}>Нет O!Bank? Переведите вручную:</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: 0.5 }}>{phone || 'Не указан'}</div>
-              {phone && <button onClick={handleCopy} style={{ padding: '6px 12px', borderRadius: 8, background: copied ? '#34C759' : '#111', color: '#fff', border: 'none', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>{copied ? '✓ Скопир.' : 'Копировать'}</button>}
-            </div>
-            <div style={{ fontSize: 13, color: '#666' }}>Сумма: <b>{total.toLocaleString()} сом</b></div>
-            <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Комментарий: Kemal Usman #{orderId}</div>
-            {phone && (
-              <button onClick={handleDial} style={{ width: '100%', marginTop: 10, padding: '10px', borderRadius: 10, background: 'transparent', color: '#E5007E', border: '1.5px solid #E5007E', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                📞 Позвонить администратору
-              </button>
-            )}
-          </div>
-          <motion.button whileTap={{ scale: 0.97 }} onClick={() => setStep('confirm')} style={{ width: '100%', padding: 14, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 14, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}>
-            ✓ Я оплатил
-          </motion.button>
-          <button onClick={onCancel} style={{ width: '100%', padding: 12, background: 'none', border: 'none', color: '#aaa', fontSize: 14, cursor: 'pointer' }}>Отмена</button>
-        </>}
-        {step === 'confirm' && <>
-          <div style={{ textAlign: 'center', padding: '12px 0 0' }}>
-            <motion.div initial={{ scale: 0.6, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-              style={{ width: 72, height: 72, margin: '0 auto 16px', borderRadius: 22, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 38 }}>⏳</div>
-            </motion.div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#111', marginBottom: 8 }}>Ожидаем подтверждение</div>
-            <div style={{ fontSize: 13, color: '#888', marginBottom: 24, lineHeight: 1.5 }}>Администратор проверит оплату и подтвердит заказ. Вы получите уведомление в WhatsApp.</div>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => onConfirm('obank_pending')} style={{ width: '100%', padding: 16, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-              Готово
-            </motion.button>
-          </div>
-        </>}
-      </motion.div>
-    </div>
-  );
-}
 
 // ─── ORDER RECEIPT ────────────────────────────────────────────────────────────
+// ─── Online Payment Screen (Premium iOS Bottom-Sheet) ───────────────────────
+// Creates invoice via server hook, shows paylink/QR, polls for payment.
+function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) {
+  const [phase, setPhase] = React.useState('creating'); // creating | waiting | success | error
+  const [paymentData, setPaymentData] = React.useState(null);
+  const [error, setError] = React.useState('');
+  const [statusText, setStatusText] = React.useState('');
+  const [dots, setDots] = React.useState('');
+  const pollRef = React.useRef(null);
+  const orderIdRef = React.useRef(null);
+
+  // Animated dots for waiting text
+  React.useEffect(() => {
+    if (phase !== 'waiting' && phase !== 'creating') return;
+    const iv = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500);
+    return () => clearInterval(iv);
+  }, [phase]);
+
+  // Phase 1: Create PB order + invoice
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const pbData = {
+          clientName: pendingOrder.clientName || '',
+          clientPhone: pendingOrder.clientPhone || '',
+          items: pendingOrder.items || [],
+          date: pendingOrder.date || new Date().toLocaleString('ru-RU'),
+          status: 'new',
+          total: total || 0,
+          payMethod: 'odengi',
+          address: pendingOrder.address || '',
+          comment: pendingOrder.comment || '',
+          bonusDiscount: pendingOrder.bonusDiscount || 0,
+          paymentMethod: 'odengi',
+          paymentStatus: 'odengi_pending',
+        };
+        const { pb } = await import('./api/pb');
+        const created = await pb.collection('orders').create(pbData);
+        if (cancelled) return;
+        orderIdRef.current = created.id;
+
+        const invoiceResult = await createOdengiInvoice(created.id);
+        if (cancelled) return;
+        setPaymentData(invoiceResult);
+        setPhase('waiting');
+
+        pollOdengiPayment(created.id, {
+          intervalMs: 3000,
+          timeoutMs: 600000,
+          onStatus: (s) => {
+            if (cancelled) return;
+            if (s.paymentApproved) {
+              setPhase('success');
+              setTimeout(() => onConfirm?.({ ...pendingOrder, id: created.id }), 1800);
+            } else {
+              setStatusText(s.status === 'processing' ? 'Ожидание оплаты' : (s.status || ''));
+            }
+          }
+        }).then(paid => {
+          if (cancelled) return;
+          if (!paid && phase !== 'success') {
+            setStatusText('Время ожидания истекло');
+          }
+        });
+      } catch (e) {
+        if (cancelled) return;
+        console.error('OdengiPayment error:', e);
+        setError(String(e.message || e));
+        setPhase('error');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const openPaylink = () => {
+    if (paymentData?.paylink_url) window.open(paymentData.paylink_url, '_blank');
+    else if (paymentData?.site_pay) window.open(paymentData.site_pay, '_blank');
+    else if (paymentData?.link_app) window.open(paymentData.link_app, '_blank');
+  };
+
+  const handleCancel = async () => {
+    if (orderIdRef.current) {
+      try { await cancelOdengiInvoice(orderIdRef.current); } catch (_) {}
+    }
+    onCancel?.();
+  };
+
+  // Pulsing ring animation for waiting
+  const PulseRing = () => (
+    <div style={{ position: 'relative', width: 80, height: 80, margin: '0 auto 20px' }}>
+      {[0, 1, 2].map(i => (
+        <motion.div key={i}
+          animate={{ scale: [1, 2.2], opacity: [0.25, 0] }}
+          transition={{ duration: 2, repeat: Infinity, delay: i * 0.6, ease: 'easeOut' }}
+          style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid #FF6B00' }}
+        />
+      ))}
+      <div style={{
+        position: 'absolute', inset: 8, borderRadius: '50%',
+        background: 'linear-gradient(135deg, #FF6B00 0%, #FF9500 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: '0 4px 20px rgba(255,107,0,0.35)'
+      }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+          <rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>
+          <rect x="6" y="14" width="4" height="2" rx="1"/>
+        </svg>
+      </div>
+    </div>
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.45)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget && phase !== 'creating') handleCancel(); }}
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+        style={{
+          background: '#fff',
+          borderRadius: '24px 24px 0 0',
+          width: '100%', maxWidth: 460,
+          paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0))',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Grab handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
+          <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E0E0E0' }} />
+        </div>
+
+        {/* Header strip */}
+        <div style={{
+          padding: '8px 24px 20px',
+          textAlign: 'center',
+          borderBottom: phase === 'waiting' ? '0.5px solid rgba(0,0,0,0.06)' : 'none',
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#111', letterSpacing: -0.3 }}>
+            Онлайн оплата
+          </div>
+          <motion.div
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            style={{ fontSize: 28, fontWeight: 800, color: '#FF6B00', marginTop: 4, letterSpacing: -0.5 }}
+          >
+            {total?.toLocaleString()} сом
+          </motion.div>
+        </div>
+
+        {/* ── Creating phase ── */}
+        {phase === 'creating' && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ padding: '40px 24px', textAlign: 'center' }}
+          >
+            <div style={{ position: 'relative', width: 52, height: 52, margin: '0 auto 16px' }}>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                style={{
+                  width: 52, height: 52, borderRadius: '50%',
+                  border: '3px solid #F0F0F0',
+                  borderTopColor: '#FF6B00',
+                }}
+              />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>Создание счёта{dots}</div>
+            <div style={{ fontSize: 13, color: '#999', marginTop: 6 }}>Подождите немного</div>
+          </motion.div>
+        )}
+
+        {/* ── Waiting for payment ── */}
+        {phase === 'waiting' && paymentData && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            style={{ padding: '24px 24px 16px' }}
+          >
+            {/* QR Code */}
+            {paymentData.qr_url && (
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                style={{
+                  background: '#FAFAFA', borderRadius: 16, padding: 16,
+                  marginBottom: 16, border: '1px solid #F0F0F0',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center',
+                }}
+              >
+                <img
+                  src={paymentData.qr_url} alt="QR"
+                  style={{
+                    width: 180, height: 180, display: 'block',
+                    borderRadius: 12, border: '1px solid #eee',
+                  }}
+                />
+                <div style={{ fontSize: 12, color: '#999', marginTop: 10, letterSpacing: 0.2 }}>
+                  Сканируйте QR-код для оплаты
+                </div>
+              </motion.div>
+            )}
+
+            {/* Divider with text */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 16px' }}>
+              <div style={{ flex: 1, height: 0.5, background: '#E5E5E5' }} />
+              <span style={{ fontSize: 11, color: '#BBB', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>или</span>
+              <div style={{ flex: 1, height: 0.5, background: '#E5E5E5' }} />
+            </div>
+
+            {/* Open wallet button */}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={openPaylink}
+              style={{
+                width: '100%', padding: '16px 20px',
+                background: 'linear-gradient(135deg, #FF6B00 0%, #FF8C00 100%)',
+                color: '#fff', border: 'none', borderRadius: 14,
+                fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                boxShadow: '0 4px 16px rgba(255,107,0,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                letterSpacing: -0.2,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h7"/>
+                <circle cx="18" cy="17" r="3"/><path d="M18 15v4"/><path d="M16 17h4"/>
+              </svg>
+              Открыть онлайн кошелёк
+            </motion.button>
+
+            {/* Status indicator */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 8, marginTop: 20, padding: '10px 0',
+            }}>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
+                style={{
+                  width: 16, height: 16, borderRadius: '50%',
+                  border: '2px solid #F0F0F0', borderTopColor: '#FF6B00',
+                }}
+              />
+              <span style={{ fontSize: 13, color: '#999', fontWeight: 500 }}>
+                {statusText || 'Ожидание оплаты'}{dots}
+              </span>
+            </div>
+
+            {/* Cancel */}
+            <button
+              onClick={handleCancel}
+              style={{
+                display: 'block', width: '100%', marginTop: 8,
+                background: 'none', border: 'none',
+                color: '#C4C4C4', fontSize: 14, fontWeight: 600,
+                cursor: 'pointer', padding: '10px 16px',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={e => e.target.style.color = '#FF3B30'}
+              onMouseLeave={e => e.target.style.color = '#C4C4C4'}
+            >
+              Отменить оплату
+            </button>
+          </motion.div>
+        )}
+
+        {/* ── Success ── */}
+        {phase === 'success' && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ padding: '40px 24px', textAlign: 'center' }}
+          >
+            <motion.div
+              initial={{ scale: 0, rotate: -45 }}
+              animate={{ scale: 1, rotate: 0 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}
+              style={{
+                width: 72, height: 72, margin: '0 auto 16px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #34C759 0%, #30D158 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 6px 24px rgba(52,199,89,0.3)',
+              }}
+            >
+              <motion.svg
+                initial={{ pathLength: 0, opacity: 0 }}
+                animate={{ pathLength: 1, opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.4 }}
+                width="32" height="32" viewBox="0 0 24 24" fill="none"
+                stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </motion.svg>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+            >
+              <div style={{ fontSize: 20, fontWeight: 800, color: '#111', marginBottom: 4 }}>Оплата прошла!</div>
+              <div style={{ fontSize: 14, color: '#999' }}>Заказ успешно оплачен</div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Error ── */}
+        {phase === 'error' && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            style={{ padding: '36px 24px', textAlign: 'center' }}
+          >
+            <motion.div
+              initial={{ scale: 0 }} animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              style={{
+                width: 64, height: 64, margin: '0 auto 16px',
+                borderRadius: '50%', background: '#FFF2F0',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/>
+              </svg>
+            </motion.div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 6 }}>Ошибка оплаты</div>
+            <div style={{ fontSize: 13, color: '#999', marginBottom: 24, lineHeight: 1.5, padding: '0 12px' }}>{error}</div>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleCancel}
+              style={{
+                padding: '14px 32px',
+                background: '#111', color: '#fff', border: 'none',
+                borderRadius: 14, fontSize: 15, fontWeight: 700,
+                cursor: 'pointer', letterSpacing: -0.2,
+              }}
+            >
+              Закрыть
+            </motion.button>
+          </motion.div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // Chiroyli chek ekran — buyurtma tasdiqlangandan keyin ko'rsatiladi.
 // "Adminga yuborish" tugmasi WhatsApp deeplink orqali chek matnini yuboradi.
 function OrderReceipt({ order, settings, onClose }) {
   if (!order) return null;
   const items = order.items || [];
-  const payLabel = order.payMethod === 'mbank' ? 'M-Bank' : order.payMethod === 'obank' ? 'O!Bank' : 'Наличные';
+  const payLabel = order.payMethod === 'odengi' ? 'Онлайн оплата' : 'Наличные';
   const deliveryLabel = order.deliveryType === 'pickup' ? 'Самовывоз' : (order.address || 'Доставка');
-  const adminPhone = (settings?.whatsappPhone || localStorage.getItem('whatsapp_admin') || localStorage.getItem('mbank_phone') || '').replace(/\D/g, '');
+  const adminPhone = (settings?.whatsappPhone || '').replace(/\D/g, '');
 
   const receiptText = [
     `Чек заказа №${order.id}`,
@@ -7396,19 +10723,62 @@ function OrderReceipt({ order, settings, onClose }) {
     `Тел: ${order.clientPhone}`,
   ].filter(Boolean).join('\n');
 
-  const shareToAdmin = () => {
-    const msg = `📋 ${receiptText}\n\n✅ Оплата совершена. Пожалуйста, подтвердите заказ.`;
+  const fileInputRef = React.useRef(null);
+  const [selectedImage, setSelectedImage] = React.useState(null);
+  const [sending, setSending] = React.useState(false);
+
+  // Option A: WhatsApp text — asks client to attach screenshot manually
+  const shareTextToAdmin = () => {
+    const bankName = 'Онлайн оплата';
+    const msg = `📋 ${receiptText}\n\n✅ Оплата совершена через ${bankName}.\n\n📎 Пожалуйста, отправьте сюда скриншот квитанции об оплате для подтверждения заказа 🙏`;
     if (adminPhone) {
       window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+    } else if (navigator.share) {
+      navigator.share({ title: `Заказ №${order.id}`, text: msg }).catch(() => {});
     } else {
-      // Fallback: share via native share API or copy
-      if (navigator.share) {
-        navigator.share({ title: `Заказ №${order.id}`, text: msg }).catch(() => {});
-      } else {
-        navigator.clipboard?.writeText(msg);
-      }
+      navigator.clipboard?.writeText(msg);
     }
   };
+
+  // Option B: Pick image from camera/gallery, then share via navigator.share (with file) or WhatsApp
+  const handleImagePick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedImage(file);
+  };
+
+  const shareImageToAdmin = async () => {
+    if (!selectedImage) return;
+    setSending(true);
+    const bankName = 'Онлайн оплата';
+    const caption = `📋 Квитанция об оплате\n\nЗаказ №${order.id}\nСумма: ${(order.total || 0).toLocaleString()} сом\nОплата: ${bankName}\nКлиент: ${order.clientName}\nТел: ${order.clientPhone}\n\n✅ Подтвердите, пожалуйста 🙏`;
+
+    // Try navigator.share with files (works on iOS Safari / Capacitor WKWebView)
+    if (navigator.share && navigator.canShare) {
+      try {
+        const shareData = {
+          title: `Квитанция — Заказ №${order.id}`,
+          text: caption,
+          files: [selectedImage],
+        };
+        if (navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          setSending(false);
+          return;
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') console.warn('[receipt] share failed:', err);
+      }
+    }
+    // Fallback: open WhatsApp with text (image can't be pre-attached via deeplink)
+    if (adminPhone) {
+      const fallbackMsg = `${caption}\n\n⚠️ Фото квитанции прикреплено отдельно — пожалуйста, проверьте.`;
+      window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(fallbackMsg)}`, '_blank');
+    }
+    setSending(false);
+  };
+
+  const isBankPayment = false;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}>
@@ -7478,28 +10848,110 @@ function OrderReceipt({ order, settings, onClose }) {
           </div>
         </div>
 
-        {/* WhatsApp share button */}
-        {(order.payMethod === 'mbank' || order.payMethod === 'obank') && (
-          <motion.button
-            whileTap={{ scale: 0.97 }}
-            onClick={shareToAdmin}
-            style={{
-              width: '100%', padding: 15, marginBottom: 10,
-              background: '#25D366', color: '#fff', border: 'none', borderRadius: 14,
-              fontSize: 14, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              boxShadow: '0 4px 12px rgba(37,211,102,0.3)',
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12.005 21.785a9.674 9.674 0 01-4.93-1.35l-.354-.21-3.67.963.98-3.577-.231-.367A9.67 9.67 0 012.22 12.01C2.222 6.61 6.607 2.226 12.01 2.226c2.613 0 5.068 1.019 6.914 2.867a9.715 9.715 0 012.862 6.918c-.003 5.4-4.388 9.784-9.78 9.784z"/></svg>
-            Отправить чек администратору
-          </motion.button>
+        {/* Bank payment receipt section */}
+        {isBankPayment && (
+          <div style={{ marginBottom: 10 }}>
+            {/* Hidden file input for camera/gallery */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleImagePick}
+            />
+
+            {/* Selected image preview */}
+            {selectedImage && (
+              <div style={{ marginBottom: 10, position: 'relative' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  Квитанция выбрана
+                </div>
+                <div style={{ borderRadius: 12, overflow: 'hidden', border: '2px solid #E8F5E9', position: 'relative' }}>
+                  <img
+                    src={URL.createObjectURL(selectedImage)}
+                    alt="receipt"
+                    style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }}
+                  />
+                  <button
+                    onClick={() => setSelectedImage(null)}
+                    style={{ position: 'absolute', top: 6, right: 6, width: 28, height: 28, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Two-button layout: camera/gallery + WhatsApp text */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              {/* Option B: Pick photo of receipt */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  flex: 1, padding: '13px 8px',
+                  background: selectedImage ? '#E8F5E9' : '#F5F5F5',
+                  color: selectedImage ? '#2E7D32' : '#333',
+                  border: selectedImage ? '1.5px solid #A5D6A7' : '1.5px solid #E0E0E0',
+                  borderRadius: 14, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                {selectedImage ? 'Заменить фото' : 'Фото квитанции'}
+              </motion.button>
+
+              {/* Option A: WhatsApp text asking to attach */}
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={shareTextToAdmin}
+                style={{
+                  flex: 1, padding: '13px 8px',
+                  background: '#25D366', color: '#fff', border: 'none', borderRadius: 14,
+                  fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  boxShadow: '0 2px 8px rgba(37,211,102,0.25)',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347zM12.005 21.785a9.674 9.674 0 01-4.93-1.35l-.354-.21-3.67.963.98-3.577-.231-.367A9.67 9.67 0 012.22 12.01C2.222 6.61 6.607 2.226 12.01 2.226c2.613 0 5.068 1.019 6.914 2.867a9.715 9.715 0 012.862 6.918c-.003 5.4-4.388 9.784-9.78 9.784z"/></svg>
+                Отправить чек
+              </motion.button>
+            </div>
+
+            {/* Send selected image via share API */}
+            {selectedImage && (
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={shareImageToAdmin}
+                disabled={sending}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{
+                  width: '100%', padding: 15, marginBottom: 10,
+                  background: sending ? '#999' : '#111', color: '#fff', border: 'none', borderRadius: 14,
+                  fontSize: 14, fontWeight: 700, cursor: sending ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+                {sending ? 'Отправка...' : 'Отправить квитанцию администратору'}
+              </motion.button>
+            )}
+          </div>
         )}
 
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onClose}
-          style={{ width: '100%', padding: 15, background: '#111', color: '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+          style={{ width: '100%', padding: 15, background: isBankPayment ? '#F5F5F5' : '#111', color: isBankPayment ? '#333' : '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
         >
           Готово
         </motion.button>
@@ -7528,47 +10980,330 @@ function pickAudioMime() {
   return '';
 }
 
-function ProductAudioRecorder({ productId }) {
+// ─── FLOATING DRAGGABLE CART PILL ──────────────────────────────────────────
+// Extracted as a proper component so React hooks run stably (no IIFE).
+function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
+  const STORAGE_KEY = 'parfum_cart_pill_pos';
+  const pillRef = React.useRef(null);
+  const dragState = React.useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0, moved: false });
+  const [expanded, setExpanded] = React.useState(false);
+
+  const getDefaultPos = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const p = JSON.parse(saved);
+        if (p.x >= 0 && p.y >= 0 && p.x < window.innerWidth - 40 && p.y < window.innerHeight - 20) return p;
+      }
+    } catch {}
+    return { x: window.innerWidth - 220, y: window.innerHeight - 160 };
+  };
+  const [pillPos, setPillPos] = React.useState(getDefaultPos);
+
+  const clamp = React.useCallback((pos) => {
+    const el = pillRef.current;
+    const w = el ? el.offsetWidth : 200;
+    const h = el ? el.offsetHeight : 52;
+    return {
+      x: Math.max(8, Math.min(pos.x, window.innerWidth - w - 8)),
+      y: Math.max(8, Math.min(pos.y, window.innerHeight - h - 8)),
+    };
+  }, []);
+
+  const onPointerDown = (e) => {
+    if (e.button && e.button !== 0) return;
+    const touch = e.touches ? e.touches[0] : e;
+    dragState.current = { dragging: true, startX: touch.clientX, startY: touch.clientY, origX: pillPos.x, origY: pillPos.y, moved: false };
+    e.preventDefault();
+  };
+
+  const onPointerMove = React.useCallback((e) => {
+    const ds = dragState.current;
+    if (!ds.dragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const dx = touch.clientX - ds.startX;
+    const dy = touch.clientY - ds.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) ds.moved = true;
+    if (!ds.moved) return;
+    setPillPos(clamp({ x: ds.origX + dx, y: ds.origY + dy }));
+  }, [clamp]);
+
+  const onPointerUp = React.useCallback(() => {
+    const ds = dragState.current;
+    if (!ds.dragging) return;
+    ds.dragging = false;
+    setPillPos(prev => {
+      const pillW = pillRef.current?.offsetWidth || 200;
+      const midX = window.innerWidth / 2;
+      const snapX = prev.x + pillW / 2 < midX ? 12 : window.innerWidth - pillW - 12;
+      const snapped = clamp({ x: snapX, y: prev.y });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapped)); } catch {}
+      return snapped;
+    });
+  }, [clamp]);
+
+  React.useEffect(() => {
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchmove', onPointerMove, { passive: false });
+    window.addEventListener('touchend', onPointerUp);
+    return () => {
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('touchend', onPointerUp);
+    };
+  }, [onPointerMove, onPointerUp]);
+
+  React.useEffect(() => {
+    const onResize = () => setPillPos(prev => clamp(prev));
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [clamp]);
+
+  const ruPlural = (n) => {
+    const m100 = n % 100;
+    if (m100 >= 11 && m100 <= 14) return 'товаров';
+    const m10 = n % 10;
+    if (m10 === 1) return 'товар';
+    if (m10 >= 2 && m10 <= 4) return 'товара';
+    return 'товаров';
+  };
+  const itemsWord = lang === 'kg' ? 'товар' : ruPlural(cartCount);
+  const onCart = screen === 'cart';
+  const ctaLabel = onCart
+    ? (lang === 'kg' ? 'Заказ берүү' : 'Оформить заказ')
+    : (lang === 'kg' ? 'Заказга өтүү' : 'Перейти к оформлению');
+
+  const handleTap = () => {
+    haptic('medium');
+    if (onCart) {
+      window.dispatchEvent(new CustomEvent('cart:checkout'));
+    } else {
+      onGoToCart();
+    }
+  };
+
+  return (
+    <motion.div
+      ref={pillRef}
+      key="floating-cart-pill"
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1, x: pillPos.x, y: pillPos.y }}
+      exit={{ scale: 0, opacity: 0 }}
+      transition={{
+        x: { type: 'spring', stiffness: 300, damping: 28 },
+        y: { type: 'spring', stiffness: 300, damping: 28 },
+        scale: { type: 'spring', stiffness: 500, damping: 25 },
+      }}
+      onMouseDown={onPointerDown}
+      onTouchStart={onPointerDown}
+      style={{
+        position: "fixed", top: 0, left: 0,
+        zIndex: 9999,
+        touchAction: "none",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        cursor: dragState.current.dragging ? "grabbing" : "grab",
+      }}
+    >
+      {/* Outer glow layer */}
+      <motion.div
+        animate={{
+          boxShadow: expanded
+            ? "0 0 28px 4px rgba(255,107,0,0.18), 0 8px 32px rgba(0,0,0,0.35)"
+            : "0 0 16px 2px rgba(255,107,0,0.12), 0 4px 20px rgba(0,0,0,0.3)",
+        }}
+        transition={{ duration: 0.4 }}
+        style={{ borderRadius: 50 }}
+      >
+        <motion.button
+          onClick={() => {
+            if (dragState.current.moved) { dragState.current.moved = false; return; }
+            if (expanded) {
+              handleTap();
+            } else {
+              setExpanded(true);
+              setTimeout(() => setExpanded(false), 4000);
+            }
+          }}
+          whileTap={!dragState.current.moved ? { scale: 0.93 } : {}}
+          style={{
+            background: "rgba(18,18,20,0.82)",
+            backdropFilter: "blur(24px) saturate(180%)",
+            WebkitBackdropFilter: "blur(24px) saturate(180%)",
+            borderRadius: 50,
+            padding: expanded ? "8px 16px 8px 8px" : "8px",
+            border: "0.5px solid rgba(255,255,255,0.12)",
+            display: "flex", alignItems: "center", gap: expanded ? 10 : 0,
+            cursor: dragState.current.dragging ? "grabbing" : "pointer",
+            whiteSpace: "nowrap",
+            position: 'relative',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Subtle inner highlight */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)',
+            borderRadius: '50px 50px 0 0',
+            pointerEvents: 'none',
+          }} />
+
+          {/* Cart icon circle */}
+          <div style={{ position: 'relative', flexShrink: 0, zIndex: 1 }}>
+            <motion.div
+              animate={{
+                background: expanded
+                  ? "linear-gradient(135deg, #FF6B00 0%, #FF8C00 100%)"
+                  : "rgba(255,255,255,0.1)",
+              }}
+              transition={{ duration: 0.3 }}
+              style={{
+                width: 38, height: 38, borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff",
+                boxShadow: expanded ? "0 2px 12px rgba(255,107,0,0.3)" : "none",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <path d="M16 10a4 4 0 01-8 0"/>
+              </svg>
+            </motion.div>
+
+            {/* Badge */}
+            <motion.div
+              key={`badge-${cartCount}`}
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 16 }}
+              style={{
+                position: 'absolute', top: -3, right: -3,
+                minWidth: 19, height: 19, borderRadius: 10,
+                background: '#FF3B30',
+                color: '#fff',
+                fontSize: 10, fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 5px',
+                border: '2px solid rgba(18,18,20,0.9)',
+                boxShadow: '0 1px 6px rgba(255,59,48,0.4)',
+              }}
+            >
+              {cartCount}
+            </motion.div>
+          </div>
+
+          {/* Expanded content */}
+          <AnimatePresence>
+            {expanded && (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: 'auto', opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 26 }}
+                style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 10, zIndex: 1 }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{
+                    color: '#fff', fontSize: 13.5, fontWeight: 700,
+                    letterSpacing: -0.3,
+                    textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                  }}>
+                    {ctaLabel}
+                  </span>
+                  <span style={{
+                    color: 'rgba(255,255,255,0.5)', fontSize: 11.5, fontWeight: 500,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {cartCount} {itemsWord} · <AnimatedSum value={cartTotal} duration={0.55} />
+                  </span>
+                </div>
+
+                {/* Arrow button */}
+                <motion.div
+                  animate={{ x: [0, 3, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                  style={{
+                    width: 28, height: 28, borderRadius: '50%',
+                    background: 'rgba(255,107,0,0.2)',
+                    border: '1px solid rgba(255,107,0,0.25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 6 15 12 9 18"/>
+                  </svg>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function ProductAudioRecorder({ productId, onAudioUploaded }) {
   const { lang } = useLang();
   const key = 'parfum_audio_' + productId;
 
-  // status: idle | requesting | recording | encoding | done | error
-  const [status, setStatus] = React.useState(localStorage.getItem(key) ? 'done' : 'idle');
+  // Check if PB already has audio for this product
+  const [pbHasAudio, setPbHasAudio] = React.useState(false);
+  const [pbAudioUrl, setPbAudioUrl] = React.useState(null);
+
+  // status: idle | requesting | recording | encoding | uploading | done | error
+  const [status, setStatus] = React.useState('idle');
   const [error, setError] = React.useState(null);
   const [countdown, setCountdown] = React.useState(10);
-  const [duration, setDuration] = React.useState(0); // seconds, set when recording finishes
-  const [playing, setPlaying] = React.useState(false);
-  const [progress, setProgress] = React.useState(0); // 0..1 playback progress
+  const [duration, setDuration] = React.useState(0);
+  const [uploadProgress, setUploadProgress] = React.useState('');
 
-  const audioRef = React.useRef(null);
+  const player = useAudioPlayer();
+  const audioSrc = pbAudioUrl || null;
+  const isMine = !!audioSrc && player.currentSrc === audioSrc;
+  const isPlaying = isMine && player.isPlaying;
+  const currentTime = isMine ? player.currentTime : 0;
+  const totalDur = isMine ? (player.duration || duration || 10) : (duration || 10);
+  const progress = totalDur > 0 ? Math.min(1, currentTime / totalDur) : 0;
+
   const recorderRef = React.useRef(null);
   const streamRef = React.useRef(null);
   const startTimeRef = React.useRef(0);
   const tickRef = React.useRef(null);
   const stopTimerRef = React.useRef(null);
-  const rafRef = React.useRef(null);
+  const audioBlobRef = React.useRef(null);
 
-  const T_RU = lang === 'ru';
+  const isRu = lang !== 'kg';
+
+  // On mount — check if product has audio in PB
+  React.useEffect(() => {
+    if (!productId) return;
+    (async () => {
+      try {
+        const rec = await pb.collection('products').getOne(productId);
+        if (rec.audio) {
+          const url = `${PB_URL}/api/files/products/${rec.id}/${rec.audio}`;
+          setPbAudioUrl(url);
+          setPbHasAudio(true);
+          setStatus('done');
+        } else if (localStorage.getItem(key)) {
+          setStatus('done');
+        }
+      } catch {}
+    })();
+  }, [productId]);
 
   const errMsg = (kind) => {
     const map = {
-      ru: {
-        unsupported: 'Запись не поддерживается в этом браузере',
-        permission: 'Нет доступа к микрофону. Разрешите доступ в настройках.',
-        record: 'Не удалось записать аудио',
-        play: 'Не удалось воспроизвести аудио',
-      },
-      kg: {
-        unsupported: 'Жазуу бул браузерде колдоого алынбайт',
-        permission: 'Микрофонго мүмкүнчүлүк жок. Тууралоодон уруксат бер.',
-        record: 'Аудио жазуу мүмкүн болбоду',
-        play: 'Аудиону угуу мүмкүн болбоду',
-      },
+      ru: { unsupported: 'Запись не поддерживается', permission: 'Нет доступа к микрофону', record: 'Ошибка записи', upload: 'Не удалось загрузить на сервер' },
+      kg: { unsupported: 'Жазуу колдоого алынбайт', permission: 'Микрофонго мүмкүнчүлүк жок', record: 'Жазуу катасы', upload: 'Серверге жүктөө мүмкүн болбоду' },
     };
-    return (lang === 'kg' ? map.kg : map.ru)[kind];
+    return (lang === 'kg' ? map.kg : map.ru)[kind] || kind;
   };
 
-  // ── cleanup ──────────────────────────────────────────────────────────────
   const cleanupRecorder = () => {
     if (tickRef.current) { clearInterval(tickRef.current); tickRef.current = null; }
     if (stopTimerRef.current) { clearTimeout(stopTimerRef.current); stopTimerRef.current = null; }
@@ -7581,18 +11316,48 @@ function ProductAudioRecorder({ productId }) {
     }
   };
 
-  React.useEffect(() => () => {
-    cleanupRecorder();
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-  }, []);
+  React.useEffect(() => () => { cleanupRecorder(); }, []);
 
-  // Re-sync status if the underlying audio in localStorage changes (e.g. on edit)
-  React.useEffect(() => {
-    if (localStorage.getItem(key)) setStatus(s => (s === 'idle' ? 'done' : s));
-  }, [key]);
+  // ── Upload blob to PocketBase ──────────────────────────────────────────
+  const uploadToPB = async (blob) => {
+    if (!productId || !blob) return;
+    setStatus('uploading');
+    setUploadProgress(isRu ? 'Загрузка на сервер...' : 'Серверге жүктөлүүдө...');
+    try {
+      const ext = (blob.type?.split('/')[1] || 'm4a').replace('mpeg', 'mp3').replace('mp4', 'm4a').replace('webm', 'webm');
+      const file = new File([blob], `audio_${productId}.${ext}`, { type: blob.type });
+      const fd = new FormData();
+      fd.append('audio', file);
+      const updated = await pb.collection('products').update(productId, fd, { requestKey: null });
+      if (updated.audio) {
+        const url = `${PB_URL}/api/files/products/${updated.id}/${updated.audio}`;
+        setPbAudioUrl(url);
+        setPbHasAudio(true);
+        // Clean up localStorage — PB is now the source of truth
+        localStorage.removeItem(key);
+        onAudioUploaded?.();
+      }
+      setStatus('done');
+      setUploadProgress('');
+    } catch (err) {
+      console.warn('[AudioRecorder] PB upload error:', err);
+      // Fall back to localStorage
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        try { localStorage.setItem(key, reader.result); } catch {}
+        setStatus('done');
+        setUploadProgress('');
+      };
+      reader.onerror = () => {
+        setStatus('error');
+        setError(errMsg('upload'));
+        setUploadProgress('');
+      };
+      reader.readAsDataURL(blob);
+    }
+  };
 
-  // ── record ───────────────────────────────────────────────────────────────
+  // ── Record ─────────────────────────────────────────────────────────────
   const startRecording = async () => {
     setError(null);
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
@@ -7600,17 +11365,13 @@ function ProductAudioRecorder({ productId }) {
     }
     cleanupRecorder();
     setStatus('requesting');
-
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       const denied = e?.name === 'NotAllowedError' || e?.name === 'SecurityError';
-      setStatus('error');
-      setError(denied ? errMsg('permission') : errMsg('record'));
-      return;
+      setStatus('error'); setError(denied ? errMsg('permission') : errMsg('record')); return;
     }
-
     streamRef.current = stream;
     const mime = pickAudioMime();
     let rec;
@@ -7618,265 +11379,236 @@ function ProductAudioRecorder({ productId }) {
       rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
     } catch {
       setStatus('error'); setError(errMsg('record'));
-      stream.getTracks().forEach(t => t.stop());
-      return;
+      stream.getTracks().forEach(t => t.stop()); return;
     }
-
     const chunks = [];
-    rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+    rec.ondataavailable = (e) => { if (e.data?.size > 0) chunks.push(e.data); };
     rec.onerror = () => { setStatus('error'); setError(errMsg('record')); cleanupRecorder(); };
     rec.onstop = () => {
       const elapsedMs = Date.now() - startTimeRef.current;
       cleanupRecorder();
       if (chunks.length === 0) { setStatus('error'); setError(errMsg('record')); return; }
-      setStatus('encoding');
       const recordedMime = rec.mimeType || mime || 'audio/webm';
-      // For iOS playback compatibility: store as data URL with the original
-      // mime type. Safari will treat audio/mp4 as .m4a (AAC) and play it back
-      // through `new Audio()` without transcoding.
       const blob = new Blob(chunks, { type: recordedMime });
-      const reader = new FileReader();
-      reader.onerror = () => { setStatus('error'); setError(errMsg('record')); };
-      reader.onloadend = () => {
-        try {
-          localStorage.setItem(key, reader.result);
-          setDuration(Math.min(10, Math.round(elapsedMs / 1000)));
-          setStatus('done');
-        } catch {
-          setStatus('error'); setError(errMsg('record'));
-        }
-      };
-      reader.readAsDataURL(blob);
+      audioBlobRef.current = blob;
+      setDuration(Math.min(10, Math.round(elapsedMs / 1000)));
+      // Upload directly to PB
+      uploadToPB(blob);
     };
-
     recorderRef.current = rec;
     setStatus('recording');
     setCountdown(10);
     startTimeRef.current = Date.now();
     try { haptic('light'); } catch {}
-
     let c = 10;
     tickRef.current = setInterval(() => {
-      c -= 1;
-      setCountdown(Math.max(0, c));
+      c -= 1; setCountdown(Math.max(0, c));
       if (c <= 0) { clearInterval(tickRef.current); tickRef.current = null; }
     }, 1000);
-
     try { rec.start(100); } catch {
       setStatus('error'); setError(errMsg('record')); cleanupRecorder(); return;
     }
     stopTimerRef.current = setTimeout(() => {
-      if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-        try { recorderRef.current.stop(); } catch {}
-      }
+      if (recorderRef.current?.state !== 'inactive') { try { recorderRef.current.stop(); } catch {} }
     }, 10000);
   };
 
   const stopRecordingEarly = () => {
-    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+    if (recorderRef.current?.state !== 'inactive') {
       try { haptic('medium'); } catch {}
       try { recorderRef.current.stop(); } catch {}
     }
   };
 
-  // ── playback (preview) ───────────────────────────────────────────────────
-  const togglePlay = () => {
-    if (playing) {
-      if (audioRef.current) audioRef.current.pause();
-      setPlaying(false);
-      return;
+  // ── Delete from PB ─────────────────────────────────────────────────────
+  const handleDelete = async () => {
+    player.pause();
+    if (pbHasAudio && productId) {
+      try {
+        await pb.collection('products').update(productId, { audio: null }, { requestKey: null });
+      } catch (e) { console.warn('[AudioRecorder] PB delete error:', e); }
     }
-    const data = localStorage.getItem(key);
-    if (!data) return;
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    const audio = new Audio(data);
-    audioRef.current = audio;
-    audio.onended = () => { setPlaying(false); setProgress(0); };
-    audio.onerror = () => { setPlaying(false); setError(errMsg('play')); setStatus('done'); };
-    audio.play().then(() => {
-      setPlaying(true);
-      const tick = () => {
-        if (!audioRef.current) return;
-        const d = audioRef.current.duration || duration || 10;
-        setProgress(d ? audioRef.current.currentTime / d : 0);
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    }).catch(() => { setPlaying(false); setError(errMsg('play')); });
-  };
-
-  const handleDelete = () => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    cleanupRecorder();
     localStorage.removeItem(key);
+    audioBlobRef.current = null;
+    setPbAudioUrl(null);
+    setPbHasAudio(false);
     setStatus('idle');
-    setPlaying(false);
-    setProgress(0);
     setDuration(0);
     setError(null);
   };
 
-  // ── render ───────────────────────────────────────────────────────────────
+  const togglePlay = () => {
+    if (!audioSrc) return;
+    player.toggle(audioSrc);
+  };
+
   const fmtTime = (s) => `0:${String(Math.max(0, Math.floor(s))).padStart(2, '0')}`;
 
-  // Error banner — shown above any state, dismissed when next action succeeds.
+  // ── Error banner ───────────────────────────────────────────────────────
   const errorBanner = error && (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      background: '#FEF2F2', border: '1px solid #FECACA',
-      borderRadius: 10, padding: '8px 12px', marginTop: 8,
-      fontSize: 12, color: '#B91C1C', fontWeight: 500,
-    }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,59,48,0.08)', borderRadius: 12, padding: '10px 14px', marginTop: 10, fontSize: 12, color: '#FF3B30', fontWeight: 500 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" style={{ flexShrink: 0 }}>
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
       <span style={{ flex: 1 }}>{error}</span>
-      <button onClick={() => setError(null)} aria-label="dismiss" style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: '#B91C1C', display: 'flex' }}>
+      <button onClick={() => setError(null)} style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', color: '#FF3B30', display: 'flex' }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
-    </div>
+    </motion.div>
   );
 
-  // ── recording state ──────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+  //  RECORDING STATE — iOS Voice Memo style
+  // ═══════════════════════════════════════════════════════════════════════
   if (status === 'recording' || status === 'requesting') {
     const elapsed = 10 - countdown;
     return (
       <div>
-        <motion.div
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-          style={{ background: '#FEF2F2', border: '1px solid #FEE2E2', borderRadius: 14, padding: '14px 16px', marginTop: 8 }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+          style={{ background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)', borderRadius: 20, padding: '18px 18px 16px', marginTop: 8 }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <motion.div
-                animate={{ scale: [1, 1.25, 1], opacity: [1, 0.55, 1] }}
-                transition={{ duration: 1.1, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ width: 10, height: 10, borderRadius: 5, background: '#E53935', boxShadow: '0 0 0 4px rgba(229,57,53,0.18)' }}
+                animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ width: 10, height: 10, borderRadius: 5, background: '#FF3B30', boxShadow: '0 0 8px rgba(255,59,48,0.5)' }}
               />
-              <span style={{ color: '#B91C1C', fontWeight: 700, fontSize: 14, letterSpacing: -0.1 }}>
+              <span style={{ color: '#fff', fontWeight: 700, fontSize: 15, letterSpacing: -0.2 }}>
                 {status === 'requesting'
-                  ? (T_RU ? 'Доступ к микрофону…' : 'Микрофонго мүмкүнчүлүк…')
-                  : (T_RU ? `Запись · ${fmtTime(elapsed)}` : `Жазуу · ${fmtTime(elapsed)}`)}
+                  ? (isRu ? 'Доступ к микрофону…' : 'Микрофонго мүмкүнчүлүк…')
+                  : fmtTime(elapsed)}
               </span>
+              {status === 'recording' && (
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: 500 }}>/ 0:10</span>
+              )}
             </div>
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={stopRecordingEarly}
-              disabled={status === 'requesting'}
-              style={{ padding: '7px 16px', borderRadius: 20, border: 'none', background: '#E53935', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 6px rgba(229,57,53,0.30)' }}
-            >
-              {T_RU ? 'Стоп' : 'Стоп'}
+            <motion.button whileTap={{ scale: 0.9 }} onClick={stopRecordingEarly} disabled={status === 'requesting'}
+              style={{ width: 38, height: 38, borderRadius: 12, border: 'none', background: '#FF3B30', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 14px rgba(255,59,48,0.4)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
             </motion.button>
           </div>
-          {/* Animated red waveform */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, height: 20, marginBottom: 10 }}>
-            <style>{`@keyframes recBar{0%,100%{transform:scaleY(0.30)}50%{transform:scaleY(1)}}`}</style>
-            {Array.from({ length: 28 }).map((_, i) => (
+          {/* Waveform — iOS Voice Memo style */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, height: 32, marginBottom: 12, padding: '0 2px' }}>
+            <style>{`@keyframes recWave{0%,100%{transform:scaleY(0.2)}25%{transform:scaleY(0.8)}50%{transform:scaleY(1)}75%{transform:scaleY(0.5)}}`}</style>
+            {Array.from({ length: 40 }).map((_, i) => (
               <div key={i} style={{
-                flex: 1, height: 18, borderRadius: 2,
-                background: '#E53935',
+                flex: 1, height: 28, borderRadius: 1.5,
+                background: `linear-gradient(180deg, #FF3B30 0%, #FF6B6B 100%)`,
                 transformOrigin: 'center',
-                animation: 'recBar 0.85s ease-in-out infinite',
-                animationDelay: `${(i % 7) * 0.08}s`,
-                opacity: 0.85,
+                animation: status === 'recording' ? `recWave ${0.6 + (i % 5) * 0.15}s ease-in-out infinite` : 'none',
+                animationDelay: `${(i % 8) * 0.06}s`,
+                opacity: status === 'recording' ? (0.4 + Math.random() * 0.6) : 0.2,
+                transform: status === 'requesting' ? 'scaleY(0.15)' : undefined,
               }} />
             ))}
           </div>
-          {/* Linear progress 0 → 10s */}
-          <div style={{ height: 4, background: '#FECACA', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', background: '#E53935', borderRadius: 4, width: `${(elapsed / 10) * 100}%`, transition: 'width 1s linear' }} />
+          {/* Progress track */}
+          <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+            <motion.div animate={{ width: `${(elapsed / 10) * 100}%` }}
+              transition={{ duration: 0.8, ease: 'linear' }}
+              style={{ height: '100%', background: 'linear-gradient(90deg, #FF3B30, #FF6B6B)', borderRadius: 3 }} />
           </div>
         </motion.div>
       </div>
     );
   }
 
-  // ── encoding state ───────────────────────────────────────────────────────
-  if (status === 'encoding') {
+  // ═══════════════════════════════════════════════════════════════════════
+  //  UPLOADING / ENCODING STATE
+  // ═══════════════════════════════════════════════════════════════════════
+  if (status === 'encoding' || status === 'uploading') {
     return (
       <div>
-        <div style={{ background: '#f5f5f7', borderRadius: 14, padding: '14px 16px', marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-            style={{ width: 18, height: 18, border: '2px solid rgba(0,0,0,0.12)', borderTopColor: '#111', borderRadius: '50%' }}
-          />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-            {T_RU ? 'Сохраняем…' : 'Сактоодо…'}
-          </span>
-        </div>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          style={{ background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)', borderRadius: 20, padding: '18px 20px', marginTop: 8, display: 'flex', alignItems: 'center', gap: 14 }}>
+          <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+            style={{ width: 22, height: 22, border: '2.5px solid rgba(255,255,255,0.15)', borderTopColor: '#FF3B30', borderRadius: '50%', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 2 }}>
+              {status === 'uploading' ? (isRu ? 'Сохраняем в облако' : 'Булутка сакталууда') : (isRu ? 'Обработка…' : 'Иштетилүүдө…')}
+            </div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+              {uploadProgress || (isRu ? 'Несколько секунд...' : 'Бир нече секунд...')}
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   }
 
-  // ── done state — premium preview player ─────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+  //  DONE STATE — Premium iOS player
+  // ═══════════════════════════════════════════════════════════════════════
   if (status === 'done') {
     return (
       <div>
-        <motion.div
-          initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
           style={{
-            background: 'linear-gradient(180deg,#fafafa 0%,#f4f4f6 100%)',
-            border: '0.5px solid #ececef',
-            borderRadius: 14, padding: '12px 12px', marginTop: 8,
-            display: 'flex', flexDirection: 'column', gap: 10,
-          }}
-        >
-          {/* Player row: play btn · progress · duration */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <motion.button
-              whileTap={{ scale: 0.92 }}
-              onClick={togglePlay}
-              aria-label={playing ? 'Pause' : 'Play'}
+            background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)',
+            borderRadius: 20, padding: '16px 16px 14px', marginTop: 8,
+          }}>
+          {/* Player row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+            <motion.button whileTap={{ scale: 0.88 }} onClick={togglePlay}
               style={{
-                flexShrink: 0, width: 36, height: 36, borderRadius: '50%',
-                background: '#111', color: '#fff', border: 'none',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', boxShadow: '0 4px 10px rgba(0,0,0,0.18)',
-              }}
-            >
-              {playing ? (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                  <rect x="6" y="4" width="4" height="16" rx="1.2"/><rect x="14" y="4" width="4" height="16" rx="1.2"/>
-                </svg>
+                flexShrink: 0, width: 44, height: 44, borderRadius: 22,
+                background: isPlaying ? 'rgba(255,59,48,0.15)' : 'rgba(255,255,255,0.1)',
+                border: isPlaying ? '1.5px solid rgba(255,59,48,0.3)' : '1.5px solid rgba(255,255,255,0.12)',
+                color: isPlaying ? '#FF3B30' : '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              }}>
+              {isPlaying ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.2"/><rect x="14" y="4" width="4" height="16" rx="1.2"/></svg>
               ) : (
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 1 }}>
-                  <polygon points="6 4 20 12 6 20 6 4"/>
-                </svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><polygon points="6 4 20 12 6 20 6 4"/></svg>
               )}
             </motion.button>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, color: '#888', marginBottom: 4, fontWeight: 500 }}>
-                {T_RU ? 'Аудио готово' : 'Аудио даяр'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: 3, background: '#34C759' }} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
+                    {pbHasAudio ? (isRu ? 'Сохранено в облаке' : 'Булутта сакталды') : (isRu ? 'Аудио готово' : 'Аудио даяр')}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {isPlaying ? `${fmtTime(currentTime)} / ${fmtTime(totalDur)}` : fmtTime(duration || totalDur)}
+                </span>
               </div>
-              <div style={{ height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+              {/* Progress bar */}
+              <div style={{ height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', cursor: 'pointer' }}
+                onClick={(e) => {
+                  if (!audioSrc) return;
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                  if (!isMine) player.play(audioSrc);
+                  setTimeout(() => player.seek(ratio * totalDur), 100);
+                }}>
                 <motion.div
-                  animate={{ width: `${Math.min(100, progress * 100)}%` }}
-                  transition={{ ease: 'linear', duration: 0.05 }}
-                  style={{ height: '100%', background: '#111', borderRadius: 4 }}
-                />
+                  animate={{ width: `${progress * 100}%` }}
+                  transition={{ ease: 'linear', duration: 0.08 }}
+                  style={{ height: '100%', background: isPlaying ? '#FF3B30' : 'rgba(255,255,255,0.35)', borderRadius: 3 }} />
               </div>
-            </div>
-            <div style={{ fontSize: 12, color: '#666', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0 }}>
-              {fmtTime(duration || 10)}
             </div>
           </div>
-          {/* Action row */}
+          {/* Action buttons */}
           <div style={{ display: 'flex', gap: 8 }}>
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={startRecording}
-              style={{ flex: 1, padding: '9px', borderRadius: 10, border: '1px solid #e2e2e6', background: '#fff', color: '#111', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-            >
-              {T_RU ? 'Перезаписать' : 'Кайра жаз'}
+            <motion.button whileTap={{ scale: 0.95 }} onClick={startRecording}
+              style={{ flex: 1, padding: '10px', borderRadius: 12, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.06)', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+              </svg>
+              {isRu ? 'Перезаписать' : 'Кайра жаз'}
             </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={handleDelete}
-              style={{ flex: 1, padding: '9px', borderRadius: 10, border: '1px solid #FCA5A5', background: '#fff', color: '#DC2626', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-            >
-              {T_RU ? 'Удалить' : 'Өчүрүү'}
+            <motion.button whileTap={{ scale: 0.95 }} onClick={handleDelete}
+              style={{ flex: 1, padding: '10px', borderRadius: 12, border: '1px solid rgba(255,59,48,0.2)', background: 'rgba(255,59,48,0.08)', color: '#FF3B30', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+              {isRu ? 'Удалить' : 'Өчүрүү'}
             </motion.button>
           </div>
         </motion.div>
@@ -7885,30 +11617,42 @@ function ProductAudioRecorder({ productId }) {
     );
   }
 
-  // ── idle / error — record CTA ────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════
+  //  IDLE — Record CTA (iOS Voice Memo inspired)
+  // ═══════════════════════════════════════════════════════════════════════
   return (
     <div>
-      <motion.button
-        whileTap={{ scale: 0.97 }}
-        onClick={startRecording}
+      <motion.button whileTap={{ scale: 0.96 }} onClick={startRecording}
         style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          width: '100%', padding: '13px',
-          borderRadius: 12, border: '1.5px dashed #d4d4d8',
-          background: '#fff', cursor: 'pointer',
-          fontSize: 13, fontWeight: 600, color: '#111',
-          marginTop: 8,
-        }}
-      >
-        <span style={{
-          width: 20, height: 20, borderRadius: '50%',
-          background: '#E53935', color: '#fff',
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          width: '100%', padding: '16px',
+          borderRadius: 16, border: 'none',
+          background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)',
+          cursor: 'pointer', marginTop: 8,
         }}>
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>
-        </span>
-        {T_RU ? 'Записать аромат · 10 сек' : 'Жыт жаз · 10 с'}
+        <motion.div
+          animate={{ scale: [1, 1.15, 1] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          style={{
+            width: 36, height: 36, borderRadius: 18,
+            background: 'linear-gradient(135deg, #FF3B30, #FF6B6B)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 4px 16px rgba(255,59,48,0.35)',
+          }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">
+            <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+            <line x1="12" y1="19" x2="12" y2="22" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
+        </motion.div>
+        <div style={{ textAlign: 'left' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', letterSpacing: -0.2 }}>
+            {isRu ? 'Записать аромат' : 'Жытты жаз'}
+          </div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 500, marginTop: 1 }}>
+            {isRu ? 'до 10 секунд · сохранится на сервере' : '10 секундга чейин · серверге сакталат'}
+          </div>
+        </div>
       </motion.button>
       {errorBanner}
     </div>
@@ -7994,9 +11738,6 @@ function AudioRecordBtn({ productId }) {
 
 function ClientAudioBtn({ product, productId, compact = false }) {
   const { t, lang } = useLang();
-  // Resolve source URL: prefer PB-served audio (production); fall back to a
-  // local recording cached during admin recording sessions for instant
-  // preview before the product is saved.
   const pid = product?.id || productId;
   const localKey = pid ? 'parfum_audio_' + pid : null;
   const localData = (typeof window !== 'undefined' && localKey) ? localStorage.getItem(localKey) : null;
@@ -8019,160 +11760,170 @@ function ClientAudioBtn({ product, productId, compact = false }) {
 
   if (!src) return null;
   const isActive = isPlaying || (isMine && currentTime > 0);
+  const isRu = lang !== 'kg';
 
-  // ── Compact pill (catalog card) ──────────────────────────────────────────────
+  // ── Compact pill (catalog card) — Apple Music mini style ────────────────
   if (compact) {
     return (
-      <div onClick={e => { e.stopPropagation(); handleToggle(); }}
+      <motion.div
+        onClick={e => { e.stopPropagation(); handleToggle(); }}
+        whileTap={{ scale: 0.92 }}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          padding: '5px 10px 5px 7px',
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '4px 10px 4px 5px',
           borderRadius: 20,
-          background: isActive ? '#111' : 'rgba(0,0,0,0.06)',
+          background: isPlaying ? 'linear-gradient(135deg, #1C1C1E, #2C2C2E)' : 'rgba(0,0,0,0.05)',
           cursor: 'pointer',
-          transition: 'background 0.2s',
           marginTop: 8,
           userSelect: 'none',
           alignSelf: 'flex-start',
-        }}
-      >
+          border: isPlaying ? '0.5px solid rgba(255,255,255,0.1)' : '0.5px solid rgba(0,0,0,0.06)',
+        }}>
         <div style={{
           width: 22, height: 22, borderRadius: '50%',
-          background: isActive ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.08)',
+          background: isPlaying ? 'rgba(255,59,48,0.2)' : 'rgba(0,0,0,0.07)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: isActive ? '#fff' : '#555', flexShrink: 0,
+          color: isPlaying ? '#FF3B30' : '#666', flexShrink: 0,
         }}>
           {isPlaying
-            ? <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
-            : <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            ? <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
+            : <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 1 }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
           }
         </div>
         {isPlaying ? (
-          <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 12 }}>
-            <style>{`@keyframes audioBar{0%,100%{height:3px}50%{height:10px}}`}</style>
-            {[0,1,2].map(i => (
-              <div key={i} style={{ width: 2.5, borderRadius: 1.5, background: 'rgba(255,255,255,0.75)', animation: 'audioBar 0.7s ease-in-out infinite', animationDelay: `${i*0.13}s`, height: 3 }}/>
+          <div style={{ display: 'flex', gap: 1.5, alignItems: 'center', height: 12 }}>
+            <style>{`@keyframes abPro{0%,100%{height:3px}50%{height:10px}}`}</style>
+            {[0,1,2,3].map(i => (
+              <div key={i} style={{ width: 2, borderRadius: 1, background: '#FF3B30', animation: 'abPro 0.65s ease-in-out infinite', animationDelay: `${i*0.1}s`, height: 3 }}/>
             ))}
           </div>
         ) : (
-          <span style={{ fontSize: 11, fontWeight: 600, color: isActive ? '#fff' : '#555', whiteSpace: 'nowrap' }}>
-            {isActive ? t.continueBtn : t.listenBtn}
+          <span style={{ fontSize: 10, fontWeight: 600, color: '#666', whiteSpace: 'nowrap', letterSpacing: -0.1 }}>
+            {t.listenBtn || (isRu ? 'Слушать' : 'Угуу')}
           </span>
         )}
-      </div>
+      </motion.div>
     );
   }
 
-  // ── Full player (detail screen) — light, soft glass, slim ───────────────────
-  const icPlay = (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 1 }}>
-      <polygon points="6 4 20 12 6 20 6 4"/>
-    </svg>
-  );
-  const icPause = (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="6" y="4" width="4" height="16" rx="1.2"/>
-      <rect x="14" y="4" width="4" height="16" rx="1.2"/>
-    </svg>
-  );
-
+  // ── Full player (detail screen) — iOS Now Playing / Apple Music style ──────
   const fmt = (s) => `0:${String(Math.max(0, Math.floor(s))).padStart(2, '0')}`;
   const totalDur = Math.max(1, duration || 10);
-  const progress = Math.min(1, currentTime / totalDur);
+  const progressVal = Math.min(1, currentTime / totalDur);
 
-  // State-aware title
-  let titleText;
-  if (isError)        titleText = lang === 'kg' ? 'Угуу мүмкүн болбоду' : 'Не удалось воспроизвести';
-  else if (isLoading) titleText = lang === 'kg' ? 'Жүктөлүүдө...' : 'Загрузка...';
-  else if (isPlaying) titleText = lang === 'kg' ? 'Атыр азыр ойноп жатат' : 'Сейчас играет аромат';
-  else                titleText = lang === 'kg' ? 'Атырды угуу' : 'Послушать аромат';
+  let titleText, subtitleText;
+  if (isError) {
+    titleText = isRu ? 'Ошибка воспроизведения' : 'Угуу катасы';
+    subtitleText = isRu ? 'Нажмите для повтора' : 'Кайра аракет кылыңыз';
+  } else if (isLoading) {
+    titleText = isRu ? 'Загрузка...' : 'Жүктөлүүдө...';
+    subtitleText = '';
+  } else if (isPlaying) {
+    titleText = isRu ? 'Описание аромата' : 'Жыт сүрөттөмөсү';
+    subtitleText = isRu ? 'Сейчас играет' : 'Азыр ойноп жатат';
+  } else {
+    titleText = isRu ? 'Послушать аромат' : 'Жытты угуу';
+    subtitleText = isRu ? `${fmt(totalDur)} · голосовое описание` : `${fmt(totalDur)} · үн сүрөттөмөсү`;
+  }
 
   return (
-    <div onClick={e => e.stopPropagation()} style={{ marginTop: 8, marginBottom: 4 }}>
+    <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, marginBottom: 6 }}>
       <motion.div
-        onClick={handleToggle}
-        whileTap={{ scale: 0.985 }}
+        whileTap={{ scale: 0.98 }}
         transition={{ type: 'spring', stiffness: 420, damping: 28 }}
         style={{
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: 'rgba(0,0,0,0.04)',
-          backdropFilter: 'blur(18px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(18px) saturate(160%)',
-          border: '0.5px solid rgba(0,0,0,0.06)',
-          borderRadius: 14,
-          padding: '10px 12px',
+          background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)',
+          borderRadius: 18,
+          padding: '14px 16px',
           cursor: 'pointer',
           userSelect: 'none',
+          overflow: 'hidden',
         }}
       >
-        {/* Play / Pause / Loading / Error button */}
-        <motion.div
-          animate={isPlaying ? { scale: [1, 1.04, 1] } : { scale: 1 }}
-          transition={isPlaying ? { duration: 1.6, repeat: Infinity, ease: 'easeInOut' } : { type: 'spring', stiffness: 420, damping: 24 }}
-          style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: isError ? '#E53935' : '#111',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, color: '#fff',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.16)',
-            opacity: isLoading ? 0.85 : 1,
-          }}
-        >
-          {isLoading ? (
-            <motion.span
-              animate={{ rotate: 360 }}
-              transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-              style={{ width: 12, height: 12, border: '1.6px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', display: 'inline-block' }}
-            />
-          ) : isError ? (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
-          ) : isPlaying ? icPause : icPlay}
-        </motion.div>
+        <div onClick={handleToggle} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Play / Pause button — glassmorphic */}
+          <motion.div
+            animate={isPlaying ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+            transition={isPlaying ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
+            style={{
+              width: 42, height: 42, borderRadius: 21, flexShrink: 0,
+              background: isError ? 'rgba(255,59,48,0.2)' : isPlaying ? 'rgba(255,59,48,0.15)' : 'rgba(255,255,255,0.1)',
+              border: isPlaying ? '1px solid rgba(255,59,48,0.25)' : '1px solid rgba(255,255,255,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: isError ? '#FF3B30' : isPlaying ? '#FF3B30' : '#fff',
+            }}>
+            {isLoading ? (
+              <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
+                style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#fff', borderRadius: '50%', display: 'block' }} />
+            ) : isError ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 1l22 22"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V5a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2c0 .76-.12 1.5-.35 2.18"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+            ) : isPlaying ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1.2"/><rect x="14" y="4" width="4" height="16" rx="1.2"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginLeft: 2 }}><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            )}
+          </motion.div>
 
-        {/* Title + progress + time */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 13, fontWeight: 600,
-            color: isError ? '#E53935' : '#111',
-            letterSpacing: -0.1,
-            marginBottom: isActive ? 6 : 0,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
-            {titleText}
-          </div>
-          {isActive && !isError && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                flex: 1, height: 3,
-                background: 'rgba(0,0,0,0.08)',
-                borderRadius: 2, overflow: 'hidden',
-                cursor: 'pointer',
-              }}
-              onClick={(e) => {
-                // Click anywhere on the track to seek.
-                e.stopPropagation();
-                const rect = e.currentTarget.getBoundingClientRect();
-                const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                player.seek(ratio * totalDur);
-              }}>
-                <div style={{
-                  height: '100%',
-                  width: `${progress * 100}%`,
-                  background: '#111',
-                  borderRadius: 2,
-                  transition: 'width 0.12s linear',
-                }} />
+          {/* Title + subtitle */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: -0.2, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {titleText}
+            </div>
+            {subtitleText && (
+              <div style={{ fontSize: 11, color: isPlaying ? '#FF3B30' : 'rgba(255,255,255,0.4)', fontWeight: 500, letterSpacing: -0.1 }}>
+                {subtitleText}
               </div>
-              <span style={{
-                fontSize: 10, color: '#888',
-                fontVariantNumeric: 'tabular-nums',
-                fontWeight: 500, flexShrink: 0,
-              }}>
-                {fmt(currentTime)} / {fmt(totalDur)}
-              </span>
+            )}
+          </div>
+
+          {/* Waveform animation (when playing) or mic icon (idle) */}
+          {isPlaying ? (
+            <div style={{ display: 'flex', gap: 2, alignItems: 'center', height: 20, flexShrink: 0 }}>
+              <style>{`@keyframes clWave{0%,100%{height:4px}50%{height:16px}}`}</style>
+              {[0,1,2,3,4].map(i => (
+                <div key={i} style={{
+                  width: 2.5, borderRadius: 2, background: '#FF3B30',
+                  animation: 'clWave 0.6s ease-in-out infinite',
+                  animationDelay: `${i * 0.08}s`, height: 4,
+                }} />
+              ))}
+            </div>
+          ) : !isLoading && !isError && (
+            <div style={{ color: 'rgba(255,255,255,0.25)', flexShrink: 0 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
+              </svg>
             </div>
           )}
         </div>
+
+        {/* Progress bar — only when active */}
+        {isActive && !isError && (
+          <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              const rect = e.currentTarget.querySelector('[data-track]')?.getBoundingClientRect();
+              if (!rect) return;
+              const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              player.seek(ratio * totalDur);
+            }}>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0, width: 28 }}>
+              {fmt(currentTime)}
+            </span>
+            <div data-track style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
+              <motion.div
+                animate={{ width: `${progressVal * 100}%` }}
+                transition={{ ease: 'linear', duration: 0.08 }}
+                style={{ height: '100%', background: '#FF3B30', borderRadius: 3, position: 'relative' }}>
+                {/* Scrubber dot */}
+                <div style={{ position: 'absolute', right: -4, top: -3, width: 9, height: 9, borderRadius: '50%', background: '#FF3B30', boxShadow: '0 0 6px rgba(255,59,48,0.4)' }} />
+              </motion.div>
+            </div>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0, width: 28, textAlign: 'right' }}>
+              {fmt(totalDur)}
+            </span>
+          </div>
+        )}
       </motion.div>
     </div>
   );
@@ -8197,12 +11948,14 @@ function DesktopLayout({
   welcomeCelebration, setWelcomeCelebration,
   windowWidth,
   onAdminLogin,
+  setScreen, screen,
 }) {
   const [desktopSearch, setDesktopSearch] = useState('');
   const [desktopCategory, setDesktopCategory] = useState('all');
   const [desktopSort, setDesktopSort] = useState('default');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [cartOpen, setCartOpen] = useState(false);
+  const [storyViewerOpen, setStoryViewerOpen] = useState(null); // group index or null
   const [selectedVariants, setSelectedVariants] = useState({});
   const deskAdminTapRef = React.useRef(0);
   const deskAdminTimerRef = React.useRef(null);
@@ -8232,12 +11985,13 @@ function DesktopLayout({
   const [address, setAddress] = useState('');
   const [comment, setComment] = useState('');
   const [payMethod, setPayMethod] = useState('cash');
+  const [showPayQr, setShowPayQr] = useState(false);
   const [useBonus, setUseBonus] = useState(false);
   const [modalVariantId, setModalVariantId] = useState(null);
   const [modalImgIndex, setModalImgIndex] = useState(0);
 
   const minPrice = (p) => {
-    const prices = (p.variants || []).map(v => v.price || 0).filter(Boolean);
+    const prices = (p.variants || []).filter(v => v.inStock).map(v => v.price || 0).filter(Boolean);
     return prices.length ? Math.min(...prices) : 0;
   };
 
@@ -8245,7 +11999,10 @@ function DesktopLayout({
   const cartTotal = cart.reduce((s, ci) => {
     const prod = products.find(p => String(p.id) === String(ci.productId));
     const variant = prod?.variants?.find(v => String(v.id) === String(ci.variantId));
-    return s + (variant?.price || 0) * ci.qty;
+    const basePrice = variant?.price || 0;
+    const si = getSaleInfo(prod);
+    const finalPrice = si ? salePrice(basePrice, si.percent) : basePrice;
+    return s + finalPrice * ci.qty;
   }, 0);
 
   const announcements = settings?.announcementTexts?.split('\n').filter(Boolean) || [
@@ -8259,16 +12016,26 @@ function DesktopLayout({
   const gridColumns = windowWidth >= 1600 ? 'repeat(5, 1fr)' : windowWidth >= 1200 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)';
 
   const filteredProducts = products
-    .filter(p => desktopCategory === 'all' || p.category === desktopCategory)
-    .filter(p => !desktopSearch ||
-      p.name?.toLowerCase().includes(desktopSearch.toLowerCase()) ||
-      p.brand?.toLowerCase().includes(desktopSearch.toLowerCase())
-    )
+    .filter(p => { const vars = p.variants || []; return vars.some(v => v.inStock); })
+    .filter(p => desktopCategory === 'all' || (p.category || '').trim() === desktopCategory)
+    .filter(p => {
+      if (!desktopSearch) return true;
+      const q = desktopSearch.toLowerCase();
+      return (p.name || '').toLowerCase().includes(q) ||
+        (p.name_kg || '').toLowerCase().includes(q) ||
+        (p.brand || '').toLowerCase().includes(q) ||
+        (p.shortDesc || '').toLowerCase().includes(q) ||
+        (p.tags || '').toLowerCase().includes(q) ||
+        (p.desc || '').toLowerCase().includes(q);
+    })
     .sort((a, b) => {
       if (desktopSort === 'price_asc') return minPrice(a) - minPrice(b);
       if (desktopSort === 'price_desc') return minPrice(b) - minPrice(a);
       if (desktopSort === 'name') return (a.name || '').localeCompare(b.name || '');
-      return 0;
+      // Default: featured first, then by priority
+      if (a.featured && !b.featured) return -1;
+      if (!a.featured && b.featured) return 1;
+      return (b.priority || 0) - (a.priority || 0);
     });
 
   // Announcement bar auto-rotate
@@ -8299,21 +12066,68 @@ function DesktopLayout({
 
   const NAV_ITEMS = [
     { id: 'all',      label: 'Все' },
-    { id: 'female',   label: 'Женские' },
-    { id: 'male',     label: 'Мужские' },
-    { id: 'unisex',   label: 'Унисекс' },
-    { id: 'premium',  label: 'Премиум' },
+    { id: 'Женские',  label: 'Женские' },
+    { id: 'Мужские',  label: 'Мужские' },
+    { id: 'Унисекс',  label: 'Унисекс' },
+    { id: 'Премиум',  label: 'Премиум' },
   ];
 
   const CAT_TABS = [
     { id: 'all', label: 'Все' },
-    { id: 'female', label: 'Женские' },
-    { id: 'male', label: 'Мужские' },
-    { id: 'unisex', label: 'Унисекс' },
-    { id: 'premium', label: 'Премиум' },
+    { id: 'Женские', label: 'Женские' },
+    { id: 'Мужские', label: 'Мужские' },
+    { id: 'Унисекс', label: 'Унисекс' },
+    { id: 'Премиум', label: 'Премиум' },
   ];
 
   const currentBanner = activeHeroBanners[heroBannerIndex];
+
+  // ── Story groups — auto-generated from visible (in-stock) products ──
+  const storyGroups = React.useMemo(() => {
+    // Only show in-stock products in story groups
+    const visProducts = products.filter(p => (p.variants || []).some(v => v.inStock));
+    const groups = [];
+    // 1. Новинки — last 14 days
+    const newItems = visProducts.filter(p => {
+      if (!p.created) return false;
+      return (Date.now() - new Date(p.created).getTime()) < 14 * 24 * 60 * 60 * 1000;
+    });
+    if (newItems.length > 0) groups.push({ label: lang === 'kg' ? 'Жаңылыктар' : 'Новинки', icon: '✨', items: newItems.slice(0, 8) });
+
+    // 2. Хиты — most ordered
+    const orderCounts = {};
+    (orders || []).filter(o => o.status === 'delivered').forEach(o => {
+      (o.items || []).forEach(ci => { orderCounts[ci.productId] = (orderCounts[ci.productId] || 0) + ci.qty; });
+    });
+    const topIds = Object.entries(orderCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+    const topProducts = topIds.map(id => visProducts.find(p => String(p.id) === String(id))).filter(Boolean);
+    if (topProducts.length >= 2) {
+      groups.push({ label: lang === 'kg' ? 'Хиттер' : 'Хиты', icon: '🔥', items: topProducts });
+    }
+
+    // 3. Акции — on sale
+    const saleItems = visProducts.filter(p => { const s = getSaleInfo(p); return s && s.active; });
+    if (saleItems.length > 0) groups.push({ label: lang === 'kg' ? 'Акциялар' : 'Акции', icon: '🎁', items: saleItems.slice(0, 8) });
+
+    // 4. Premium
+    const premiumItems = visProducts.filter(p => p.category === 'premium');
+    if (premiumItems.length > 0) groups.push({ label: 'Premium', icon: '💎', items: premiumItems.slice(0, 8) });
+
+    // 5. Женские
+    const femaleItems = visProducts.filter(p => p.category === 'female');
+    if (femaleItems.length >= 3) groups.push({ label: lang === 'kg' ? 'Аялдар' : 'Женские', icon: '🌸', items: femaleItems.slice(0, 8) });
+
+    // 6. Мужские
+    const maleItems = visProducts.filter(p => p.category === 'male');
+    if (maleItems.length >= 3) groups.push({ label: lang === 'kg' ? 'Эркектер' : 'Мужские', icon: '🖤', items: maleItems.slice(0, 8) });
+
+    // If no groups, show random products
+    if (groups.length === 0 && visProducts.length > 0) {
+      groups.push({ label: lang === 'kg' ? 'Каталог' : 'Каталог', icon: '🛍️', items: visProducts.slice(0, 8) });
+    }
+
+    return groups;
+  }, [products, orders, lang]);
 
   const isNewProduct = (product) => {
     if (!product.created) return false;
@@ -8349,13 +12163,13 @@ function DesktopLayout({
         }}
       >
         {/* Image */}
-        <div style={{ position: 'relative', aspectRatio: '1 / 1.05', overflow: 'hidden', background: '#F5F3EF' }}>
+        <div style={{ position: 'relative', aspectRatio: '1 / 1.15', overflow: 'hidden', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 }}>
           {(product.img || product.images?.[0]) ? (
             <motion.img
               src={product.img || product.images[0]}
               whileHover={{ scale: 1.06 }}
               transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
               alt={product.name}
             />
           ) : (
@@ -8374,38 +12188,61 @@ function DesktopLayout({
               −{_saleInfo.percent}%
             </div>
           )}
-          {/* Category badge */}
-          {!_saleInfo && product.category === 'premium' && (
-            <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(17,17,17,0.85)',
-              backdropFilter: 'blur(8px)', color: '#fff', fontSize: 8, fontWeight: 600,
-              letterSpacing: 1.5, textTransform: 'uppercase', padding: '5px 10px',
-              borderRadius: 20 }}>
-              Premium
-            </div>
-          )}
-          {/* NEW badge — last 7 days */}
-          {_isNew && !_saleInfo && product.category !== 'premium' && !allOutOfStock && (
-            <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,122,255,0.9)',
-              backdropFilter: 'blur(8px)', color: '#fff', fontSize: 8, fontWeight: 700,
-              letterSpacing: 1.5, textTransform: 'uppercase', padding: '5px 10px',
-              borderRadius: 20 }}>
-              NEW
-            </div>
-          )}
+          {/* ── Stacked SVG badges (top-left) ── */}
+          {!allOutOfStock && !_saleInfo && (() => {
+            const badges = [];
+            if (product.category === 'premium') badges.push({ icon: IC.crown(10, "#fff"), text: "Premium", bg: "rgba(17,17,17,0.85)" });
+            if (product?.isPopular) badges.push({ icon: IC.flame(10, "#fff"), text: t.badge_popular, bg: "linear-gradient(135deg, #FF6A00, #FF3B30)" });
+            if (product?.isHit) badges.push({ icon: IC.bolt(10, "#fff"), text: t.badge_hit, bg: "linear-gradient(135deg, #FF9500, #FF6B00)" });
+            if (product?.isNew || _isNew) badges.push({ icon: IC.sparkle(10, "#fff"), text: t.badge_new, bg: "linear-gradient(135deg, #34C759, #30D158)" });
+            return badges.slice(0, 2).map((b, bi) => (
+              <motion.div key={bi}
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 + bi * 0.06, duration: 0.35 }}
+                style={{
+                  position: "absolute", top: 10 + bi * 28, left: 10,
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  background: b.bg, color: "#fff", borderRadius: 20,
+                  padding: "5px 10px 5px 7px", fontSize: 8, fontWeight: 700,
+                  letterSpacing: 0.8, textTransform: "uppercase",
+                  backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                  zIndex: 5,
+                }}>
+                <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{b.icon}</span>
+                <span>{b.text}</span>
+              </motion.div>
+            ));
+          })()}
           {allOutOfStock && (
             <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(180,0,0,0.8)',
               backdropFilter: 'blur(8px)', color: '#fff', fontSize: 8, fontWeight: 600,
               letterSpacing: 1.5, textTransform: 'uppercase', padding: '5px 10px',
-              borderRadius: 20 }}>
-              Нет в наличии
+              borderRadius: 20, zIndex: 5 }}>
+              {t.outOfStock}
             </div>
           )}
         </div>
 
         {/* Info */}
         <div style={{ padding: '14px 16px 16px' }}>
-          <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#aaa', marginBottom: 4, fontWeight: 500 }}>
-            {product.brand}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+            <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#aaa', fontWeight: 500, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+              {product.brand}
+            </div>
+            {product?.isAuthor && (
+              <div style={{
+                display: "inline-flex", alignItems: "center", gap: 4,
+                background: "#111", color: "#fff", borderRadius: 6,
+                padding: "3px 8px 3px 5px", fontSize: 8.5, fontWeight: 700,
+                letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.15)", flexShrink: 0,
+              }}>
+                <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{IC.crown(10, "#FFD700")}</span>
+                {t.badge_author}
+              </div>
+            )}
           </div>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 3, lineHeight: 1.3,
             overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
@@ -8413,9 +12250,9 @@ function DesktopLayout({
           </div>
           <div style={{ fontSize: 11, color: '#bbb', marginBottom: 12, lineHeight: 1.5, height: 33,
             overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-            {product.description}
+            {(() => { const d = pickDesc(product, lang); const lines = d.split('\n').filter(l => l.trim() && !l.trim().startsWith('🔝') && !l.trim().startsWith('💎') && !l.trim().startsWith('🌿') && !l.trim().startsWith('📋')); return lines.join(' ').trim() || d; })()}
           </div>
-          <SaleProgressBar product={product} />
+          {/* SaleProgressBar removed — progress bar is now inside SaleCountdownBadge (Variant C) */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             {_saleMinP ? (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -8489,6 +12326,24 @@ function DesktopLayout({
           50% { opacity: 0.4; }
         }
       `}</style>
+
+      {/* ── DESKTOP MY ORDERS OVERLAY ── */}
+      {screen === 'myorders' && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setScreen('catalog'); }}>
+          <div style={{ background: '#fff', borderRadius: 20, width: '90%', maxWidth: 600, maxHeight: '85vh', overflow: 'auto', position: 'relative', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}>
+            <div style={{ position: 'sticky', top: 0, background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', zIndex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>{lang === 'kg' ? 'Менин заказтарым' : 'Мои заказы'}</div>
+              <div onClick={() => setScreen('catalog')} style={{ cursor: 'pointer', width: 32, height: 32, borderRadius: 10, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              </div>
+            </div>
+            <div style={{ padding: '0 4px 20px' }}>
+              <MyOrdersScreen orders={orders} goToCatalog={() => setScreen('catalog')} reviews={reviews} user={user} showToast={showToast} />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── ANNOUNCEMENT BAR ── */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1100,
@@ -8586,8 +12441,9 @@ function DesktopLayout({
                 {userMenuOpen && (
                   <motion.div
                     initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                    style={{ position: 'absolute', top: '100%', right: 0, width: 210,
-                      background: '#fff', border: '1px solid #E5E5E5', zIndex: 1001, marginTop: 8 }}
+                    style={{ position: 'absolute', top: '100%', right: 0, width: 280,
+                      background: '#fff', border: '1px solid #E5E5E5', borderRadius: 16, zIndex: 1001, marginTop: 8,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.12)', overflow: 'hidden' }}
                   >
                     {user ? (
                       <>
@@ -8596,13 +12452,14 @@ function DesktopLayout({
                           <div style={{ fontSize: 11, color: '#BBB' }}>{user.phone}</div>
                         </div>
                         {[
-                          { label: 'Мои заказы', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#555" strokeWidth="1.4"/><path d="M8 10h8M8 14h5" stroke="#555" strokeWidth="1.4" strokeLinecap="round"/></svg> },
+                          { label: 'Мои заказы', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#555" strokeWidth="1.4"/><path d="M8 10h8M8 14h5" stroke="#555" strokeWidth="1.4" strokeLinecap="round"/></svg>, action: () => { setScreen('myorders'); setUserMenuOpen(false); } },
                           { label: `Бонусы: ${bonusBalance} сом`, icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="#C9A84C" strokeWidth="1.4"/></svg> },
+                          ...(referralCode ? [{ label: `Реф. код: ${referralCode}`, icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="#7C5CBF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="#7C5CBF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>, action: () => { navigator.clipboard.writeText(referralCode).then(() => { showToast('Код скопирован!'); }); } }] : []),
                           { label: 'Выйти', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="#555" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>, action: () => { onLogout(); setUserMenuOpen(false); } },
-                        ].map((item, i) => (
+                        ].map((item, i, arr) => (
                           <div key={i} onClick={item.action || (() => setUserMenuOpen(false))}
                             style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10,
-                              fontSize: 13, color: '#555', cursor: 'pointer', borderBottom: i < 2 ? '1px solid #F5F5F5' : 'none' }}
+                              fontSize: 13, color: '#555', cursor: 'pointer', borderBottom: i < arr.length - 1 ? '1px solid #F5F5F5' : 'none' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#FAFAFA'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                             {item.icon} {item.label}
@@ -8610,17 +12467,29 @@ function DesktopLayout({
                         ))}
                       </>
                     ) : (
-                      <div style={{ padding: '20px 16px' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 12 }}>Войти в аккаунт</div>
+                      <div style={{ padding: '24px 20px', minWidth: 240 }}>
+                        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                          <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#F5F5F5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke="#999" strokeWidth="1.5"/></svg>
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: '#111', letterSpacing: -0.2 }}>Войти в аккаунт</div>
+                          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>Бонусы, история заказов и кэшбэк</div>
+                        </div>
                         <div onClick={() => { setUserMenuOpen(false); setGuestMode(false); }}
-                          style={{ width: '100%', background: '#111', color: '#fff', padding: '12px',
-                            textAlign: 'center', fontSize: 11, letterSpacing: 2, textTransform: 'uppercase',
-                            cursor: 'pointer', marginBottom: 8 }}>
+                          style={{ width: '100%', background: '#111', color: '#fff', padding: '12px 0',
+                            textAlign: 'center', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase',
+                            cursor: 'pointer', marginBottom: 8, borderRadius: 12, fontWeight: 700 }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#111'}>
                           Войти
                         </div>
                         <div onClick={() => { setGuestMode(true); setUserMenuOpen(false); }}
-                          style={{ textAlign: 'center', fontSize: 11, color: '#BBB', cursor: 'pointer', letterSpacing: 1 }}>
-                          Продолжить как гость
+                          style={{ width: '100%', textAlign: 'center', fontSize: 13, color: '#888', cursor: 'pointer',
+                            letterSpacing: 1, padding: '12px 0', border: '1.5px solid #E5E5E5', borderRadius: 12,
+                            fontWeight: 700, textTransform: 'uppercase' }}
+                          onMouseEnter={e => e.currentTarget.style.borderColor = '#CCC'}
+                          onMouseLeave={e => e.currentTarget.style.borderColor = '#E5E5E5'}>
+                          Гость
                         </div>
                       </div>
                     )}
@@ -8650,6 +12519,27 @@ function DesktopLayout({
                 </motion.div>
               )}
             </div>
+            {/* WhatsApp — edge right */}
+            <a href={`https://wa.me/${(settings?.whatsappPhone || '996551120009').replace(/[^0-9]/g, '')}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                padding: '6px 14px 6px 10px',
+                background: '#25D366', borderRadius: 20,
+                textDecoration: 'none', cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#1EBE5A'; e.currentTarget.style.transform = 'scale(1.03)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#25D366'; e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.955 9.955 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18a8 8 0 01-4.29-1.24l-.28-.168-2.9.76.78-2.84-.18-.29A8 8 0 1112 20z"/>
+              </svg>
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', letterSpacing: 0.3 }}>
+                {lang === 'kg' ? 'Жазыңыз' : 'Написать нам'}
+              </span>
+            </a>
           </div>
         </div>
         {/* Row 2 — Navigation */}
@@ -8718,9 +12608,9 @@ function DesktopLayout({
                   <div style={{ fontSize: 56, fontWeight: 200, letterSpacing: 10, textTransform: 'uppercase', color: '#fff', lineHeight: 1.12, marginBottom: 8 }}>
                     {currentBanner?.title ? (
                       currentBanner.title
-                    ) : (
-                      <>{(settings?.shopName || 'KEMAL USMAN').split(' ')[0]}<br /><strong style={{ fontWeight: 800 }}>{(settings?.shopName || 'KEMAL USMAN').split(' ').slice(1).join(' ') || 'USMAN'}</strong></>
-                    )}
+                    ) : settings?.shopName ? (
+                      <>{settings.shopName.split(' ')[0]}<br /><strong style={{ fontWeight: 800 }}>{settings.shopName.split(' ').slice(1).join(' ')}</strong></>
+                    ) : null}
                   </div>
                   <div style={{ fontSize: 11, letterSpacing: 3, color: 'rgba(255,255,255,0.5)', marginBottom: 36, textTransform: 'uppercase' }}>
                     {settings?.heroTagline || 'Оригинальные ароматы · Лучшие бренды'}
@@ -8736,14 +12626,16 @@ function DesktopLayout({
                       }
                       document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    style={{ display: 'inline-block', background: '#fff', color: '#111',
-                      fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', fontWeight: 700,
-                      padding: '18px 56px', cursor: 'pointer', borderRadius: 2,
-                      boxShadow: '0 6px 24px rgba(0,0,0,0.25)', transition: 'all 0.35s ease',
-                      border: '2px solid rgba(255,255,255,0.9)',
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
+                      background: 'transparent', color: '#fff',
+                      fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', fontWeight: 500,
+                      padding: '6px 2px', cursor: 'pointer', borderRadius: 0,
+                      boxShadow: 'none', transition: 'all 0.35s ease',
+                      border: 'none', borderBottom: '1.5px solid rgba(255,255,255,0.8)',
                       backdropFilter: 'none' }}
                   >
                     {currentBanner?.btnText || heroButtonText}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{marginLeft: 2}}><path d="M7 17L17 7M17 7H7M17 7v10" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </motion.div>
                 </motion.div>
               </div>
@@ -8832,67 +12724,93 @@ function DesktopLayout({
             </div>
           </div>
 
-          {/* Center — stories + subscribe button */}
+          {/* Center — story group circles + subscribe button */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
-            {/* Stories circles */}
-            <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-              {(() => {
-                const adminStories = settings?.instaStories?.filter(s => s && s.img);
-                if (adminStories && adminStories.length > 0) {
-                  return adminStories.slice(0, 5).map((s, i) => (
-                    <motion.div
-                      key={`st-${i}`}
-                      whileHover={{ scale: 1.1, y: -5 }}
-                      transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                      onClick={() => window.open(settings?.instagramUrl || 'https://www.instagram.com/kemal.ussman', '_blank')}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-                    >
-                      <div style={{
-                        width: 66, height: 66, borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #FFDC80, #F77737, #F56040, #C13584, #833AB4)',
-                        padding: 2.5, flexShrink: 0,
-                      }}>
-                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: '2.5px solid #fff', background: '#eee' }}>
-                          <img src={s.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                        </div>
-                      </div>
-                      <span style={{ fontSize: 9, color: 'rgba(0,0,0,0.5)', fontWeight: 500, maxWidth: 64, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.label || ''}
-                      </span>
-                    </motion.div>
-                  ));
-                }
-                const withImg = products.filter(p => p.img || p.images?.[0]);
-                const labels = lang === 'kg'
-                  ? ['Жаңы', 'Хит', 'Акция', 'Каталог', 'Жеткирүү']
-                  : ['Новинки', 'Хиты', 'Акции', 'Каталог', 'Доставка'];
-                const items = withImg.length >= 5
-                  ? withImg.slice(0, 5)
-                  : [...withImg, ...withImg, ...withImg, ...withImg, ...withImg].slice(0, 5);
-                return items.map((p, i) => (
+            {/* Stories circles — Instagram style (Variant A) */}
+            <div style={{ display: 'flex', gap: 18, justifyContent: 'center', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              {storyGroups.slice(0, 6).map((g, i) => {
+                const coverImg = g.items[0]?.img || g.items[0]?.images?.[0] || '';
+                const itemCount = g.items.length;
+                return (
                   <motion.div
-                    key={`st-${i}`}
-                    whileHover={{ scale: 1.1, y: -5 }}
+                    key={`sg-${i}`}
+                    whileHover={{ scale: 1.08, y: -4 }}
+                    whileTap={{ scale: 0.95 }}
                     transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                    onClick={(e) => { e.stopPropagation(); setSelectedProduct(p); setModalVariantId(p.variants?.[0]?.id || null); setModalImgIndex(0); }}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                    onClick={(e) => { e.stopPropagation(); setStoryViewerOpen(i); }}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}
                   >
+                    {/* Gradient ring with pulse animation */}
                     <div style={{
-                      width: 66, height: 66, borderRadius: '50%',
+                      width: 68, height: 68, borderRadius: '50%',
                       background: 'linear-gradient(135deg, #FFDC80, #F77737, #F56040, #C13584, #833AB4)',
-                      padding: 2.5, flexShrink: 0,
+                      padding: 2.5, flexShrink: 0, position: 'relative',
+                      animation: 'storyRingPulse 3s ease-in-out infinite',
                     }}>
                       <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', border: '2.5px solid #fff', background: '#eee' }}>
-                        <img src={p.img || p.images?.[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        {coverImg ? (
+                          <img src={coverImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        ) : (
+                          <div style={{ width: '100%', height: '100%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 22 }}>{g.icon}</span>
+                          </div>
+                        )}
                       </div>
+                      {/* Item count badge */}
+                      {itemCount > 1 && (
+                        <div style={{
+                          position: 'absolute', bottom: -2, right: -2,
+                          minWidth: 18, height: 18, borderRadius: 9,
+                          background: '#0095F6', color: '#fff',
+                          fontSize: 9, fontWeight: 700,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          border: '2px solid #fff', padding: '0 4px',
+                          boxShadow: '0 2px 6px rgba(0,149,246,0.4)',
+                        }}>
+                          {itemCount}
+                        </div>
+                      )}
                     </div>
-                    <span style={{ fontSize: 9, color: 'rgba(0,0,0,0.5)', fontWeight: 500, maxWidth: 64, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {labels[i]}
+                    <span style={{ fontSize: 10, color: 'rgba(0,0,0,0.55)', fontWeight: 600, maxWidth: 70, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: 0.2 }}>
+                      {g.label}
                     </span>
                   </motion.div>
-                ));
-              })()}
+                );
+              })}
+              {/* "+N Ещё" button if more than 6 groups */}
+              {storyGroups.length > 6 && (
+                <motion.div
+                  whileHover={{ scale: 1.08, y: -4 }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                  onClick={(e) => { e.stopPropagation(); setStoryViewerOpen(6); }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                >
+                  <div style={{
+                    width: 68, height: 68, borderRadius: '50%',
+                    background: 'linear-gradient(135deg, rgba(0,0,0,0.06), rgba(0,0,0,0.12))',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>+{storyGroups.length - 6}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: 'rgba(0,0,0,0.55)', fontWeight: 600, letterSpacing: 0.2 }}>
+                    {lang === 'kg' ? 'Дагы' : 'Ещё'}
+                  </span>
+                </motion.div>
+              )}
             </div>
+
+            {/* Hint text — directs users to tap */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.2, duration: 0.6 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: -8 }}
+            >
+              <span style={{ fontSize: 11, color: 'rgba(0,0,0,0.28)', fontWeight: 500, fontStyle: 'italic', letterSpacing: 0.3 }}>
+                {lang === 'kg' ? 'Басып көрүңүз →' : 'Нажмите чтобы посмотреть →'}
+              </span>
+            </motion.div>
 
             {/* Gradient subscribe button */}
             <motion.button
@@ -9048,11 +12966,12 @@ function DesktopLayout({
             .sort((a, b) => b[1] - a[1])
             .slice(0, 6)
             .map(e => e[0]);
+          const visibleProducts = products.filter(p => (p.variants || []).some(v => v.inStock));
           const bestsellers = bestsellerIds
-            .map(id => products.find(p => String(p.id) === String(id)))
+            .map(id => visibleProducts.find(p => String(p.id) === String(id)))
             .filter(Boolean);
-          // If not enough orders, show first 6 products as featured
-          const displayItems = bestsellers.length >= 3 ? bestsellers : products.slice(0, 6);
+          // If not enough orders, show first 6 visible products as featured
+          const displayItems = bestsellers.length >= 3 ? bestsellers : visibleProducts.slice(0, 6);
           if (displayItems.length === 0) return null;
           return (
             <div style={{ padding: '48px 48px 0' }}>
@@ -9113,13 +13032,13 @@ function DesktopLayout({
                           -{_si.percent}%
                         </div>
                       )}
-                      <div style={{ aspectRatio: '1/1.1', overflow: 'hidden', background: '#F5F3EF' }}>
+                      <div style={{ aspectRatio: '1/1.15', overflow: 'hidden', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
                         {(product.img || product.images?.[0]) ? (
                           <motion.img
                             src={product.img || product.images[0]}
                             whileHover={{ scale: 1.05 }}
                             transition={{ duration: 0.5 }}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }}
                             alt={product.name}
                           />
                         ) : (
@@ -9233,8 +13152,8 @@ function DesktopLayout({
         {/* PROMO BANNERS */}
         <div style={{ margin: '52px 48px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
           {[
-            { bg: 'linear-gradient(135deg, #111 0%, #2a1f0e 100%)', eye: 'НОВАЯ КОЛЛЕКЦИЯ', title: 'ЖЕНСКИЕ\nАРОМАТЫ', cat: 'female' },
-            { bg: 'linear-gradient(135deg, #0d1f3c 0%, #111 100%)', eye: 'ПРЕМИУМ ЛИНЕЙКА', title: 'МУЖСКИЕ\nАРОМАТЫ', cat: 'male' },
+            { bg: 'linear-gradient(135deg, #111 0%, #2a1f0e 100%)', eye: 'НОВАЯ КОЛЛЕКЦИЯ', title: 'ЖЕНСКИЕ\nАРОМАТЫ', cat: 'Женские' },
+            { bg: 'linear-gradient(135deg, #0d1f3c 0%, #111 100%)', eye: 'ПРЕМИУМ ЛИНЕЙКА', title: 'МУЖСКИЕ\nАРОМАТЫ', cat: 'Мужские' },
           ].map((b, i) => (
             <motion.div key={i} whileHover={{ scale: 1.01 }} transition={{ duration: 0.2 }}
               onClick={() => { setDesktopCategory(b.cat); document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' }); }}
@@ -9305,7 +13224,7 @@ function DesktopLayout({
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: gridColumns, gap: 18 }}>
-            {products.slice(-8).reverse().slice(0, windowWidth >= 1600 ? 5 : 4).map((p, i) => (
+            {products.filter(p => (p.variants || []).some(v => v.inStock)).slice(-8).reverse().slice(0, windowWidth >= 1600 ? 5 : 4).map((p, i) => (
               <motion.div key={p.id}
                 initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -9315,12 +13234,12 @@ function DesktopLayout({
                 style={{ cursor: 'pointer', background: '#fff', borderRadius: 16, overflow: 'hidden',
                   boxShadow: '0 2px 12px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03)',
                   border: '1px solid rgba(0,0,0,0.05)', transition: 'box-shadow 0.35s ease, transform 0.35s ease' }}>
-                <div style={{ aspectRatio: '1/1.05', overflow: 'hidden', background: '#F5F3EF' }}>
+                <div style={{ aspectRatio: '1/1.15', overflow: 'hidden', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 12 }}>
                   {(p.img || p.images?.[0]) ? (
                     <motion.img src={p.img || p.images[0]} alt={p.name}
                       whileHover={{ scale: 1.06 }}
                       transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', display: 'block' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <svg width="48" height="100" viewBox="0 0 60 140" fill="none" opacity="0.3">
@@ -9789,7 +13708,7 @@ function DesktopLayout({
                 <p style={{ marginBottom: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>3. Жеткирүү ыкмасын тандаңыз</p>
                 <p style={{ marginBottom: 14 }}>«Өзү алуу» (филиалдан) же «Жеткирүү» (дарегиңизге). Жеткирүүнү тандасаңыз, дарегиңизди жазыңыз.</p>
                 <p style={{ marginBottom: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>4. Төлөм ыкмасын тандаңыз</p>
-                <p style={{ marginBottom: 14 }}>M Bank, O!Bank же накталай төлөм. Банк тиркемеси аркылуу QR-код менен да төлөй аласыз.</p>
+                <p style={{ marginBottom: 14 }}>Онлайн төлөм же накталай төлөм. Банк тиркемеси аркылуу QR-код менен да төлөй аласыз.</p>
                 <p style={{ marginBottom: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>5. Буйрутманы тастыктаңыз</p>
                 <p style={{ marginBottom: 14 }}>«Заказ берүү» баскычын басыңыз. Сиздин буйрутма кабыл алынат жана биз сиз менен тез арада байланышабыз.</p>
                 <p style={{ marginBottom: 0, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>Бонус балдарыңыз болсо — себетте колдоно аласыз!</p>
@@ -9801,7 +13720,7 @@ function DesktopLayout({
                 <p style={{ marginBottom: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>3. Выберите способ доставки</p>
                 <p style={{ marginBottom: 14 }}>«Самовывоз» (из филиала) или «Доставка» (по вашему адресу). При доставке укажите адрес.</p>
                 <p style={{ marginBottom: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>4. Выберите способ оплаты</p>
-                <p style={{ marginBottom: 14 }}>M Bank, O!Bank или наличные. Также можно оплатить через QR-код в приложении банка.</p>
+                <p style={{ marginBottom: 14 }}>Онлайн оплата или наличные. Также можно оплатить через QR-код в приложении банка.</p>
                 <p style={{ marginBottom: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>5. Подтвердите заказ</p>
                 <p style={{ marginBottom: 14 }}>Нажмите «Оформить заказ». Ваш заказ будет принят, и мы свяжемся с вами в ближайшее время.</p>
                 <p style={{ marginBottom: 0, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>Если у вас есть бонусные баллы — вы можете использовать их в корзине!</p>
@@ -9892,7 +13811,7 @@ function DesktopLayout({
               {(lang === 'kg' ? [
                 { q: 'Парфюмериңиз оригиналбы?', a: 'Ооба, биз сапаттуу оригинал парфюмерия жана разлив парфюмдарды сатабыз.' },
                 { q: 'Жеткирүү канча турат?', a: `Жеткирүү баасы — ${settings?.deliveryCost || 0} сом. ${settings?.minOrderForFreeDelivery ? settings.minOrderForFreeDelivery + ' сомдон жогору буйрутмаларга акысыз.' : ''}` },
-                { q: 'Кайсы төлөм ыкмалары бар?', a: 'M Bank, O!Bank же накталай акча. Банк тиркемеси аркылуу QR-код менен да төлөй аласыз.' },
+                { q: 'Кайсы төлөм ыкмалары бар?', a: 'Онлайн төлөм же накталай акча. QR-код аркылуу каалаган банк тиркемеси менен төлөй аласыз.' },
                 { q: 'Буйрутма канча убакытта жеткирилет?', a: 'Ош шаары боюнча буйрутмалар адатта ошол эле күнү же кийинки күнү жеткирилет.' },
                 { q: 'Бонус система кантип иштейт?', a: `Ар бир буйрутмадан ${settings?.bonusPercent || 5}% бонус балл аласыз. Кийинки сатып алууда буйрутма суммасынын ${settings?.useBonusPercent || 30}% чейин колдоно аласыз.` },
                 { q: 'Товарды кайтарса болобу?', a: 'Ооба, товарды 3 күндүн ичинде кайтара аласыз, эгер ал ачылбаган жана баштапкы көрүнүшүн сактаган болсо.' },
@@ -9900,7 +13819,7 @@ function DesktopLayout({
               ] : [
                 { q: 'Ваша парфюмерия оригинальная?', a: 'Да, мы продаём качественную оригинальную парфюмерию и парфюм на разлив.' },
                 { q: 'Сколько стоит доставка?', a: `Стоимость доставки — ${settings?.deliveryCost || 0} сом. ${settings?.minOrderForFreeDelivery ? 'Бесплатно при заказе от ' + settings.minOrderForFreeDelivery + ' сом.' : ''}` },
-                { q: 'Какие способы оплаты доступны?', a: 'M Bank, O!Bank или наличные. Также можно оплатить по QR-коду через приложение банка.' },
+                { q: 'Какие способы оплаты доступны?', a: 'Онлайн оплата или наличные. Также можно оплатить по QR-коду через приложение банка.' },
                 { q: 'Как быстро доставляется заказ?', a: 'По Ошу заказы обычно доставляются в тот же день или на следующий.' },
                 { q: 'Как работает бонусная система?', a: `С каждого заказа вы получаете ${settings?.bonusPercent || 5}% бонусных баллов. При следующей покупке можно использовать до ${settings?.useBonusPercent || 30}% от суммы заказа.` },
                 { q: 'Можно ли вернуть товар?', a: 'Да, вы можете вернуть товар в течение 3 дней, если он не был вскрыт и сохранил товарный вид.' },
@@ -9915,6 +13834,22 @@ function DesktopLayout({
           </div>
         </div>
       )}
+
+      {/* ── STORY VIEWER ── */}
+      <AnimatePresence>
+        {storyViewerOpen !== null && storyGroups.length > 0 && (
+          <StoryViewer
+            stories={storyGroups}
+            initialGroup={storyViewerOpen}
+            onClose={() => setStoryViewerOpen(null)}
+            onAddToCart={(productId, variantId) => {
+              addToCart(productId, variantId);
+              showToast?.(lang === 'kg' ? 'Себетке кошулду!' : 'Добавлено в корзину!');
+            }}
+            lang={lang}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── PRIVACY POLICY MODAL ── */}
       {showPrivacyModal && (
@@ -9983,7 +13918,7 @@ function DesktopLayout({
                 {[
                   { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="1" y="3" width="15" height="13" rx="2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/><path d="M16 8h3l3 3v5h-6V8z" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinejoin="round"/><circle cx="5.5" cy="18.5" r="2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/><circle cx="18.5" cy="18.5" r="2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/></svg>, label: 'Доставка', desc: 'Ош и регионы' },
                   { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="6" width="20" height="14" rx="3" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/><path d="M2 10h20" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/><path d="M6 15h4" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinecap="round"/></svg>, label: 'Наличные', desc: 'При получении' },
-                  { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="3" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/><path d="M9 18h6" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinecap="round"/><path d="M12 6v6l3 2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinecap="round"/></svg>, label: 'Перевод', desc: 'MBank, O!Bank' },
+                  { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="3" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/><path d="M9 18h6" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinecap="round"/><path d="M12 6v6l3 2" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinecap="round"/></svg>, label: 'Онлайн', desc: 'Все банки КР' },
                   { svg: <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 11.5 19.79 19.79 0 01.01 2.82 2 2 0 012 .67h3a2 2 0 012 1.72c.12.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L6.09 8.47a16 16 0 006.29 6.29l1.16-1.16a2 2 0 012.11-.45c.91.34 1.85.58 2.81.7A2 2 0 0122 16.92z" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5"/></svg>, label: 'Подтверждение', desc: 'Менеджер позвонит' },
                 ].map(item => (
                   <div key={item.label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.07)' }}>
@@ -10049,7 +13984,7 @@ function DesktopLayout({
                 display: 'grid', gridTemplateColumns: '1fr 1fr' }}
             >
               {/* Left side */}
-              <div style={{ background: '#FAFAFA', display: 'flex',
+              <div style={{ background: '#FFFFFF', display: 'flex',
                 alignItems: 'center', justifyContent: 'center', minHeight: 460,
                 flexDirection: 'column', gap: 12, padding: 20 }}>
                 {(selectedProduct.img || selectedProduct.images?.[modalImgIndex]) ? (
@@ -10072,7 +14007,7 @@ function DesktopLayout({
                           outline: i === modalImgIndex ? '2px solid #111' : 'none',
                           background: '#fff' }}>
                         <img src={img}
-                          alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} />
                       </div>
                     ))}
                   </div>
@@ -10086,34 +14021,107 @@ function DesktopLayout({
                     <path d="M18 6L6 18M6 6l12 12" stroke="#111" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                 </div>
-                <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: '#BBB', marginBottom: 8 }}>
-                  {selectedProduct.brand}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: '#BBB', flex: 1 }}>
+                    {selectedProduct.brand}
+                  </div>
+                  {selectedProduct?.isAuthor && (
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 5,
+                      background: "#111", color: "#fff", borderRadius: 7,
+                      padding: "4px 10px 4px 7px", fontSize: 10, fontWeight: 700,
+                      letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+                    }}>
+                      <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{IC.crown(12, "#FFD700")}</span>
+                      {t.badge_author}
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, color: '#111', marginBottom: 12 }}>
+                <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, color: '#111', marginBottom: 6 }}>
                   {selectedProduct.name}
                 </div>
-                <div style={{ fontSize: 14, color: '#666', lineHeight: 1.7, marginBottom: 24 }}>
-                  {selectedProduct.description}
+                {/* Badges row */}
+                {(() => {
+                  const db = [];
+                  if (selectedProduct?.isPopular) db.push({ icon: IC.flame(11, "#fff"), text: t.badge_popular, bg: "linear-gradient(135deg, #FF6A00, #FF3B30)" });
+                  if (selectedProduct?.isHit) db.push({ icon: IC.bolt(11, "#fff"), text: t.badge_hit, bg: "linear-gradient(135deg, #FF9500, #FF6B00)" });
+                  if (selectedProduct?.isNew) db.push({ icon: IC.sparkle(11, "#fff"), text: t.badge_new, bg: "linear-gradient(135deg, #34C759, #30D158)" });
+                  return db.length > 0 ? (
+                    <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                      {db.map((b, bi) => (
+                        <div key={bi} style={{
+                          display: "inline-flex", alignItems: "center", gap: 4,
+                          background: b.bg, color: "#fff", borderRadius: 20,
+                          padding: "4px 10px 4px 7px", fontSize: 10, fontWeight: 600,
+                          letterSpacing: 0.3,
+                        }}>
+                          <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{b.icon}</span>
+                          <span>{b.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <div style={{ marginBottom: 12 }} />;
+                })()}
+                {/* Sale badge in desktop detail */}
+                {(() => {
+                  const si = getSaleInfo(selectedProduct);
+                  if (!si) return null;
+                  return (
+                    <div style={{ marginBottom: 16 }}>
+                      <SaleCountdownBadge product={selectedProduct} />
+                    </div>
+                  );
+                })()}
+                <div style={{ fontSize: 14, lineHeight: 1.7, marginBottom: 24 }}>
+                  <DescRenderer text={pickDesc(selectedProduct, lang)} color="#666" />
                 </div>
                 {(() => {
                   const selVariant = (selectedProduct.variants || []).find(v => v.id === modalVariantId);
-                  return selVariant ? (
+                  if (!selVariant) return null;
+                  const si = getSaleInfo(selectedProduct);
+                  if (si) {
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 20 }}>
+                        <span style={{ fontSize: 24, fontWeight: 800, color: '#FF3B30' }}>
+                          {salePrice(selVariant.price, si.percent).toLocaleString()} сом
+                        </span>
+                        <span style={{ fontSize: 16, fontWeight: 500, color: '#bbb', textDecoration: 'line-through' }}>
+                          {Number(selVariant.price).toLocaleString()} сом
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#FF3B30', background: 'rgba(255,59,48,0.08)', padding: '3px 8px', borderRadius: 6 }}>
+                          -{si.percent}%
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
                     <div style={{ fontSize: 24, fontWeight: 800, color: '#111', marginBottom: 20 }}>
                       {Number(selVariant.price).toLocaleString()} сом
                     </div>
-                  ) : null;
+                  );
                 })()}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24 }}>
-                  {(selectedProduct.variants || []).map(v => (
-                    <div key={v.id} onClick={() => v.inStock !== false && setModalVariantId(v.id)}
-                      style={{ padding: '10px 16px', border: `1px solid ${modalVariantId === v.id ? '#111' : '#E5E5E5'}`,
-                        background: modalVariantId === v.id ? '#111' : '#fff',
-                        color: modalVariantId === v.id ? '#fff' : '#555',
-                        fontSize: 12, cursor: v.inStock === false ? 'not-allowed' : 'pointer',
-                        opacity: v.inStock === false ? 0.4 : 1 }}>
-                      {v.label} — {v.price} сом
-                    </div>
-                  ))}
+                  {(selectedProduct.variants || []).filter(v => v.inStock !== false).map(v => {
+                    const si = getSaleInfo(selectedProduct);
+                    const isSel = modalVariantId === v.id;
+                    return (
+                      <div key={v.id} onClick={() => setModalVariantId(v.id)}
+                        style={{ padding: '10px 16px', border: `1px solid ${isSel ? '#111' : '#E5E5E5'}`,
+                          background: isSel ? '#111' : '#fff',
+                          color: isSel ? '#fff' : '#555',
+                          fontSize: 12, cursor: 'pointer' }}>
+                        {si ? (
+                          <>
+                            {v.label} — <span style={{ color: isSel ? '#fff' : '#FF3B30', fontWeight: 700 }}>{salePrice(v.price, si.percent).toLocaleString()}</span>
+                            <span style={{ textDecoration: 'line-through', color: isSel ? 'rgba(255,255,255,0.4)' : '#bbb', marginLeft: 4, fontSize: 11 }}>{v.price}</span> сом
+                          </>
+                        ) : (
+                          <>{v.label} — {v.price} сом</>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <ClientAudioBtn product={selectedProduct} />
                 <motion.button whileTap={{ scale: 0.98 }}
@@ -10222,7 +14230,7 @@ function DesktopLayout({
                           </div>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700 }}>{(variant?.price || 0) * ci.qty} сом</div>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>{(() => { const si = getSaleInfo(prod); const fp = si ? salePrice(variant?.price || 0, si.percent) : (variant?.price || 0); return fp * ci.qty; })()} сом</div>
                           <div onClick={() => {
                             setCart(prev => {
                               const next = prev.filter(i => !(i.productId === ci.productId && i.variantId === ci.variantId));
@@ -10277,8 +14285,7 @@ function DesktopLayout({
                   />
                   <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                     {[
-                      { id: 'mbank', label: 'M-Bank', logo: <MBankLogo size={22} /> },
-                      { id: 'obank', label: 'O!Bank', logo: <OBankLogo size={22} /> },
+                      { id: 'odengi', label: 'Онлайн', logo: <svg style={{width:22,height:22}} viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="#FF6B00" strokeWidth="2" fill="none"/><path d="M2 10h20" stroke="#FF6B00" strokeWidth="2"/></svg> },
                       { id: 'cash',  label: 'Наличные', logo: <CashLogo size={22} /> },
                     ].map(pm => (
                       <div key={pm.id} onClick={() => setPayMethod(pm.id)}
@@ -10293,34 +14300,6 @@ function DesktopLayout({
                       </div>
                     ))}
                   </div>
-                  {(payMethod === 'mbank' || payMethod === 'obank') && (() => {
-                    const pmPhone = localStorage.getItem(payMethod === 'mbank' ? 'mbank_phone' : 'obank_phone') || '';
-                    const pmQr    = payMethod === 'mbank' ? settings?.mbankQr : settings?.obankQr;
-                    const pmLabel = payMethod === 'mbank' ? 'M-Bank' : 'O!Bank';
-                    return (
-                      <div style={{ background: '#FAFAFA', border: '1px solid #F0F0F0', padding: '14px 16px', marginBottom: 12 }}>
-                        <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#BBB', marginBottom: 8 }}>
-                          Реквизиты {pmLabel}
-                        </div>
-                        {pmPhone ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: pmQr ? 12 : 0 }}>
-                            <div style={{ fontSize: 16, fontWeight: 700, color: '#111', letterSpacing: 1 }}>{pmPhone}</div>
-                            <div onClick={() => { navigator.clipboard?.writeText(pmPhone); showToast('Скопировано!'); }}
-                              style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase', color: '#888',
-                                border: '1px solid #E5E5E5', padding: '5px 10px', cursor: 'pointer' }}>
-                              Копировать
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 12, color: '#BBB' }}>Номер не настроен — обратитесь к администратору</div>
-                        )}
-                        {pmQr && (
-                          <img src={pmQr} alt={`QR ${pmLabel}`}
-                            style={{ width: 200, height: 200, objectFit: 'contain', display: 'block', margin: '8px auto 0', borderRadius: 8 }} />
-                        )}
-                      </div>
-                    );
-                  })()}
                   {bonusBalance > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '10px 12px', background: '#FAFAFA' }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -10371,8 +14350,7 @@ function DesktopLayout({
                   })()}
                   <motion.button whileTap={{ scale: 0.98 }}
                     onClick={() => {
-                      if (!user) { showToast('Войдите для оформления заказа', 'error'); return; }
-                      if (deliveryType === 'delivery' && !address.trim()) { showToast('Укажите адрес доставки', 'error'); return; }
+                      if (deliveryType === 'delivery' && !address.trim()) { showToast(lang === 'kg' ? 'Жеткирүү дарегин жазыңыз' : 'Укажите адрес доставки', 'error'); return; }
                       const minFree2 = settings?.minOrderForFreeDelivery || 0;
                       const dlv = deliveryType === 'pickup' ? 0 : (minFree2 > 0 && cartTotal >= minFree2) ? 0 : (settings?.deliveryCost || 0);
                       const bns = useBonus ? Math.min(bonusBalance, Math.floor(cartTotal * (settings?.useBonusPercent || 30) / 100)) : 0;
@@ -10385,7 +14363,7 @@ function DesktopLayout({
                     style={{ width: '100%', background: '#111', color: '#fff', border: 'none',
                       padding: '16px', fontSize: 11, letterSpacing: 2.5, textTransform: 'uppercase',
                       cursor: 'pointer', fontWeight: 600 }}>
-                    Оформить заказ
+                    {lang === 'kg' ? 'Заказ берүү' : 'Оформить заказ'}
                   </motion.button>
                 </div>
               )}
@@ -10397,29 +14375,136 @@ function DesktopLayout({
       {/* ── SEARCH OVERLAY ── */}
       <AnimatePresence>
         {searchOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
-            style={{ position: 'fixed', top: 38 + 68 + 44, left: 0, right: 0, zIndex: 1050,
-              background: '#fff', borderBottom: '1px solid #E5E5E5', padding: '20px 48px',
-              display: 'flex', alignItems: 'center', gap: 16 }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="#BBB" strokeWidth="1.5"/>
-              <path d="M16.5 16.5L21 21" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            <input
-              autoFocus
-              value={desktopSearch}
-              onChange={e => setDesktopSearch(e.target.value)}
-              placeholder="Поиск ароматов..."
-              style={{ flex: 1, fontSize: 22, border: 'none', outline: 'none', color: '#111', background: 'transparent' }}
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setSearchOpen(false); setDesktopSearch(''); }}
+              style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.15)', zIndex: 1049 }}
             />
-            <div onClick={() => { setSearchOpen(false); setDesktopSearch(''); }} style={{ cursor: 'pointer' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M18 6L6 18M6 6l12 12" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </div>
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+              style={{ position: 'fixed', top: 38 + 68 + 44, left: 0, right: 0, zIndex: 1050,
+                background: '#fff', borderBottom: desktopSearch.length < 3 ? '1px solid #E5E5E5' : 'none',
+                padding: '20px 48px',
+                display: 'flex', flexDirection: 'column', gap: 0 }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <circle cx="11" cy="11" r="7" stroke="#BBB" strokeWidth="1.5"/>
+                  <path d="M16.5 16.5L21 21" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                <input
+                  autoFocus
+                  value={desktopSearch}
+                  onChange={e => setDesktopSearch(e.target.value)}
+                  placeholder={lang === 'kg' ? 'Атыр издөө...' : 'Поиск ароматов...'}
+                  style={{ flex: 1, fontSize: 22, border: 'none', outline: 'none', color: '#111', background: 'transparent' }}
+                />
+                {desktopSearch && (
+                  <div onClick={() => setDesktopSearch('')} style={{ cursor: 'pointer', marginRight: 12 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                      <path d="M18 6L6 18M6 6l12 12" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                )}
+                <div onClick={() => { setSearchOpen(false); setDesktopSearch(''); }} style={{ cursor: 'pointer' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                    <path d="M18 6L6 18M6 6l12 12" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+              </div>
+              {/* Desktop smart search results */}
+              <AnimatePresence>
+                {desktopSearch.length >= 3 && (() => {
+                  const deskResults = smartSearch(products, desktopSearch, lang, 10);
+                  if (deskResults.length === 0) return (
+                    <motion.div
+                      key="no-results"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      style={{ padding: '24px 0', textAlign: 'center', color: '#999', fontSize: 15 }}
+                    >
+                      {lang === 'kg' ? 'Эч нерсе табылган жок' : 'Ничего не найдено'}
+                    </motion.div>
+                  );
+                  return (
+                    <motion.div
+                      key="results"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      style={{ marginTop: 12, borderTop: '1px solid #F0F0F0' }}
+                    >
+                      {deskResults.map((p, idx) => {
+                        const imgSrc = p.img || p.images?.[0];
+                        const name = pickName(p, lang);
+                        const prices = (p.variants || []).filter(v => v.inStock).map(v => v.price || 0).filter(Boolean);
+                        const price = prices.length ? Math.min(...prices) : 0;
+                        const si = getSaleInfo(p);
+                        return (
+                          <motion.div
+                            key={p.id || idx}
+                            onClick={() => { setSelectedProduct(p); setModalVariantId(p.variants?.[0]?.id || null); setModalImgIndex(0); setSearchOpen(false); setDesktopSearch(''); }}
+                            whileTap={{ scale: 0.99 }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 16, padding: '14px 4px',
+                              cursor: 'pointer', borderBottom: idx < deskResults.length - 1 ? '1px solid #F5F5F5' : 'none',
+                              transition: 'background 0.15s', borderRadius: 8,
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#FAFAFA'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <div style={{
+                              width: 64, height: 64, borderRadius: 12,
+                              background: '#FFF', border: '1px solid #F0F0F0',
+                              overflow: 'hidden', flexShrink: 0,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6,
+                            }}>
+                              {imgSrc ? (
+                                <img src={imgSrc} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                              ) : (
+                                <svg width="28" height="36" viewBox="0 0 60 140" fill="none" opacity="0.25">
+                                  <rect x="20" y="0" width="20" height="16" rx="2" fill="#C5C0B6"/>
+                                  <rect x="8" y="16" width="44" height="110" rx="4" fill="#D5D0C8"/>
+                                </svg>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 16, fontWeight: 600, color: '#111', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {name}
+                              </div>
+                              <div style={{ fontSize: 13, color: '#999', marginTop: 3 }}>
+                                {p.brand || p.category || ''}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              {price > 0 && (
+                                si ? (
+                                  <>
+                                    <div style={{ fontSize: 12, color: '#bbb', textDecoration: 'line-through' }}>{price.toLocaleString()} сом</div>
+                                    <div style={{ fontSize: 16, fontWeight: 700, color: '#E53935' }}>{salePrice(price, si.percent).toLocaleString()} сом</div>
+                                  </>
+                                ) : (
+                                  <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>от {price.toLocaleString()} сом</div>
+                                )
+                              )}
+                            </div>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.25 }}>
+                              <path d="M9 18l6-6-6-6" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </motion.div>
+                        );
+                      })}
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
@@ -10437,7 +14522,9 @@ export default function App() {
   }, [lang]);
   const [screen, setScreen] = useState("catalog");
   const [adminScreen, setAdminScreen] = useState("orders");
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState([]);
+  const [clientNotifications, setClientNotifications] = useState([]);
+  const [showNotifSheet, setShowNotifSheet] = useState(false);
   const [pbLoading, setPbLoading] = useState(true);
   const [banners, setBanners] = useState(() => {
     try {
@@ -10455,14 +14542,21 @@ export default function App() {
   const [instaPosts, setInstaPosts] = useState([]);
   const [instaProfile, setInstaProfile] = useState(null);
   const [user, setUser] = useState(null);
+  // Admin mode is PER-TAB via URL hash (#admin).
+  // This lets you run admin in one tab and client store in another.
   const [isAdmin, setIsAdmin] = useState(() => {
     try {
-      const saved = localStorage.getItem('parfum_is_admin');
-      if (saved === 'true') {
-        // Verify PB token is still valid
+      // If URL has #admin and PB token is valid → admin
+      if (window.location.hash === '#admin') {
         if (pb.authStore.isValid) return true;
-        // Token expired — clean up
-        localStorage.removeItem('parfum_is_admin');
+        // Token expired — clean hash
+        window.location.hash = '';
+      }
+      // Legacy: migrate from localStorage-only (old sessions)
+      const saved = localStorage.getItem('parfum_is_admin');
+      if (saved === 'true' && pb.authStore.isValid) {
+        // Don't auto-activate admin — let user choose via #admin
+        return false;
       }
     } catch {}
     return false;
@@ -10493,8 +14587,11 @@ export default function App() {
   const [visitCount, setVisitCount] = useState(() => { const v = parseInt(localStorage.getItem('parfum_visits') || '0'); return v; });
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
-  const [showMBank, setShowMBank] = useState(false);
-  const [showOBank, setShowOBank] = useState(false);
+  const [showRegModal, setShowRegModal] = useState(false);
+  const [pendingOrderForReg, setPendingOrderForReg] = useState(null);
+  
+  const [showOdengi, setShowOdengi] = useState(false);
+  const [odengiPaymentData, setOdengiPaymentData] = useState(null);
   const [pendingOrder, setPendingOrder] = useState(null);
   const [completedOrder, setCompletedOrder] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -10506,19 +14603,33 @@ export default function App() {
     return code;
   });
   const [showAdminLogin, setShowAdminLogin] = useState(false);
-  const [adminLoginEmail, setAdminLoginEmail] = useState("");
-  const [adminLoginPass, setAdminLoginPass] = useState("");
+  const [adminLoginEmail, setAdminLoginEmail] = useState(() => {
+    try { const s = localStorage.getItem('parfum_admin_saved'); if (s) { const d = JSON.parse(s); return d.email || ""; } } catch {} return "";
+  });
+  const [adminLoginPass, setAdminLoginPass] = useState(() => {
+    try { const s = localStorage.getItem('parfum_admin_saved'); if (s) { const d = JSON.parse(s); return d.pass || ""; } } catch {} return "";
+  });
   const [adminLoginErr, setAdminLoginErr] = useState("");
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
+  const [adminRemember, setAdminRemember] = useState(() => {
+    try { return !!localStorage.getItem('parfum_admin_saved'); } catch { return false; }
+  });
+  const [adminShowPass, setAdminShowPass] = useState(false);
   const submitTopAdminLogin = async () => {
     if (!adminLoginEmail || !adminLoginPass) { setAdminLoginErr(t.fillAll || "Заполните все поля"); return; }
     setAdminLoginLoading(true); setAdminLoginErr("");
     try {
       await adminLoginApi(adminLoginEmail, adminLoginPass);
+      // Save or clear credentials based on checkbox
+      if (adminRemember) {
+        localStorage.setItem('parfum_admin_saved', JSON.stringify({ email: adminLoginEmail, pass: adminLoginPass }));
+      } else {
+        localStorage.removeItem('parfum_admin_saved');
+      }
       setShowAdminLogin(false);
-      setAdminLoginEmail(""); setAdminLoginPass("");
       setIsAdmin(true);
       localStorage.setItem('parfum_is_admin', 'true');
+      window.location.hash = 'admin'; // per-tab admin mode
       setAdminScreen("orders");
       showToast(t.welcomeAdmin);
     } catch (e) {
@@ -10545,7 +14656,10 @@ export default function App() {
   const cartTotal = cart.reduce((sum, i) => {
     const prod = products.find(p => String(p.id) === String(i.productId));
     const v = prod?.variants?.find(vv => String(vv.id) === String(i.variantId));
-    return sum + ((v?.price || 0) * i.qty);
+    const baseP = v?.price || 0;
+    const si = getSaleInfo(prod);
+    const fp = si ? salePrice(baseP, si.percent) : baseP;
+    return sum + (fp * i.qty);
   }, 0);
 
   // Detect native iOS (Capacitor) — hides web tab bar, uses native glass bar instead
@@ -10602,7 +14716,9 @@ export default function App() {
   // state so the UI doesn't bounce back to the login screen mid-session.
   useEffect(() => {
     if (!pb.authStore.isValid) return;
-    if (pb.authStore.isAdmin || localStorage.getItem('parfum_is_admin') === 'true') {
+    // Only activate admin if this tab has #admin in URL
+    const hashAdmin = window.location.hash === '#admin';
+    if (hashAdmin && (pb.authStore.isAdmin || localStorage.getItem('parfum_is_admin') === 'true')) {
       setIsAdmin(true);
       localStorage.setItem('parfum_is_admin', 'true');
       setAdminScreen("orders");
@@ -10620,7 +14736,8 @@ export default function App() {
     }
   }, []);
 
-  // Persist banners to localStorage on every change
+  // Persist banners to localStorage + PocketBase on every change
+  const bannerSaveTimer = useRef(null);
   useEffect(() => {
     try {
       const fixed = banners.map(b => ({
@@ -10630,8 +14747,15 @@ export default function App() {
           : b.bg,
       }));
       localStorage.setItem('parfum_banners', JSON.stringify(fixed));
+      // Debounced sync to PocketBase (admin only) — so all devices see same banners
+      if (isAdmin) {
+        clearTimeout(bannerSaveTimer.current);
+        bannerSaveTimer.current = setTimeout(() => {
+          api.saveBannersMeta(fixed).catch(() => {});
+        }, 2000);
+      }
     } catch { /* ignore */ }
-  }, [banners]);
+  }, [banners, isAdmin]);
 
   // Persist settings to localStorage on every change (excluding loginBg — stored separately)
   useEffect(() => {
@@ -10660,14 +14784,26 @@ export default function App() {
           const galleryUrls = (p?.id && safeImages.length > 0)
             ? safeImages.map(img => api.getImageUrl(p, img)).filter(Boolean)
             : [];
-          const coverUrl = galleryUrls[0] || (FALLBACK_IMAGES[p.name] || null);
+          // PocketBase images only — Fragrantica CDN blocks hotlinking
+          // All images hosted on PB via pb-download-images.js
+          const coverUrl = galleryUrls[0] || null;
           return {
             ...p,
             img: coverUrl,
-            images: galleryUrls.length > 0 ? galleryUrls : (FALLBACK_IMAGES[p.name] ? [FALLBACK_IMAGES[p.name]] : []),
+            images: galleryUrls.length > 0 ? galleryUrls : [],
             variants: Array.isArray(p.variants) ? p.variants : (p.variants ? JSON.parse(p.variants) : []),
-            isPopular: p.isPopular ?? false,
-            featured: p.featured ?? false,
+            isPopular: p.isPopular === true || p.isPopular === 'true',
+            isHit: p.isHit === true || p.isHit === 'true',
+            isNew: p.isNew === true || p.isNew === 'true',
+            isAuthor: p.isAuthor === true || p.isAuthor === 'true',
+            featured: p.featured === true || p.featured === 'true',
+            priority: Number(p.priority) || 0,
+            shortDesc: p.shortDesc || '',
+            tags: p.tags || '',
+            scheduled: p.scheduled === true || p.scheduled === 'true',
+            showFrom: p.showFrom || '',
+            showUntil: p.showUntil || '',
+            relatedIds: (() => { try { return Array.isArray(p.relatedIds) ? p.relatedIds : JSON.parse(p.relatedIds || '[]'); } catch { return []; } })(),
             salePercent: Number(p.salePercent) || 0,
             saleEnd: p.saleEnd || '',
             saleStart: p.saleStart || '',
@@ -10682,10 +14818,34 @@ export default function App() {
       if (pbClients.length > 0) setRegisteredUsers(pbClients);
       if (pbReviews.length > 0) setReviews(pbReviews);
 
+      // Load notifications
+      try {
+        const notifs = await api.getNotifications();
+        setClientNotifications(notifs);
+      } catch { /* notifications collection may not exist yet */ }
+
       // Load shared media from PB (instagramScreen, etc.)
       const instaScreenUrl = await api.getSiteMedia('instagramScreen').catch(() => null);
       if (instaScreenUrl) {
         setSettings(prev => ({ ...prev, instagramScreen: instaScreenUrl }));
+      }
+
+      // Load payment settings from PocketBase
+      const paymentData = await api.loadPaymentSettings().catch(() => null);
+      if (paymentData) {
+        setSettings(prev => ({
+          ...prev,
+                    
+                    
+        }));
+      }
+
+      // Load banners from PocketBase — overrides localStorage so ALL devices
+      // show the same banners that admin configured.
+      const pbBanners = await api.loadBannersMeta().catch(() => null);
+      if (pbBanners && pbBanners.length > 0) {
+        setBanners(pbBanners);
+        localStorage.setItem('parfum_banners', JSON.stringify(pbBanners));
       }
     } catch (e) {
       console.warn("PocketBase load error:", e);
@@ -10730,10 +14890,14 @@ export default function App() {
     await loadAll();
   }, [loadAll]);
 
-  // Persist bonus balance and history
+  // Persist bonus balance and history — sync to both localStorage AND PocketBase
   useEffect(() => {
     localStorage.setItem('parfum_bonus_balance', String(bonusBalance));
     localStorage.setItem('parfum_bonus_history', JSON.stringify(bonusHistory));
+    // Sync to PocketBase so bonus persists across devices / cache clears
+    if (user?.id && bonusBalance !== undefined) {
+      api.updateClient(user.id, { bonusBalance, bonusHistory }).catch(() => {});
+    }
   }, [bonusBalance, bonusHistory]);
 
   // Count unique daily sessions
@@ -10779,10 +14943,19 @@ export default function App() {
     // We just display what the server says — no client-side math, no
     // localStorage tricks, no api.updateClient calls for bonuses.
 
-    // 1. Sync referral code
-    if (record?.referralCode) {
-      setReferralCode(record.referralCode);
-      localStorage.setItem('parfum_ref_code', record.referralCode);
+    // 1. Sync referral code — generate if missing or fix Cyrillic codes
+    const existingCode = record?.referralCode || '';
+    const hasCyrillic = /[а-яА-ЯёЁ]/.test(existingCode);
+    if (existingCode && !hasCyrillic) {
+      // Valid Latin code from server
+      setReferralCode(existingCode);
+      localStorage.setItem('parfum_ref_code', existingCode);
+    } else if (record?.id) {
+      // No code or has Cyrillic — generate clean Latin code and save to PocketBase
+      const newCode = generateReferralCode(record.name || name || phone || 'USER');
+      setReferralCode(newCode);
+      localStorage.setItem('parfum_ref_code', newCode);
+      api.updateClient(record.id, { referralCode: newCode }).catch(() => {});
     }
 
     // 2. Sync balance & history — SERVER is the single source of truth
@@ -10796,6 +14969,7 @@ export default function App() {
     // 3. Show welcome celebration modal for NEW clients (server already credited them)
     if (isNewClient && serverBalance > 0) {
       setWelcomeCelebration({ amount: serverBalance });
+      notifyWelcomeBonus(serverBalance);
     }
 
     // 4. Set user state
@@ -10819,6 +14993,22 @@ export default function App() {
     setScreen("catalog");
   };
 
+  // ── Registration from modal (guest → registered user, then auto-order) ──
+  const handleRegisterFromModal = async (regData) => {
+    // Run the same login flow
+    await handleLogin(regData);
+    setShowRegModal(false);
+    setGuestMode(false);
+    // If there was a pending order, submit it now
+    if (pendingOrderForReg) {
+      // Small delay so user state settles
+      setTimeout(() => {
+        handleOrder(pendingOrderForReg);
+        setPendingOrderForReg(null);
+      }, 300);
+    }
+  };
+
   // Clear PB auth (token in pb.authStore + secureStorage) before resetting
   // local UI state — otherwise the next mount restores the old session.
   // `authLogout` is async (touches secureStorage) but failure here is benign;
@@ -10826,8 +15016,9 @@ export default function App() {
   const handleLogout = () => {
     authLogout().catch(() => {});
     clearSentryUser();
-    setUser(null); setIsAdmin(false); setScreen("catalog"); setCart([]);
+    setUser(null); setIsAdmin(false); setGuestMode(false); setScreen("catalog"); setCart([]);
     localStorage.removeItem('parfum_is_admin');
+    if (window.location.hash === '#admin') window.location.hash = '';
     localStorage.removeItem('parfum_bonus_balance');
     localStorage.removeItem('parfum_bonus_history');
     localStorage.removeItem('parfum_ref_code');
@@ -10845,29 +15036,63 @@ export default function App() {
         ? prev.map(i => i.productId === productId && i.variantId === variantId ? { ...i, qty: i.qty + 1 } : i)
         : [...prev, { productId, variantId, qty: 1 }];
       localStorage.setItem('parfum_cart', JSON.stringify(next));
+      // Schedule cart reminder (2 hours)
+      scheduleCartReminder(next.length);
       return next;
     });
     showToast(t.addedToCart);
   };
 
   const handleOrder = async (orderData) => {
-    if (!user) { setGuestMode(false); showToast(lang === 'kg' ? 'Заказ берүү үчүн кириңиз' : 'Войдите для оформления заказа', 'error'); return; }
+    if (!user) {
+      // Guest trying to order → show registration modal, save order data for after registration
+      setPendingOrderForReg(orderData);
+      setShowRegModal(true);
+      return;
+    }
+    // ── VALIDATION: block 0-sum orders ──────────────────────────────────────
+    if (!orderData.total || orderData.total <= 0) {
+      showToast(lang === 'kg' ? 'Заказдын суммасы 0 болушу мүмкүн эмес' : 'Сумма заказа не может быть 0 сом', 'error');
+      return;
+    }
+    // ── VALIDATION: block out-of-stock items ────────────────────────────────
+    const outOfStockItems = cart.filter(ci => {
+      const prod = products.find(p => String(p.id) === String(ci.productId));
+      const variant = prod?.variants?.find(v => String(v.id) === String(ci.variantId));
+      return !variant || variant.inStock === false;
+    });
+    if (outOfStockItems.length > 0) {
+      const names = outOfStockItems.map(ci => {
+        const prod = products.find(p => String(p.id) === String(ci.productId));
+        return prod?.name || ci.name || 'Товар';
+      }).join(', ');
+      showToast(lang === 'kg' ? `Кампада жок товарлар: ${names}` : `Нет в наличии: ${names}`, 'error');
+      return;
+    }
+    // ── VALIDATION: block empty cart ────────────────────────────────────────
+    if (!cart || cart.length === 0) {
+      showToast(lang === 'kg' ? 'Себет бош' : 'Корзина пуста', 'error');
+      return;
+    }
+    // Critical #2: Validate delivery address before creating order
+    if (orderData.deliveryType === 'delivery' && !orderData.address?.trim()) {
+      showToast(lang === 'kg' ? 'Жеткирүү дарегин жазыңыз' : 'Укажите адрес доставки', 'error');
+      return;
+    }
     const now = new Date().toLocaleString("ru-RU");
     const items = cart.map(ci => {
       const prod = products.find(p => String(p.id) === String(ci.productId));
       const variant = prod?.variants.find(v => String(v.id) === String(ci.variantId));
-      return { productId: ci.productId, variantId: ci.variantId, name: `${prod?.name || ci.name || 'Товар'} ${variant?.label || ci.variantLabel || ''}`.trim(), qty: ci.qty, price: variant?.price || 0 };
+      const basePrice = variant?.price || 0;
+      const si = getSaleInfo(prod);
+      const itemPrice = si ? salePrice(basePrice, si.percent) : basePrice;
+      return { productId: ci.productId, variantId: ci.variantId, name: `${prod?.name || ci.name || 'Товар'} ${variant?.label || ci.variantLabel || ''}`.trim(), qty: ci.qty, price: itemPrice };
     });
     const localId = (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase().slice(0, 8);
     const newOrder = { id: localId, clientName: user?.name || "", clientPhone: user?.phone || "", items, date: now, status: "new", ...orderData };
-    if (orderData.payMethod === 'mbank') {
+    if (orderData.payMethod === 'odengi') {
       setPendingOrder(newOrder);
-      setShowMBank(true);
-      return;
-    }
-    if (orderData.payMethod === 'obank') {
-      setPendingOrder(newOrder);
-      setShowOBank(true);
+      setShowOdengi(true);
       return;
     }
     // Save to PocketBase
@@ -10875,7 +15100,7 @@ export default function App() {
       const pbData = {
         clientName: newOrder.clientName,
         clientPhone: newOrder.clientPhone,
-        items: JSON.stringify(newOrder.items),
+        items: newOrder.items,
         date: now,
         status: "new",
         total: orderData.total || 0,
@@ -10884,24 +15109,38 @@ export default function App() {
         comment: orderData.comment || "",
         bonusDiscount: orderData.bonusDiscount || 0,
       };
+      console.log('[order] pbData items:', JSON.stringify(pbData.items));
       const created = await api.createOrder(pbData);
-      setOrders(p => [...p, { ...newOrder, id: created.id, collectionId: created.collectionId }]);
+      // Use PB-assigned ID everywhere so WhatsApp hook can verify the order.
+      newOrder.id = created.id;
+      newOrder.collectionId = created.collectionId;
+      setOrders(p => [...p, { ...newOrder }]);
     } catch (e) {
       console.warn("PocketBase order error:", e);
       setOrders(p => [...p, newOrder]);
     }
-    const earned = Math.floor((orderData.total || 0) * (settings.bonusPercent || 0) / 100);
-    if (earned > 0) { setBonusBalance(p => p - (orderData.bonusDiscount || 0) + earned); setBonusHistory(p => [...p, ...(orderData.bonusDiscount ? [{ type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }] : []), { type: "earned", amount: earned, label: "Бонус за заказ", date: now }]); }
-    else if (orderData.bonusDiscount) { setBonusBalance(p => p - orderData.bonusDiscount); setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]); }
+    // Bonus SPENT is deducted immediately at order placement.
+    // Bonus EARNED (cashback) is only credited when order reaches "delivered" status
+    // — see handleStatusChange below. This prevents gaming via order→cancel.
+    if (orderData.bonusDiscount > 0) {
+      setBonusBalance(p => p - orderData.bonusDiscount);
+      setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]);
+    }
     setCart([]); localStorage.removeItem('parfum_cart');
     haptic('success'); // PRO: success haptic on order placement
     setCompletedOrder(newOrder);
+    // Push notification — order created
+    notifyOrderCreated(newOrder.id, newOrder.total, 'cash');
+    cancelCartReminder();
     const itemsList = (newOrder.items || []).map(i => `  • ${i.name} × ${i.qty} шт. — ${(i.price * i.qty).toLocaleString()} сом`).join('\n');
     const deliveryLine = orderData.deliveryType === 'pickup' ? 'Самовывоз' : (orderData.address || 'Доставка');
     const bonusLine = orderData.bonusDiscount > 0 ? `\nБонус: −${orderData.bonusDiscount.toLocaleString()} сом` : '';
-    const clientMsg = `Здравствуйте, ${newOrder.clientName}!\n\nВаш заказ №${newOrder.id} успешно оформлен.\n\n${itemsList}\n\nСпособ оплаты: наличные\nДоставка: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом\n\nМы свяжемся с вами для подтверждения.\nСпасибо за покупку!\n\n— Kemal Usman Parfum`;
-    const adminPhone = localStorage.getItem('whatsapp_admin') || localStorage.getItem('mbank_phone') || '';
-    const adminMsg = `📦 Новый заказ №${newOrder.id}\n\n👤 ${newOrder.clientName}\n📞 ${newOrder.clientPhone}\n\n${itemsList}\n\n💳 Оплата: наличные\n📍 ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом`;
+    const cName = newOrder.clientName || user?.name || 'Клиент';
+    const cPhone = newOrder.clientPhone || user?.phone || '';
+    const shopName = settings?.shopName || 'Kemal Usman';
+    const clientMsg = `Здравствуйте, ${cName}! 🌸\n\nВаш заказ №${newOrder.id} успешно оформлен ✅\n\n${itemsList}\n\n💳 Способ оплаты: наличные\n📦 Доставка: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом\n\nМы свяжемся с вами для подтверждения 🤝\nСпасибо за покупку! 🙏\n\n— ${shopName}`;
+    const adminPhone = settings?.whatsappPhone || '';
+    const adminMsg = `🆕 Новый заказ №${newOrder.id}\n\n👤 Клиент: ${cName}\n📞 Телефон: ${cPhone}\n\n${itemsList}\n\n💵 Оплата: наличные\n📍 Адрес: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом`;
     // Server-side WhatsApp dispatch — `sendWhatsApp` now lives in
     // src/api/whatsapp.js and only forwards { chatId, message, orderId }
     // to /api/custom/whatsapp/send. Tokens stay on the PB host.
@@ -10918,8 +15157,132 @@ export default function App() {
   // The previous local sendWhatsApp() helper was removed — see import at the
   // top of the file. The client must never know GREEN_API_INSTANCE / TOKEN.
 
+  // ── STATUS CHANGE → AUTO WHATSAPP TO CLIENT ──────────────────────────────
+  // Professional messages for each status transition. Includes receipt
+  // request for bank payments upon confirmation.
+  const handleStatusChange = async (id, newStatus) => {
+    const order = orders.find(o => o.id === id);
+    setOrders(p => p.map(o => o.id === id ? { ...o, status: newStatus } : o));
+    try { await api.updateOrder(id, { status: newStatus }); } catch (e) { console.warn('Status update error:', e); }
+
+    // Push notification — status changed
+    notifyOrderStatus(id, newStatus, order?.total);
+
+    // Build status notification message for client
+    if (!order?.clientPhone) return;
+
+    const name = order.clientName || '';
+    const oid = order.id || '';
+    const total = (order.total || 0).toLocaleString();
+    const itemsList = (typeof order.items === 'string' ? JSON.parse(order.items) : order.items || [])
+      .map(i => `  • ${i.name} × ${i.qty} — ${(i.price * i.qty).toLocaleString()} сом`)
+      .join('\n');
+    const isBankPay = false;
+    const bankName = 'Онлайн оплата';
+    const shopName = settings?.shopName || 'Kemal Usman';
+
+    const statusMessages = {
+      confirmed: lang === 'kg'
+        ? `${name}, заказыңыз №${oid} ырасталды! ✅\n\n${itemsList}\n\n💰 Жалпы: ${total} сом\n${isBankPay ? `\n📎 ${bankName} аркылуу төлөгөндөн кийин, квитанциянын скриншотун жөнөтүңүз 🙏\n` : ''}\nБиз даярдап жатабыз 🤝\n\n— ${shopName}`
+        : `${name}, ваш заказ №${oid} подтверждён! ✅\n\n${itemsList}\n\n💰 Итого: ${total} сом\n${isBankPay ? `\n📎 После оплаты через ${bankName}, отправьте скриншот квитанции в ответ на это сообщение 🙏\n` : ''}\nМы уже готовим ваш заказ 🤝\n\n— ${shopName}`,
+
+      preparing: lang === 'kg'
+        ? `${name}, заказыңыз №${oid} даярдалууда! 📦\n\nТезарада жеткирүүгө даяр болот ✨\n\n— ${shopName}`
+        : `${name}, ваш заказ №${oid} готовится 📦\n\nСовсем скоро будет готов к отправке ✨\n\n— ${shopName}`,
+
+      delivering: lang === 'kg'
+        ? `${name}, заказыңыз №${oid} жолдо! 🚗\n\nКурьер жакында жетет. Телефонуңуз иштеп турсун 📱\n\n— ${shopName}`
+        : `${name}, ваш заказ №${oid} в пути! 🚗\n\nКурьер скоро будет у вас. Держите телефон включённым 📱\n\n— ${shopName}`,
+
+      delivered: lang === 'kg'
+        ? `${name}, заказыңыз №${oid} жеткирилди! 🎉\n\n💰 ${total} сом\n\nСатып алганыңыз үчүн рахмат! Жыттар сизге жагат деп үмүттөнөбүз 🌸\n\nБизди тандаганыңыз үчүн ыраазыбыз! 🤍\n\n— ${shopName}`
+        : `${name}, ваш заказ №${oid} доставлен! 🎉\n\n💰 ${total} сом\n\nСпасибо за покупку! Надеемся, ароматы вам понравятся 🌸\n\nБудем рады видеть вас снова! 🤍\n\n— ${shopName}`,
+
+      cancelled: lang === 'kg'
+        ? `${name}, тилекке каршы, заказыңыз №${oid} жокко чыгарылды 😔\n\nСуроолоруңуз болсо, бизге жазыңыз 💬\n\n— ${shopName}`
+        : `${name}, к сожалению, ваш заказ №${oid} отменён 😔\n\nЕсли у вас есть вопросы, напишите нам 💬\n\n— ${shopName}`,
+    };
+
+    const msg = statusMessages[newStatus];
+    if (msg) {
+      sendWhatsApp({ phone: order.clientPhone, message: msg, orderId: oid })
+        .then(r => { if (!r.ok) console.warn('[status] whatsapp notify failed:', r.error); });
+    }
+
+    // ── Cashback: credit bonus ONLY when order is delivered ──
+    if (newStatus === 'delivered' && order) {
+      const orderTotal = order.total || 0;
+      const earned = Math.floor(orderTotal * (settings.bonusPercent || 0) / 100);
+      if (earned > 0) {
+        notifyBonusEarned(earned);
+        const now = new Date().toLocaleDateString("ru-RU");
+        setBonusBalance(p => {
+          const newBal = p + earned;
+          localStorage.setItem('parfum_bonus_balance', String(newBal));
+          // Also update PocketBase for the client
+          if (order.clientPhone) {
+            const normalizedPhone = normalizePhone(order.clientPhone);
+            api.getClientByPhone(normalizedPhone).then(client => {
+              if (client?.id) {
+                const serverBal = (client.bonusBalance || 0) + earned;
+                const serverHist = [...(Array.isArray(client.bonusHistory) ? client.bonusHistory : []), { type: "earned", amount: earned, label: "Кэшбэк за заказ №" + oid, date: now }];
+                api.updateClient(client.id, { bonusBalance: serverBal, bonusHistory: serverHist }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
+          return newBal;
+        });
+        setBonusHistory(p => {
+          const newHist = [...p, { type: "earned", amount: earned, label: "Кэшбэк за заказ №" + oid, date: new Date().toLocaleDateString("ru-RU") }];
+          localStorage.setItem('parfum_bonus_history', JSON.stringify(newHist));
+          return newHist;
+        });
+      }
+    }
+
+    // ── Cancelled: refund spent bonus + claw back cashback if was delivered ──
+    if (newStatus === 'cancelled' && order) {
+      const now = new Date().toLocaleDateString("ru-RU");
+      const refund = order.bonusDiscount || 0;
+      // Claw back cashback if order was previously delivered
+      const wasDelivered = order.status === 'delivered';
+      const clawback = wasDelivered ? Math.floor((order.total || 0) * (settings.bonusPercent || 0) / 100) : 0;
+      const totalChange = refund - clawback; // refund adds, clawback removes
+
+      if (refund > 0 || clawback > 0) {
+        const histEntries = [];
+        if (refund > 0) histEntries.push({ type: "refund", amount: refund, label: "Возврат бонуса (заказ №" + oid + ")", date: now });
+        if (clawback > 0) histEntries.push({ type: "clawback", amount: -clawback, label: "Возврат кэшбэка (заказ №" + oid + ")", date: now });
+
+        setBonusBalance(p => {
+          const newBal = Math.max(0, p + totalChange);
+          localStorage.setItem('parfum_bonus_balance', String(newBal));
+          if (order.clientPhone) {
+            const normalizedPhone = normalizePhone(order.clientPhone);
+            api.getClientByPhone(normalizedPhone).then(client => {
+              if (client?.id) {
+                const serverBal = Math.max(0, (client.bonusBalance || 0) + totalChange);
+                const serverHist = [...(Array.isArray(client.bonusHistory) ? client.bonusHistory : []), ...histEntries];
+                api.updateClient(client.id, { bonusBalance: serverBal, bonusHistory: serverHist }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
+          return newBal;
+        });
+        setBonusHistory(p => {
+          const newHist = [...p, ...histEntries];
+          localStorage.setItem('parfum_bonus_history', JSON.stringify(newHist));
+          return newHist;
+        });
+      }
+    }
+  };
+
   const handleSendWhatsApp = (order) => {
-    const msg = `Заказ #${order.id} статус: ${t["status_" + order.status] || order.status}`;
+    const name = order.clientName || '';
+    const total = (order.total || 0).toLocaleString();
+    const statusLabel = t["status_" + order.status] || order.status;
+    const msg = `Здравствуйте, ${name}! 🌸\n\n📋 Ваш заказ №${order.id}\n📌 Статус: ${statusLabel}\n💰 Итого: ${total} сом\n\nЕсли есть вопросы — напишите нам 💬\n\n— ${settings?.shopName || 'Kemal Usman'}`;
     window.open(`https://wa.me/${order.clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -10935,11 +15298,13 @@ export default function App() {
   ];
 
   const ADMIN_NAV = [
-    { id: "orders",   icon: IC.orders,   label: t.orders },
-    { id: "products", icon: IC.bottle,   label: t.products },
-    { id: "reviews",  icon: IC.star || IC.orders, label: lang === 'kg' ? 'Пикирлер' : 'Отзывы' },
-    { id: "stats",    icon: IC.stats,    label: t.stats },
-    { id: "settings", icon: IC.settings, label: t.settings },
+    { id: "orders",        icon: IC.orders,   label: t.orders },
+    { id: "products",      icon: IC.bottle,   label: t.products },
+    { id: "clients",       icon: IC.user,     label: lang === 'kg' ? 'Кардарлар' : 'Клиенты' },
+    { id: "notifications", icon: IC.bell,     label: t.notifications },
+    { id: "reviews",       icon: IC.star || IC.orders, label: lang === 'kg' ? 'Пикирлер' : 'Отзывы' },
+    { id: "stats",         icon: IC.stats,    label: t.stats },
+    { id: "settings",      icon: IC.settings, label: t.settings },
   ];
 
   if (!user && !isAdmin && !guestMode) return (
@@ -11042,7 +15407,7 @@ export default function App() {
         </div>
       ) : (
         /* ── MOBILE LOGIN — unchanged ── */
-        <div style={{ width: "100vw", maxWidth: "100vw", minHeight: "100vh", overflow: "hidden", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
+        <div style={{ width: "100vw", maxWidth: "100vw", minHeight: "100dvh", overflow: "hidden", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
           <LoginScreen
             onLogin={handleLogin}
             welcomeConfig={{ enabled: settings.welcomeBonusEnabled, amount: settings.welcomeBonus, expireDays: 30 }}
@@ -11060,6 +15425,13 @@ export default function App() {
   return (
     <LangContext.Provider value={t_ctx}>
       <Toast toast={toast} onDismiss={dismissToast} />
+      {/* Registration modal — shown when guest tries to order */}
+      <RegisterModal
+        open={showRegModal}
+        onClose={() => { setShowRegModal(false); setPendingOrderForReg(null); }}
+        onRegister={handleRegisterFromModal}
+        showToast={showToast}
+      />
       {welcomeCelebration && (
         <BonusCelebration
           amount={welcomeCelebration.amount}
@@ -11070,100 +15442,39 @@ export default function App() {
       {/* Payment modals — rendered OUTSIDE the desktop/mobile ternary so they
           appear on both layouts. The handlers are the same as before; they
           create a PocketBase order, clear cart, fire WhatsApp notifications. */}
-      {showMBank && pendingOrder && (
-        <MBankPayment
+      
+
+      {showOdengi && pendingOrder && (
+        <OdengiPayment
           total={pendingOrder.total}
-          orderId={pendingOrder.id}
-          onConfirm={async (status) => {
-            const finalOrder = { ...pendingOrder, paymentStatus: status, paymentMethod: 'mbank' };
-            try {
-              const pbData = {
-                clientName: finalOrder.clientName,
-                clientPhone: finalOrder.clientPhone,
-                items: JSON.stringify(finalOrder.items),
-                date: finalOrder.date,
-                status: "new",
-                total: finalOrder.total || 0,
-                payMethod: finalOrder.payMethod || 'mbank',
-                address: finalOrder.address || "",
-                comment: finalOrder.comment || "",
-                bonusDiscount: finalOrder.bonusDiscount || 0,
-              };
-              const created = await api.createOrder(pbData);
-              setOrders(prev => [...prev, { ...finalOrder, id: created.id, collectionId: created.collectionId }]);
-            } catch (e) {
-              console.warn("PocketBase order error:", e);
-              showToast('Ошибка сохранения заказа', 'error');
-              setOrders(prev => [...prev, finalOrder]);
-            }
+          pendingOrder={pendingOrder}
+          showToast={showToast}
+          onConfirm={(confirmedOrder) => {
+            const finalOrder = { ...pendingOrder, ...confirmedOrder, paymentStatus: 'paid', paymentMethod: 'odengi' };
+            setOrders(prev => [...prev, finalOrder]);
             setCart([]); localStorage.removeItem('parfum_cart');
-            setShowMBank(false);
-            setCompletedOrder({ ...pendingOrder, paymentStatus: status, paymentMethod: 'mbank' });
+            const odSpent = pendingOrder.bonusDiscount || 0;
+            if (odSpent > 0) { setBonusBalance(p => p - odSpent); setBonusHistory(p => [...p, { type: 'spent', amount: -odSpent, label: 'Бонус потрачен', date: new Date().toISOString() }]); }
+            setShowOdengi(false);
+            setCompletedOrder(finalOrder);
+            notifyOrderCreated(finalOrder.id, finalOrder.total, 'odengi');
+            notifyPaymentConfirmed(finalOrder.id, 'Онлайн оплата');
+            cancelCartReminder();
             setPendingOrder(null);
-            const itemsList2 = (pendingOrder.items || []).map(i => `  • ${i.name} × ${i.qty} шт. — ${(i.price * i.qty).toLocaleString()} сом`).join('\n');
-            const deliveryLine2 = pendingOrder.deliveryType === 'pickup' ? 'Самовывоз' : (pendingOrder.address || 'Доставка');
-            const bonusLine2 = pendingOrder.bonusDiscount > 0 ? `\nБонус: −${pendingOrder.bonusDiscount.toLocaleString()} сом` : '';
-            const clientMsg2 = `Здравствуйте, ${pendingOrder.clientName}!\n\nВаш заказ №${pendingOrder.id} успешно оформлен.\n\n${itemsList2}\n\n💳 Оплата: M-Bank\n📍 ${deliveryLine2}${bonusLine2}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом\n\nОжидайте подтверждения оплаты.\nСпасибо за покупку!\n\n— Kemal Usman Parfum`;
-            const adminMsg2 = `📦 Новый заказ №${pendingOrder.id} (M-Bank)\n\n👤 ${pendingOrder.clientName}\n📞 ${pendingOrder.clientPhone}\n\n${itemsList2}\n\n💳 Оплата: M-Bank (ожидает подтверждения)\n📍 ${deliveryLine2}${bonusLine2}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом`;
-            const adm2 = localStorage.getItem('whatsapp_admin') || localStorage.getItem('mbank_phone') || '';
-            if (pendingOrder.clientPhone) {
-              sendWhatsApp({ phone: pendingOrder.clientPhone, message: clientMsg2, orderId: pendingOrder.id })
-                .then(r => { if (!r.ok) console.warn('[mbank] whatsapp client notify failed:', r.error); });
-            }
-            if (adm2) {
-              sendWhatsApp({ phone: adm2, message: adminMsg2, orderId: pendingOrder.id })
-                .then(r => { if (!r.ok) console.warn('[mbank] whatsapp admin notify failed:', r.error); });
-            }
+            haptic('success');
+            const adm4 = settings?.whatsappPhone || '';
+            const itemsList4 = (pendingOrder.items || []).map(i => `  • ${i.name} × ${i.qty} шт. — ${(i.price * i.qty).toLocaleString()} сом`).join('\n');
+            const deliveryLine4 = pendingOrder.deliveryType === 'pickup' ? 'Самовывоз' : (pendingOrder.address || 'Доставка');
+            const bonusLine4 = pendingOrder.bonusDiscount > 0 ? `\nБонус: −${pendingOrder.bonusDiscount.toLocaleString()} сом` : '';
+            const odName = pendingOrder.clientName || user?.name || 'Клиент';
+            const odPhone = pendingOrder.clientPhone || user?.phone || '';
+            const odShop = settings?.shopName || 'Kemal Usman';
+            const clientMsg4 = `Здравствуйте, ${odName}! 🌸\n\nВаш заказ №${finalOrder.id} оплачен через O!Деньги ✅\n\n${itemsList4}\n\n💳 Оплата: O!Деньги (подтверждена)\n📍 Адрес: ${deliveryLine4}${bonusLine4}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом\n\nСпасибо за покупку! 🤍\n\n— ${odShop}`;
+            const adminMsg4 = `🆕 Заказ №${finalOrder.id} ОПЛАЧЕН (O!Деньги)\n\n👤 ${odName}\n📞 ${odPhone}\n\n${itemsList4}\n\n💳 O!Деньги — оплачен ✅\n📍 ${deliveryLine4}${bonusLine4}\n💰 ${pendingOrder.total.toLocaleString()} сом`;
+            if (pendingOrder.clientPhone) sendWhatsApp({ phone: pendingOrder.clientPhone, message: clientMsg4, orderId: finalOrder.id }).catch(() => {});
+            if (adm4) sendWhatsApp({ phone: adm4, message: adminMsg4, orderId: finalOrder.id }).catch(() => {});
           }}
-          onCancel={() => { setShowMBank(false); setPendingOrder(null); }}
-        />
-      )}
-      {showOBank && pendingOrder && (
-        <OBankPayment
-          total={pendingOrder.total}
-          orderId={pendingOrder.id}
-          onConfirm={async (status) => {
-            const finalOrder = { ...pendingOrder, paymentStatus: status, paymentMethod: 'obank' };
-            try {
-              const pbData = {
-                clientName: finalOrder.clientName,
-                clientPhone: finalOrder.clientPhone,
-                items: JSON.stringify(finalOrder.items),
-                date: finalOrder.date,
-                status: "new",
-                total: finalOrder.total || 0,
-                payMethod: finalOrder.payMethod || 'obank',
-                address: finalOrder.address || "",
-                comment: finalOrder.comment || "",
-                bonusDiscount: finalOrder.bonusDiscount || 0,
-              };
-              const created = await api.createOrder(pbData);
-              setOrders(prev => [...prev, { ...finalOrder, id: created.id, collectionId: created.collectionId }]);
-            } catch (e) {
-              console.warn("PocketBase order error:", e);
-              showToast('Ошибка сохранения заказа', 'error');
-              setOrders(prev => [...prev, finalOrder]);
-            }
-            setCart([]); localStorage.removeItem('parfum_cart');
-            setShowOBank(false);
-            setCompletedOrder({ ...pendingOrder, paymentStatus: status, paymentMethod: 'obank' });
-            setPendingOrder(null);
-            const adm3 = localStorage.getItem('whatsapp_admin') || localStorage.getItem('mbank_phone') || '';
-            const itemsList3 = (pendingOrder.items || []).map(i => `  • ${i.name} × ${i.qty} шт. — ${(i.price * i.qty).toLocaleString()} сом`).join('\n');
-            const deliveryLine3 = pendingOrder.deliveryType === 'pickup' ? 'Самовывоз' : (pendingOrder.address || 'Доставка');
-            const bonusLine3 = pendingOrder.bonusDiscount > 0 ? `\nБонус: −${pendingOrder.bonusDiscount.toLocaleString()} сом` : '';
-            const clientMsg3 = `Здравствуйте, ${pendingOrder.clientName}!\n\nВаш заказ №${pendingOrder.id} успешно оформлен.\n\n${itemsList3}\n\n💳 Оплата: O!Bank\n📍 ${deliveryLine3}${bonusLine3}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом\n\nОжидайте подтверждения оплаты.\nСпасибо за покупку!\n\n— Kemal Usman Parfum`;
-            const adminMsg3 = `📦 Новый заказ №${pendingOrder.id} (O!Bank)\n\n👤 ${pendingOrder.clientName}\n📞 ${pendingOrder.clientPhone}\n\n${itemsList3}\n\n💳 Оплата: O!Bank (ожидает подтверждения)\n📍 ${deliveryLine3}${bonusLine3}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом`;
-            if (pendingOrder.clientPhone) {
-              sendWhatsApp({ phone: pendingOrder.clientPhone, message: clientMsg3, orderId: pendingOrder.id })
-                .then(r => { if (!r.ok) console.warn('[obank] whatsapp client notify failed:', r.error); });
-            }
-            if (adm3) {
-              sendWhatsApp({ phone: adm3, message: adminMsg3, orderId: pendingOrder.id })
-                .then(r => { if (!r.ok) console.warn('[obank] whatsapp admin notify failed:', r.error); });
-            }
-          }}
-          onCancel={() => { setShowOBank(false); setPendingOrder(null); }}
+          onCancel={() => { setShowOdengi(false); setPendingOrder(null); }}
         />
       )}
       {completedOrder && (
@@ -11205,6 +15516,8 @@ export default function App() {
           setWelcomeCelebration={setWelcomeCelebration}
           windowWidth={windowWidth}
           onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }}
+          setScreen={setScreen}
+          screen={screen}
         />
       ) : isDesktop && isAdmin ? (
         /* ── DESKTOP ADMIN WRAPPER — no mobile CSS vars, no NavBar ── */
@@ -11224,13 +15537,13 @@ export default function App() {
               {t.adminPanel} — Kemal Usman
             </div>
             <button
-              onClick={() => { setIsAdmin(false); localStorage.removeItem('parfum_is_admin'); setAdminScreen('orders'); }}
+              onClick={() => { setIsAdmin(false); localStorage.removeItem('parfum_is_admin'); setAdminScreen('orders'); if (window.location.hash === '#admin') window.location.hash = ''; }}
               style={{
                 background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
                 color: '#fff', padding: '6px 16px', fontSize: 11, letterSpacing: 2,
                 textTransform: 'uppercase', cursor: 'pointer', fontWeight: 600,
               }}>
-              {t.exit || 'Выйти'}
+              {t.exit}
             </button>
           </div>
 
@@ -11241,11 +15554,13 @@ export default function App() {
             padding: '0 48px',
           }}>
             {[
-              { id: 'orders',   label: t.orders   || 'Заказы'     },
-              { id: 'products', label: t.products  || 'Товары'     },
-              { id: 'reviews',  label: lang === 'kg' ? 'Пикирлер' : 'Отзывы' },
-              { id: 'stats',    label: t.stats     || 'Статистика' },
-              { id: 'settings', label: t.settings  || 'Настройки'  },
+              { id: 'orders',        label: t.orders   || 'Заказы'     },
+              { id: 'products',      label: t.products  || 'Товары'     },
+              { id: 'clients',       label: lang === 'kg' ? 'Кардарлар' : 'Клиенты' },
+              { id: 'notifications', label: t.notifications || 'Уведомления' },
+              { id: 'reviews',       label: lang === 'kg' ? 'Пикирлер' : 'Отзывы' },
+              { id: 'stats',         label: t.stats     || 'Статистика' },
+              { id: 'settings',      label: t.settings  || 'Настройки'  },
             ].map(tab => (
               <div key={tab.id} onClick={() => setAdminScreen(tab.id)}
                 style={{
@@ -11263,7 +15578,7 @@ export default function App() {
           {/* Admin screen content */}
           <div style={{ padding: '32px 48px', minHeight: 'calc(100vh - 120px)' }}>
             {(() => {
-              const VALID_ADMIN_TABS = ['orders', 'products', 'reviews', 'stats', 'settings'];
+              const VALID_ADMIN_TABS = ['orders', 'products', 'clients', 'notifications', 'reviews', 'stats', 'settings'];
               const safeAdminScreen = VALID_ADMIN_TABS.includes(adminScreen) ? adminScreen : 'orders';
               return (
                 <ErrorBoundary key={safeAdminScreen}>
@@ -11271,23 +15586,28 @@ export default function App() {
                     <AdminOrdersScreen
                       allOrders={orders}
                       onRefresh={handleRefresh}
-                      onStatusChange={async (id, st) => {
-                        setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o));
-                        try { await api.updateOrder(id, { status: st }); } catch (e) { console.warn(e); }
-                      }}
+                      onStatusChange={handleStatusChange}
                       onDelete={async (id) => {
                         setOrders(p => p.filter(o => o.id !== id));
                         try { await api.deleteOrder(id); } catch (e) { console.warn(e); }
                       }}
                       onSendWhatsApp={handleSendWhatsApp}
-                      onConfirmMBankPayment={(id) => {
+                      onConfirmOnlinePayment={(id) => {
                         setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o));
                         showToast(t.orderPlaced);
+                        const ord = orders.find(o => o.id === id);
+                        if (ord) notifyPaymentConfirmed(id, 'Онлайн оплата');
                       }}
                     />
                   )}
                   {safeAdminScreen === 'products' && (
                     <AdminProductsScreen products={products} setProducts={setProducts} showToast={showToast} />
+                  )}
+                  {safeAdminScreen === 'clients' && (
+                    <AdminClientsScreen clients={registeredUsers} orders={orders} showToast={showToast} />
+                  )}
+                  {safeAdminScreen === 'notifications' && (
+                    <AdminNotificationsScreen products={products} clients={registeredUsers} showToast={showToast} lang={lang} />
                   )}
                   {safeAdminScreen === 'reviews' && (
                     <AdminReviewsScreen reviews={reviews} setReviews={setReviews} showToast={showToast} />
@@ -11317,7 +15637,7 @@ export default function App() {
                   'bonus' from older Swift) doesn't blank every render branch
                   and leave the user stuck on a white screen. */}
               {(() => {
-                const VALID_ADMIN_TABS = ["orders", "products", "reviews", "stats", "settings"];
+                const VALID_ADMIN_TABS = ["orders", "products", "clients", "reviews", "stats", "settings"];
                 const safeAdminScreen = VALID_ADMIN_TABS.includes(adminScreen) ? adminScreen : "orders";
                 // Per-tab ErrorBoundary — if any admin screen throws during
                 // render (undefined prop, missing field on a fresh PB record,
@@ -11328,8 +15648,10 @@ export default function App() {
                 // tabs always remounts a fresh boundary, clearing prior errors.
                 return (
                   <ErrorBoundary key={safeAdminScreen}>
-                    {safeAdminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onRefresh={handleRefresh} onStatusChange={async (id, st) => { setOrders(p => p.map(o => o.id === id ? { ...o, status: st } : o)); try { await api.updateOrder(id, { status: st }); } catch (e) { console.warn("Status update error:", e); } }} onDelete={async (id) => { setOrders(p => p.filter(o => o.id !== id)); try { await api.deleteOrder(id); } catch (e) { console.warn("Delete order error:", e); } }} onSendWhatsApp={handleSendWhatsApp} onConfirmMBankPayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast(t.orderPlaced); }} />}
+                    {safeAdminScreen === "orders" && <AdminOrdersScreen allOrders={orders} onRefresh={handleRefresh} onStatusChange={handleStatusChange} onDelete={async (id) => { setOrders(p => p.filter(o => o.id !== id)); try { await api.deleteOrder(id); } catch (e) { console.warn("Delete order error:", e); } }} onSendWhatsApp={handleSendWhatsApp} onConfirmOnlinePayment={(id) => { setOrders(p => p.map(o => o.id === id ? { ...o, paymentStatus: 'paid' } : o)); showToast(t.orderPlaced); const ord2 = orders.find(o => o.id === id); if (ord2) notifyPaymentConfirmed(id, 'Онлайн оплата'); }} />}
                     {safeAdminScreen === "products" && <AdminProductsScreen products={products} setProducts={setProducts} showToast={showToast} />}
+                    {safeAdminScreen === "clients" && <AdminClientsScreen clients={registeredUsers} orders={orders} showToast={showToast} />}
+                    {safeAdminScreen === "notifications" && <AdminNotificationsScreen products={products} clients={registeredUsers} showToast={showToast} lang={lang} />}
                     {safeAdminScreen === "reviews" && <AdminReviewsScreen reviews={reviews} setReviews={setReviews} showToast={showToast} />}
                     {safeAdminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />}
                     {safeAdminScreen === "settings" && <AdminSettingsScreen banners={banners} setBanners={setBanners} products={products} settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
@@ -11357,7 +15679,7 @@ export default function App() {
                     aria-hidden={screen !== 'catalog'}
                     inert={screen !== 'catalog' ? '' : undefined}
                   >
-                    <CatalogScreen products={products} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} setIsDetailOpen={setIsDetailOpen} />
+                    <CatalogScreen products={products} settings={settings} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} setIsDetailOpen={setIsDetailOpen} reviews={reviews} />
                   </div>
                   <div
                     style={{ display: screen === 'cart' ? 'block' : 'none' }}
@@ -11379,141 +15701,27 @@ export default function App() {
                     aria-hidden={screen !== 'profile'}
                     inert={screen !== 'profile' ? '' : undefined}
                   >
-                    <ProfileScreen user={user} onLogout={handleLogout} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} />
+                    <ProfileScreen user={user} onLogout={handleLogout} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); window.location.hash = 'admin'; setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} onOpenNotifications={() => setShowNotifSheet(true)} unreadNotifCount={clientNotifications.filter(n => { const phone = user?.phone; if (!phone) return false; if (n.targetPhone && n.targetPhone !== phone) return false; const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : []; return !readBy.includes(phone); }).length} />
                   </div>
                 </>
               )}
             </MotionScreen>
           )}
         </div>
-        {/* Floating checkout bar — rendered into document.body via portal so
-            no ancestor transform / will-change / filter can ever capture
-            its `position: fixed` containing block. Always resolves against
-            the viewport, never moves with scroll. */}
+        {/* ── DRAGGABLE FLOATING CART PILL ──────────────────────────
+             Proper component so hooks run stably. Portal → document.body. */}
         {createPortal(
         <AnimatePresence>
-          {/* Show ONLY on shopping context (catalog or cart) when items exist.
-              Hidden on profile / orders / admin / login — single contextual CTA. */}
-          {!isAdmin && !isDetailOpen && cartCount > 0 && screen === "catalog" && (() => {
-            // RU plural: 1 товар / 2-4 товара / 5+ товаров. KG keeps singular form.
-            const ruPlural = (n) => {
-              const m100 = n % 100;
-              if (m100 >= 11 && m100 <= 14) return 'товаров';
-              const m10 = n % 10;
-              if (m10 === 1) return 'товар';
-              if (m10 >= 2 && m10 <= 4) return 'товара';
-              return 'товаров';
-            };
-            const itemsWord = lang === 'kg' ? 'товар' : ruPlural(cartCount);
-            // Label adapts to context: navigate vs. submit. On cart screen
-            // tapping the bar dispatches `cart:checkout` which CartScreen
-            // listens for and runs onOrder with current form state.
-            const onCart = screen === 'cart';
-            const ctaLabel = onCart
-              ? (lang === 'kg' ? 'Заказ берүү' : 'Оформить заказ')
-              : (lang === 'kg' ? 'Заказга өтүү' : 'Перейти к оформлению');
-            const handleTap = () => {
-              haptic('medium');
-              if (onCart) {
-                window.dispatchEvent(new CustomEvent('cart:checkout'));
-              } else {
-                setScreen('cart');
-              }
-            };
-
-            return (
-              <motion.div
-                key="floating-cart-cta"
-                // Entry: slide up + fade + slight scale. Exit: reverse, smooth.
-                initial={{ y: 80, opacity: 0, scale: 0.96 }}
-                animate={{ y: 0, opacity: 1, scale: 1 }}
-                exit={{ y: 80, opacity: 0, scale: 0.96 }}
-                transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.85 }}
-                style={{ position: "fixed", bottom: "calc(env(safe-area-inset-bottom) + 6px)", left: 16, right: 16, zIndex: 100, pointerEvents: "none" }}
-              >
-                <motion.button
-                  onClick={handleTap}
-                  // Press: slight shrink + stronger shadow.
-                  whileTap={{
-                    scale: 0.97,
-                    boxShadow: "0 6px 22px rgba(0,0,0,0.20)",
-                  }}
-                  // Bounce on every cartTotal change + soft idle breathing
-                  // (opacity 1 ↔ 0.96 over 3.6s, infinite, easeInOut).
-                  key={`cta-${cartTotal}`}
-                  initial={{ scale: 0.985 }}
-                  animate={{ scale: 1, opacity: [1, 0.96, 1] }}
-                  transition={{
-                    scale: { type: 'spring', stiffness: 520, damping: 22 },
-                    opacity: { duration: 3.6, repeat: Infinity, ease: 'easeInOut' },
-                  }}
-                  style={{
-                    width: "100%",
-                    background: "linear-gradient(180deg, #1f1f22 0%, #111111 100%)",
-                    borderRadius: 18,
-                    padding: "12px 16px",
-                    border: "0.5px solid rgba(255,255,255,0.08)",
-                    display: "flex", alignItems: "center", gap: 12,
-                    pointerEvents: "all",
-                    boxSizing: "border-box",
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-                    cursor: "pointer",
-                  }}
-                >
-                  {/* Cart icon — circle on left */}
-                  <div style={{
-                    width: 36, height: 36, borderRadius: "50%",
-                    background: "rgba(255,255,255,0.10)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#fff", flexShrink: 0,
-                    border: "0.5px solid rgba(255,255,255,0.06)",
-                  }}>
-                    {React.cloneElement(IC.cart, { style: { width: 18, height: 18 } })}
-                  </div>
-
-                  {/* Stacked label: CTA + count·total */}
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-start" }}>
-                    <span style={{
-                      color: "#fff", fontSize: 15, fontWeight: 600, letterSpacing: -0.2,
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%",
-                    }}>
-                      {ctaLabel}
-                    </span>
-                    {/* Sub-line — small pulse on cartTotal change; price counts
-                        smoothly between old and new total via AnimatedSum. */}
-                    <motion.span
-                      key={`count-${cartCount}`}
-                      initial={{ scale: 0.92, opacity: 0.6 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: 'spring', stiffness: 480, damping: 22 }}
-                      style={{
-                        color: "rgba(255,255,255,0.62)",
-                        fontSize: 12, fontWeight: 500,
-                        fontVariantNumeric: "tabular-nums",
-                        letterSpacing: -0.05,
-                        transformOrigin: 'left center',
-                      }}
-                    >
-                      {cartCount} {itemsWord} · <AnimatedSum value={cartTotal} duration={0.55} />
-                    </motion.span>
-                  </div>
-
-                  {/* Right chevron — minimal, no red */}
-                  <div style={{
-                    width: 32, height: 32, borderRadius: "50%",
-                    background: "rgba(255,255,255,0.10)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    color: "#fff", flexShrink: 0,
-                    border: "0.5px solid rgba(255,255,255,0.06)",
-                  }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 6 15 12 9 18"/>
-                    </svg>
-                  </div>
-                </motion.button>
-              </motion.div>
-            );
-          })()}
+          {!isAdmin && !isDetailOpen && cartCount > 0 && screen === "catalog" && (
+            <FloatingCartPill
+              key="floating-cart-pill"
+              cartCount={cartCount}
+              cartTotal={cartTotal}
+              lang={lang}
+              screen={screen}
+              onGoToCart={() => setScreen('cart')}
+            />
+          )}
         </AnimatePresence>,
         document.body
         )}
@@ -11527,19 +15735,33 @@ export default function App() {
           ? (<GlassNavBar items={ADMIN_NAV} active={adminScreen} onSelect={setAdminScreen} />)
           : (!isNative && <GlassNavBar items={USER_NAV} active={screen} onSelect={setScreen} />)}
         {showAdminLogin && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div style={{ background: "#fff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: "#111", marginBottom: 16, textAlign: "center" }}>{t.adminPanel}</div>
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowAdminLogin(false)}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
               <div style={{ marginBottom: 10 }}>
-                <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 15, outline: "none", boxSizing: "border-box" }} autoFocus />
+                <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
               </div>
-              <div style={{ position: "relative", marginBottom: 12 }}>
-                <input type="password" autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 15, outline: "none", boxSizing: "border-box" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} />
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+                <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93", fontSize: 11, fontWeight: 600, letterSpacing: 0.2 }}>
+                  {adminShowPass ? (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  ) : (
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
               </div>
-              {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center" }}>{adminLoginErr}</div>}
+              {/* Remember me checkbox */}
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer", padding: "4px 0", WebkitTapHighlightColor: "transparent" }} onClick={() => setAdminRemember(v => !v)}>
+                <div style={{ width: 22, height: 22, borderRadius: 7, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
+                  {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <span style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>{t.remember_me}</span>
+              </label>
+              {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Отмена</button>
-                <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1 }}>{adminLoginLoading ? '…' : 'OK'}</button>
+                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#333" }}>{t.cancel}</button>
+                <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
               </div>
             </div>
           </div>
@@ -11548,22 +15770,135 @@ export default function App() {
       )}
       {/* ── DESKTOP ADMIN LOGIN MODAL — rendered at root level so it works on desktop too ── */}
       {showAdminLogin && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-          <div style={{ background: "#fff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 340 }}>
-            <div style={{ fontSize: 17, fontWeight: 800, color: "#111", marginBottom: 16, textAlign: "center" }}>{t.adminPanel}</div>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowAdminLogin(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
             <div style={{ marginBottom: 10 }}>
-              <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 15, outline: "none", boxSizing: "border-box" }} autoFocus />
+              <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
             </div>
-            <div style={{ position: "relative", marginBottom: 12 }}>
-              <input type="password" autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 15, outline: "none", boxSizing: "border-box" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} />
+            <div style={{ position: "relative", marginBottom: 8 }}>
+              <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+              <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93" }}>
+                {adminShowPass ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                )}
+              </button>
             </div>
-            {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center" }}>{adminLoginErr}</div>}
+            {/* Remember me checkbox */}
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer", padding: "4px 0", WebkitTapHighlightColor: "transparent" }} onClick={() => setAdminRemember(v => !v)}>
+              <div style={{ width: 22, height: 22, borderRadius: 7, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
+                {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+              </div>
+              <span style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>{t.remember_me}</span>
+            </label>
+            {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f5f5f5", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Отмена</button>
-              <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "12px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1 }}>{adminLoginLoading ? '…' : 'OK'}</button>
+              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#333" }}>{t.cancel}</button>
+              <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
             </div>
           </div>
         </div>
+      )}
+      {/* ── CLIENT NOTIFICATIONS SHEET ── */}
+      {showNotifSheet && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 99998 }} onClick={() => setShowNotifSheet(false)}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }} />
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: "absolute", bottom: 0, left: 0, right: 0,
+              background: "#fff", borderRadius: "24px 24px 0 0",
+              maxHeight: "80vh", overflowY: "auto",
+              paddingBottom: "max(20px, env(safe-area-inset-bottom, 20px))",
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+              animation: "slideUp 0.3s ease-out",
+            }}
+          >
+            {/* Handle */}
+            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: "#E0E0E0" }} />
+            </div>
+            {/* Header */}
+            <div style={{ padding: "8px 20px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {React.cloneElement(IC.bell, { style: { width: 20, height: 20, color: T.accent } })}
+                <span style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{t.notifications}</span>
+              </div>
+              <div onClick={() => setShowNotifSheet(false)} style={{ width: 28, height: 28, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                <span style={{ fontSize: 16, color: T.textMuted, lineHeight: 1 }}>×</span>
+              </div>
+            </div>
+            {/* Notifications list */}
+            <div style={{ padding: "0 16px" }}>
+              {clientNotifications.filter(n => !n.targetPhone || n.targetPhone === user?.phone).length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: T.textMuted }}>
+                  {React.cloneElement(IC.bell, { style: { width: 40, height: 40, color: T.textMuted, opacity: 0.2, margin: "0 auto 12px", display: "block" } })}
+                  <div style={{ fontSize: 14 }}>{t.notifEmpty}</div>
+                </div>
+              ) : (
+                clientNotifications
+                  .filter(n => !n.targetPhone || n.targetPhone === user?.phone)
+                  .map(n => {
+                    const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : [];
+                    const isRead = user?.phone ? readBy.includes(user.phone) : false;
+                    const linkedProduct = n.productId ? products.find(p => p.id === n.productId) : null;
+                    const date = new Date(n.created);
+                    const now = new Date();
+                    const diffH = Math.floor((now - date) / 3600000);
+                    const timeStr = diffH < 1 ? (lang === 'kg' ? 'Жаңы эле' : 'Только что') : diffH < 24 ? `${diffH} ${lang === 'kg' ? 'саат мурун' : 'ч назад'}` : `${date.getDate()}.${(date.getMonth()+1).toString().padStart(2,'0')}`;
+
+                    return (
+                      <div key={n.id}
+                        onClick={async () => {
+                          if (!isRead && user?.phone) {
+                            api.markNotificationRead(n.id, user.phone).catch(() => {});
+                            setClientNotifications(prev => prev.map(x => x.id === n.id ? { ...x, readBy: JSON.stringify([...readBy, user.phone]) } : x));
+                          }
+                          if (linkedProduct) {
+                            setShowNotifSheet(false);
+                            // Navigate to product — set screen to catalog and trigger product detail
+                          }
+                        }}
+                        style={{
+                          padding: "14px 16px", borderRadius: 16, marginBottom: 8, cursor: "pointer",
+                          background: isRead ? "#FAFAFA" : "#F0F7FF",
+                          border: isRead ? "1px solid #F0F0F0" : "1px solid #D0E4FF",
+                          transition: "all 0.2s",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                              {!isRead && <div style={{ width: 6, height: 6, borderRadius: 3, background: "#007AFF", flexShrink: 0 }} />}
+                              {n.promoTag && (
+                                <span style={{
+                                  padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, color: "#fff",
+                                  background: n.promoTag === 'sale' ? '#FF3B30' : n.promoTag === 'new' ? '#34C759' : n.promoTag === 'limited' ? '#FF9500' : '#007AFF',
+                                }}>
+                                  {n.promoTag === 'sale' ? (lang === 'kg' ? 'ЧЕГИРМЕ' : 'СКИДКА') : n.promoTag === 'new' ? (lang === 'kg' ? 'ЖАҢЫ' : 'НОВИНКА') : n.promoTag === 'limited' ? (lang === 'kg' ? 'ЧЕКТЕЛГЕН' : 'ОГРАНИЧЕНО') : (lang === 'kg' ? 'БЕЛЕК' : 'ПОДАРОК')}
+                                </span>
+                              )}
+                              <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{n.title}</span>
+                            </div>
+                            <div style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.4, marginBottom: linkedProduct ? 8 : 0 }}>{n.body}</div>
+                            {linkedProduct && (
+                              <div style={{ padding: "4px 8px", borderRadius: 6, background: "rgba(0,122,255,0.08)", fontSize: 11, color: "#007AFF", fontWeight: 600, display: "inline-block" }}>
+                                🔗 {linkedProduct.brand} — {linkedProduct.name}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0, marginTop: 2 }}>{timeStr}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </LangContext.Provider>
   );

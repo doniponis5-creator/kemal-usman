@@ -1,4 +1,0 @@
-module KeyboardPlugin {
-umbrella header "/Users/doniyorabduganiev/kemal-usman/parfum-shop/node_modules/@capacitor/keyboard/ios/Sources/KeyboardPlugin/include/KeyboardPlugin.h"
-export *
-}

@@ -212,10 +212,27 @@ code {
   background: var(--code-bg);
 }
 
+/* Product card tap feedback — pure CSS, no JS overhead on 500+ cards */
+.product-card-wrap {
+  transition: transform 0.14s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+.product-card-wrap:active {
+  transform: scale(0.97);
+}
+
 /* Skeleton shimmer animation */
 @keyframes shimmer {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+/* Instagram story ring pulse glow */
+@keyframes storyRingPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 96, 64, 0); }
+  50% { box-shadow: 0 0 0 5px rgba(245, 96, 64, 0.15); }
 }
 
 /* Login glassmorphism inputs — placeholder oq */

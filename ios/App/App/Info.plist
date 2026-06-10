@@ -36,12 +36,7 @@
         <false/>
         <key>NSExceptionDomains</key>
         <dict>
-            <key>145.223.100.16</key>
-            <dict>
-                <key>NSExceptionAllowsInsecureHTTPLoads</key>
-                <true/>
-            </dict>
-            <key>api.kemalusman.kg</key>
+            <key>kemalusman.kg</key>
             <dict>
                 <key>NSExceptionAllowsInsecureHTTPLoads</key>
                 <false/>
@@ -58,17 +53,13 @@
         </dict>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>Для загрузки фотографий товаров</string>
+    <string>This app uses the camera to take product photos for your listings.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Для записи аудио аромата</string>
+    <string>This app uses the microphone to record audio notes about fragrances.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Для выбора фотографий товаров из галереи</string>
+    <string>This app accesses your photo library to select product images.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Для определения адреса доставки</string>
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>audio</string>
-    </array>
+    <string>This app uses your location to determine the delivery address.</string>
     <key>UILaunchStoryboardName</key>
     <string>LaunchScreen</string>
     <key>UIMainStoryboardFile</key>
@@ -77,6 +68,8 @@
     <array>
         <string>UIInterfaceOrientationPortrait</string>
     </array>
+    <key>UIRequiresFullScreen</key>
+    <true/>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <true/>
 </dict>

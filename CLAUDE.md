@@ -149,3 +149,59 @@ Before every `npm run build && scp`:
 - [ ] Did I change any component props? → All usages updated?
 - [ ] Mobile layout (< 1024px) still works unchanged?
 - [ ] Did I test admin login flow on desktop?
+### 11. TASK UNDERSTANDING CONFIRMATION
+
+Before making major changes, ask 3-5 short verification questions to confirm understanding of:
+- expected behavior
+- affected screens/components
+- data flow
+- mobile UX expectations
+- possible edge cases
+
+If requirements are unclear:
+- ask first
+- do not assume
+- do not implement speculative behavior
+
+After understanding the task, briefly explain:
+1. what will be changed
+2. which files/functions are affected
+3. possible risks
+4. implementation plan
+
+
+### 16. MODERN BEST-PRACTICE DECISION MAKING
+
+Do not blindly follow the first obvious implementation.
+
+When solving tasks:
+- evaluate modern best practices
+- compare possible approaches
+- prefer the most stable, scalable, and premium solution
+
+Priority order:
+1. user experience
+2. mobile smoothness
+3. maintainability
+4. performance
+5. visual quality
+6. development simplicity
+
+If a significantly better modern approach exists:
+- explain why it is better
+- recommend it before implementation
+
+Prefer:
+- modern iOS-quality UX
+- smooth animations
+- scalable architecture
+- production-grade solutions
+- premium visual polish
+
+Avoid:
+- outdated UI patterns
+- temporary hacks
+- low-quality quick fixes
+- visually cheap solutions
+
+Think like a senior product engineer building a premium mobile app in 2026.

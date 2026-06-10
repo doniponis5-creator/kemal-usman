@@ -30,35 +30,102 @@ onRecordBeforeCreateRequest((e) => {
   if (e.collection.name !== 'orders') return;
   $app.logger().info('orders.beforeCreate', 'phone', e.record.get('clientPhone'));
 
-  // Items must be a valid JSON array of { productId, variantId, qty }.
-  let items = e.record.get('items');
-  if (typeof items === 'string') { try { items = JSON.parse(items); } catch { items = []; } }
-  if (!Array.isArray(items) || items.length === 0) {
-    throw new BadRequestError('Items list is empty or malformed.');
+  // ── Parse items from the HTTP request body, NOT from e.record.get() ──
+  // PocketBase JSVM (goja) wraps JSON fields as proxy objects. Property
+  // access on proxied array elements silently returns undefined even though
+  // the data is present. Pulling the raw body via $apis.requestInfo() gives
+  // us a plain JS string we can JSON.parse ourselves — no proxy issues.
+  const info = $apis.requestInfo(e.httpContext);
+  let rawItems = (info.data || {}).items;
+  $app.logger().info('items_source', 'type', typeof rawItems,
+    'preview', String(typeof rawItems === 'string' ? rawItems : JSON.stringify(rawItems)).slice(0, 400));
+
+  let items;
+  if (typeof rawItems === 'string') {
+    // Double-stringified safety: parse once, check if still string, parse again.
+    try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; }
+    if (typeof rawItems === 'string') {
+      try { rawItems = JSON.parse(rawItems); } catch { rawItems = []; }
+    }
+    items = rawItems;
+  } else if (Array.isArray(rawItems)) {
+    // Already an array (PB SDK sent JSON object, not string).
+    // Force through JSON round-trip to shed any residual goja proxies.
+    try { items = JSON.parse(JSON.stringify(rawItems)); } catch { items = []; }
+  } else if (rawItems && typeof rawItems === 'object') {
+    // goja may present the array as an object with numeric keys.
+    try { items = JSON.parse(JSON.stringify(rawItems)); } catch { items = []; }
+    if (!Array.isArray(items)) {
+      // Convert {0: {...}, 1: {...}} → [{...}, {...}]
+      const arr = [];
+      for (let k = 0; rawItems[String(k)] !== undefined; k++) {
+        try { arr.push(JSON.parse(JSON.stringify(rawItems[String(k)]))); } catch { break; }
+      }
+      items = arr;
+    }
+  } else {
+    items = [];
   }
 
+  if (!Array.isArray(items) || items.length === 0) {
+    $app.logger().error('items_invalid', 'raw',
+      String(typeof rawItems === 'string' ? rawItems : JSON.stringify(rawItems)).slice(0, 500));
+    throw new BadRequestError('Items list is empty or malformed.');
+  }
   // Recompute the total from authoritative product prices.
   let serverTotal = 0;
-  for (const item of items) {
-    if (!item || !item.productId || !item.variantId || !item.qty) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    // Defensive: extract fields explicitly in case proxy lingers on elements.
+    const pId  = item.productId || item['productId'] || '';
+    const vId  = item.variantId || item['variantId'] || '';
+    const qNum = Number(item.qty || item['qty'] || 0);
+    $app.logger().info('item_check', 'index', String(i),
+      'productId', String(pId), 'variantId', String(vId), 'qty', String(qNum),
+      'keys', Object.keys(item).join(','));
+    if (!pId || !vId || !qNum) {
+      $app.logger().error('item_missing_field', 'index', String(i),
+        'item', JSON.stringify(item).slice(0, 200),
+        'pId', String(pId), 'vId', String(vId), 'qty', String(qNum));
       throw new BadRequestError('Item missing productId/variantId/qty.');
     }
-    if (item.qty < 1 || item.qty > 999) {
+    // Normalize the item for downstream use.
+    items[i] = { productId: String(pId), variantId: String(vId), qty: qNum,
+                 name: item.name || '', price: Number(item.price || 0) };
+    if (qNum < 1 || qNum > 999) {
       throw new BadRequestError('Quantity must be between 1 and 999.');
     }
     let product;
     try {
-      product = $app.dao().findRecordById('products', item.productId);
+      product = $app.dao().findRecordById('products', String(pId));
     } catch (err) {
-      throw new BadRequestError('Unknown product: ' + item.productId);
+      throw new BadRequestError('Unknown product: ' + pId);
     }
-    let variants = product.get('variants');
-    if (typeof variants === 'string') { try { variants = JSON.parse(variants); } catch { variants = []; } }
-    const v = (variants || []).find((x) => String(x.id) === String(item.variantId));
-    if (!v) throw new BadRequestError('Unknown variant: ' + item.variantId);
+    // PB JSVM returns JSON fields as Go JsonRaw (byte array), not parsed JS.
+    // Must convert to string first, then parse.
+    let rawV = product.get('variants');
+    let variants = [];
+    try {
+      const vStr = (typeof rawV === 'string') ? rawV : String(rawV);
+      variants = JSON.parse(vStr);
+    } catch (_) { variants = []; }
+    if (!Array.isArray(variants)) { variants = []; }
+    // Goja .find() is unreliable on JSON-parsed arrays — use manual loop
+    let v = null;
+    const vIdStr = String(vId);
+    for (let vi = 0; vi < variants.length; vi++) {
+      const candidate = variants[vi];
+      if (candidate && String(candidate.id) === vIdStr) { v = candidate; break; }
+    }
+    $app.logger().info('variant_lookup', 'vId', vIdStr, 'found', String(!!v),
+      'variants_count', String(variants.length),
+      'variant_ids', variants.map(function(x){ return String(x.id); }).join(','));
+    if (!v) throw new BadRequestError('Unknown variant: ' + vId);
     if (v.inStock === false) throw new BadRequestError('Variant out of stock: ' + v.label);
-    serverTotal += Number(v.price) * Number(item.qty);
+    serverTotal += Number(v.price) * qNum;
   }
+  // Write the fully-normalized plain JS items back so PB stores clean JSON.
+  e.record.set('items', items);
 
   // Pull max-discount-percent from settings.
   let useBonusPct = 30;
@@ -149,11 +216,11 @@ onRecordBeforeUpdateRequest((e) => {
     referrerBonus = Number(s.get('referralBonus') || 0);
   } catch (_) { /* defaults */ }
 
-  // NOTE: PocketBase schema uses snake_case: bonus_balance, bonus_history,
-  //       referral_code, referred_by. Always use these in get/set calls.
-  let balance = Number(client.get('bonus_balance') || 0);
+  // PocketBase schema uses camelCase: bonusBalance, bonusHistory,
+  // referralCode, referredBy — consistent with the frontend.
+  let balance = Number(client.get('bonusBalance') || 0);
   let history = [];
-  try { history = JSON.parse(client.get('bonus_history') || '[]'); } catch (_) { history = []; }
+  try { history = JSON.parse(client.get('bonusHistory') || '[]'); } catch (_) { history = []; }
   if (!Array.isArray(history)) history = [];
 
   // Is this the client's first delivery? (Excludes the order being delivered now.)
@@ -184,10 +251,10 @@ onRecordBeforeUpdateRequest((e) => {
   }
 
   // 3. Referral payout on first delivery — skip if already given at registration.
-  const usedRef = client.get('referred_by');
+  const usedRef = client.get('referredBy');
   const hasReferralInHistory = history.some(function(h) { return h && h.type === 'referral'; });
   if (isFirstDelivery && usedRef && !hasReferralInHistory) {
-    const ownCode = client.get('referral_code');
+    const ownCode = client.get('referralCode');
     if (ownCode && String(usedRef) === String(ownCode)) {
       $app.logger().info('referral: self-referral blocked', 'phone', phone);
     } else {
@@ -197,14 +264,14 @@ onRecordBeforeUpdateRequest((e) => {
       }
       if (referrerBonus > 0) {
         let referrer;
-        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referral_code = {:c}', { c: usedRef }); } catch (_) {}
+        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referralCode = {:c}', { c: usedRef }); } catch (_) {}
         if (referrer && referrer.id !== client.id) {
-          const refBal = Number(referrer.get('bonus_balance') || 0) + referrerBonus;
+          const refBal = Number(referrer.get('bonusBalance') || 0) + referrerBonus;
           let refHistory = [];
-          try { refHistory = JSON.parse(referrer.get('bonus_history') || '[]'); } catch (_) { refHistory = []; }
+          try { refHistory = JSON.parse(referrer.get('bonusHistory') || '[]'); } catch (_) { refHistory = []; }
           refHistory.push({ type: 'referral', amount: referrerBonus, label: 'Referral payout for ' + phone, date: new Date().toISOString() });
-          referrer.set('bonus_balance', refBal);
-          referrer.set('bonus_history', JSON.stringify(refHistory));
+          referrer.set('bonusBalance', refBal);
+          referrer.set('bonusHistory', JSON.stringify(refHistory));
           $app.dao().saveRecord(referrer);
           $app.logger().info('referral: payout credited', 'referrerId', referrer.id, 'amount', referrerBonus);
         }
@@ -212,8 +279,8 @@ onRecordBeforeUpdateRequest((e) => {
     }
   }
 
-  client.set('bonus_balance', balance);
-  client.set('bonus_history', JSON.stringify(history));
+  client.set('bonusBalance', balance);
+  client.set('bonusHistory', JSON.stringify(history));
   $app.dao().saveRecord(client);
 }, 'orders');
 

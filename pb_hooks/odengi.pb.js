@@ -1,350 +1,413 @@
 /// <reference path="../pb_data/types.d.ts" />
+// O!Деньги payment integration v4 — SECURITY HARDENED (2026-06-10)
 //
-// O!Деньги (dengi.kg) payment integration — PocketBase JSVM hooks.
+// Changes vs v3:
+//   1. Credentials come ONLY from environment variables — never hardcoded,
+//      never read from the publicly-readable `settings` collection:
+//        ODENGI_SID             — merchant SID
+//        ODENGI_PASSWORD        — merchant API password (ROTATE the old leaked one!)
+//        ODENGI_API_URL         — optional, default https://api.dengi.o.kg/api/json/json.php
+//        ODENGI_TEST_MODE       — optional, 0 or 1, default 0
+//        ODENGI_RESULT_BASE_URL — optional, default https://api.kemalusman.kg
+//      Set them in /etc/pocketbase/env (systemd EnvironmentFile) and restart PB.
+//   2. create-invoice / check-status / cancel now REQUIRE a valid PocketBase
+//      auth token, and the caller must own the order (clientPhone or client
+//      relation match) or be a PB admin/superuser.
+//   3. The result webhook ENFORCES the HMAC-MD5 signature — missing or wrong
+//      hash is rejected with 403 (previously it only logged a warning!).
+//   4. The webhook verifies amount (kopecks) and currency against the order
+//      before marking it paid.
 //
-// Hash formula: HMAC-MD5(json_body_without_hash, api_password)
-// JSON must have no spaces or line breaks.
-//
-// Endpoints:
-//   POST /api/custom/odengi/create-invoice
-//   POST /api/custom/odengi/check-status
-//   POST /api/custom/odengi/result  (webhook)
-//   POST /api/custom/odengi/cancel
+// NOTE: all code stays inside callbacks (Goja scoping fix from v3).
 
-const md5 = require(`${__hooks}/_lib/md5.js`);
-
-// ─── Config ──────────────────────────────────────────────────────────────────
-function getOdengiConfig() {
-  let sid = '5084412514';
-  let password = 'ER@L6H&KMGH@P9X';
-  let apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
-  let testMode = 0;
-  let resultBaseUrl = 'https://api.kemalusman.kg';
-
+// ═══ Create Invoice ═══
+routerAdd('POST', '/api/custom/odengi/create-invoice', function(c) {
   try {
-    const s = $app.dao().findRecordById('settings', 'main');
-    if (s.get('odengiSid'))      sid = String(s.get('odengiSid'));
-    if (s.get('odengiPassword')) password = String(s.get('odengiPassword'));
-    if (s.get('odengiApiUrl'))   apiUrl = String(s.get('odengiApiUrl'));
-    if (s.get('odengiTestMode') !== undefined) testMode = Number(s.get('odengiTestMode'));
-    if (s.get('odengiResultBaseUrl')) resultBaseUrl = String(s.get('odengiResultBaseUrl'));
-  } catch (_) { /* use defaults */ }
+    var md5 = require(__hooks + '/_lib/md5.js');
+    var info = $apis.requestInfo(c);
 
-  return { sid, password, apiUrl, testMode, resultBaseUrl };
-}
+    // ── Auth: must be a logged-in client or PB admin ──
+    var isAdmin = !!info.admin || (typeof info.hasSuperuserAuth === 'function' && info.hasSuperuserAuth());
+    var auth = info.authRecord;
+    if (!isAdmin && !auth) return c.json(401, { error: 'auth_required' });
 
-// ─── API caller ──────────────────────────────────────────────────────────────
-function callOdengiApi(cfg, cmd, data) {
-  const mktime = String(Math.floor(Date.now() / 1000));
+    var body = info.data || {};
+    var orderId = body.orderId;
+    if (!orderId) return c.json(400, { error: 'orderId is required' });
 
-  const bodyNoHash = {
-    cmd: cmd,
-    version: 1005,
-    sid: cfg.sid,
-    mktime: mktime,
-    lang: 'ru',
-    data: data
-  };
+    var order;
+    try { order = $app.dao().findRecordById('orders', String(orderId)); }
+    catch (e) { return c.json(404, { error: 'Order not found' }); }
 
-  // HMAC-MD5(json_without_hash, password) — per O!Деньги docs
-  const jsonStr = JSON.stringify(bodyNoHash);
-  const hash = md5.hmac(jsonStr, cfg.password);
-
-  const fullBody = JSON.parse(jsonStr);
-  fullBody.hash = hash;
-
-  $app.logger().info('odengi_api_call', 'cmd', cmd, 'mktime', mktime, 'hash', hash,
-    'url', cfg.apiUrl, 'body_preview', JSON.stringify(fullBody).slice(0, 300));
-
-  const res = $http.send({
-    url: cfg.apiUrl,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fullBody),
-    timeout: 30,
-  });
-
-  $app.logger().info('odengi_api_response', 'cmd', cmd, 'status', String(res.statusCode),
-    'body', String(res.raw).slice(0, 500));
-
-  var parsed;
-  try { parsed = JSON.parse(res.raw); } catch (e) {
-    throw new Error('O!Деньги API returned invalid JSON: ' + String(res.raw).slice(0, 200));
-  }
-
-  if (parsed.data && parsed.data.error) {
-    throw new Error('O!Деньги error ' + parsed.data.error + ': ' + (parsed.data.desc || 'unknown'));
-  }
-
-  return parsed;
-}
-
-// ─── Endpoint: Create Invoice ────────────────────────────────────────────────
-routerAdd('POST', '/api/custom/odengi/create-invoice', (c) => {
-  const body = $apis.requestInfo(c).data || {};
-  const orderId = body.orderId;
-
-  if (!orderId) {
-    return c.json(400, { error: 'orderId is required' });
-  }
-
-  var order;
-  try {
-    order = $app.dao().findRecordById('orders', orderId);
-  } catch (e) {
-    return c.json(404, { error: 'Order not found: ' + orderId });
-  }
-
-  const total = Number(order.get('total') || 0);
-  if (total <= 0) {
-    return c.json(400, { error: 'Order total must be > 0' });
-  }
-
-  const cfg = getOdengiConfig();
-  const amountKopecks = Math.round(total * 100);
-  const odengiOrderId = 'KU_' + orderId + '_' + Date.now();
-
-  // Parse items — handle Goja JsonRaw proxy
-  var rawItems = order.get('items');
-  var items = [];
-  try {
-    var iStr = (typeof rawItems === 'string') ? rawItems : String(rawItems);
-    items = JSON.parse(iStr);
-  } catch (_) { items = []; }
-
-  var goodsList = [];
-  for (var i = 0; i < items.length; i++) {
-    var item = items[i];
-    goodsList.push({
-      id: String(item.productId || i),
-      name: String(item.name || 'Parfum').slice(0, 100),
-      amount: String(Math.round(Number(item.price || 0) * 100)),
-      count: String(item.qty || 1),
-      image: ''
-    });
-  }
-
-  var data = {
-    order_id: odengiOrderId,
-    desc: 'Kemal Usman - Заказ #' + orderId,
-    amount: amountKopecks,
-    currency: 'KGS',
-    test: cfg.testMode,
-    long_term: 0,
-    user_to: null,
-    date_life: null,
-    date_start_push: null,
-    count_push: null,
-    send_push: 1,
-    send_sms: 1,
-    success_url: null,
-    fail_url: null,
-    fields_other: JSON.stringify({ pb_order_id: orderId }),
-    transtype: null,
-    result_url: cfg.resultBaseUrl + '/api/custom/odengi/result'
-  };
-
-  if (goodsList.length > 0) {
-    data.goods = goodsList;
-  }
-
-  var apiResponse;
-  try {
-    apiResponse = callOdengiApi(cfg, 'createInvoice', data);
-  } catch (e) {
-    $app.logger().error('odengi_create_invoice_failed', 'error', String(e), 'orderId', orderId);
-    return c.json(502, { error: 'O!Деньги API error: ' + String(e) });
-  }
-
-  var invoiceData = apiResponse.data || {};
-
-  // Store invoice info on the order
-  order.set('odengiInvoiceId', invoiceData.invoice_id || '');
-  order.set('odengiOrderId', odengiOrderId);
-  order.set('paymentMethod', 'odengi');
-  order.set('paymentStatus', 'odengi_pending');
-  try {
-    $app.dao().saveRecord(order);
-  } catch (e) {
-    $app.logger().error('odengi_save_order_failed', 'error', String(e));
-  }
-
-  return c.json(200, {
-    invoiceId: invoiceData.invoice_id || '',
-    paylink_url: invoiceData.paylink_url || '',
-    qr_url: invoiceData.qr || invoiceData.emv_qr || '',
-    link_app: invoiceData.link_app || '',
-    site_pay: invoiceData.site_pay || '',
-    qr_data: invoiceData.emv_qr_data || '',
-  });
-});
-
-// ─── Endpoint: Check Status ──────────────────────────────────────────────────
-routerAdd('POST', '/api/custom/odengi/check-status', (c) => {
-  const body = $apis.requestInfo(c).data || {};
-  const orderId = body.orderId;
-  if (!orderId) return c.json(400, { error: 'orderId required' });
-
-  var order;
-  try { order = $app.dao().findRecordById('orders', orderId); }
-  catch (_) { return c.json(404, { error: 'Order not found' }); }
-
-  var invoiceId = order.get('odengiInvoiceId');
-  var odengiOrderId = order.get('odengiOrderId');
-  if (!invoiceId && !odengiOrderId) {
-    return c.json(400, { error: 'No O!Деньги invoice found for this order' });
-  }
-
-  const cfg = getOdengiConfig();
-
-  var apiResponse;
-  try {
-    apiResponse = callOdengiApi(cfg, 'statusPayment', {
-      invoice_id: invoiceId || '',
-      order_id: odengiOrderId || '',
-      mark: null
-    });
-  } catch (e) {
-    return c.json(502, { error: 'Status check failed: ' + String(e) });
-  }
-
-  var data = apiResponse.data || {};
-
-  var paymentApproved = false;
-  if (data.status === 'approved') {
-    paymentApproved = true;
-  } else if (data.payments && Array.isArray(data.payments)) {
-    for (var i = 0; i < data.payments.length; i++) {
-      if (data.payments[i].status === 'approved') {
-        paymentApproved = true;
-        break;
+    // ── Ownership: caller must own this order ──
+    if (!isAdmin) {
+      var ownPhone = '', ownsByPhone = false, ownsByRel = false;
+      try { ownPhone = String(auth.get('phone') || ''); } catch (_) {}
+      try { ownsByPhone = !!ownPhone && String(order.get('clientPhone') || '') === ownPhone; } catch (_) {}
+      try { ownsByRel = String(order.get('client') || '') === String(auth.id); } catch (_) {}
+      if (!ownsByPhone && !ownsByRel) {
+        $app.logger().warn('odengi_create_forbidden', 'caller', String(auth.id), 'order', String(orderId));
+        return c.json(403, { error: 'forbidden' });
       }
     }
-  }
 
-  if (paymentApproved && order.get('paymentStatus') !== 'paid') {
-    order.set('paymentStatus', 'paid');
-    order.set('status', 'confirmed');
-    try { $app.dao().saveRecord(order); } catch (_) {}
-    $app.logger().info('odengi_payment_confirmed_via_poll', 'orderId', orderId);
-  }
-
-  return c.json(200, {
-    status: data.status || (data.payments ? 'has_payments' : 'unknown'),
-    payments: data.payments || [],
-    paymentApproved: paymentApproved,
-    orderStatus: order.get('status'),
-    paymentStatus: order.get('paymentStatus'),
-  });
-});
-
-// ─── Endpoint: Result Webhook ────────────────────────────────────────────────
-// POST /api/custom/odengi/result
-// Webhook hash verification: HMAC-MD5(trans_id:::status_pay:::site_id:::order_id:::amount:::currency:::mktime:::test, password)
-routerAdd('POST', '/api/custom/odengi/result', (c) => {
-  const info = $apis.requestInfo(c);
-  const data = info.data || {};
-
-  $app.logger().info('odengi_webhook_received',
-    'trans_id', String(data.trans_id || ''),
-    'status_pay', String(data.status_pay || ''),
-    'order_id', String(data.order_id || ''),
-    'amount', String(data.amount || ''),
-    'mobile', String(data.mobile || ''));
-
-  // Verify webhook hash
-  const cfg = getOdengiConfig();
-  var webhookStr = String(data.trans_id || '') + ':::' +
-    String(data.status_pay || '') + ':::' +
-    String(data.site_id || '') + ':::' +
-    String(data.order_id || '') + ':::' +
-    String(data.amount || '') + ':::' +
-    String(data.currency || '') + ':::' +
-    String(data.mktime || '') + ':::' +
-    String(data.test || '');
-  var expectedHash = md5.hmac(webhookStr, cfg.password);
-
-  if (data.hash && data.hash !== expectedHash) {
-    $app.logger().warn('odengi_webhook_hash_mismatch',
-      'received', String(data.hash), 'expected', expectedHash);
-    // Don't reject — log warning but process anyway
-  }
-
-  // Extract PocketBase order ID
-  var pbOrderId = '';
-
-  var fieldsOther = data.fields_other;
-  if (typeof fieldsOther === 'string') {
-    try { fieldsOther = JSON.parse(fieldsOther); } catch (_) {}
-  }
-  if (fieldsOther && fieldsOther.pb_order_id) {
-    pbOrderId = fieldsOther.pb_order_id;
-  }
-
-  if (!pbOrderId && data.order_id) {
-    var parts = String(data.order_id).split('_');
-    if (parts.length >= 2 && parts[0] === 'KU') {
-      pbOrderId = parts[1];
+    // ── Guard: do not re-invoice an already-paid order ──
+    if (String(order.get('paymentStatus') || '') === 'paid') {
+      return c.json(400, { error: 'order_already_paid' });
     }
-  }
 
-  if (!pbOrderId) {
-    $app.logger().error('odengi_webhook_no_order_id', 'raw', JSON.stringify(data).slice(0, 500));
-    return c.json(200, { ok: false, error: 'Cannot determine order ID' });
-  }
+    var total = Number(order.get('total') || 0);
+    if (total <= 0) return c.json(400, { error: 'Order total must be > 0' });
 
-  var order;
-  try { order = $app.dao().findRecordById('orders', pbOrderId); }
-  catch (_) {
-    $app.logger().error('odengi_webhook_order_not_found', 'pbOrderId', pbOrderId);
-    return c.json(200, { ok: false, error: 'Order not found' });
-  }
+    // ── Config: environment ONLY ──
+    var sid = $os.getenv('ODENGI_SID') || '';
+    var password = $os.getenv('ODENGI_PASSWORD') || '';
+    var apiUrl = $os.getenv('ODENGI_API_URL') || 'https://api.dengi.o.kg/api/json/json.php';
+    var testMode = Number($os.getenv('ODENGI_TEST_MODE') || 0);
+    var resultBaseUrl = $os.getenv('ODENGI_RESULT_BASE_URL') || 'https://api.kemalusman.kg';
+    if (!sid || !password) {
+      $app.logger().error('odengi_not_configured', 'hint', 'set ODENGI_SID and ODENGI_PASSWORD in /etc/pocketbase/env and restart pocketbase');
+      return c.json(503, { error: 'payment_not_configured' });
+    }
 
-  var statusPay = Number(data.status_pay || 0);
+    var amountKopecks = Math.round(total * 100);
+    var odengiOrderId = 'KU_' + orderId + '_' + Date.now();
 
-  if (statusPay === 3) {
-    order.set('paymentStatus', 'paid');
-    order.set('status', 'confirmed');
-    order.set('odengiTransId', String(data.trans_id || ''));
-    order.set('odengiPayerPhone', String(data.mobile || ''));
+    // Parse items
+    var rawItems = order.get('items');
+    var items = [];
+    try { items = JSON.parse((typeof rawItems === 'string') ? rawItems : String(rawItems)); } catch(_) {}
+
+    var goodsList = [];
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      goodsList.push({
+        id: String(item.productId || i),
+        name: String(item.name || 'Parfum').slice(0, 100),
+        amount: String(Math.round(Number(item.price || 0) * 100)),
+        count: String(item.qty || 1),
+        image: ''
+      });
+    }
+
+    var data = {
+      order_id: odengiOrderId,
+      desc: 'Kemal Usman - Заказ #' + orderId,
+      amount: amountKopecks,
+      currency: 'KGS',
+      test: testMode,
+      long_term: 0, user_to: null, date_life: null,
+      date_start_push: null, count_push: null,
+      send_push: 1, send_sms: 1,
+      success_url: null, fail_url: null,
+      fields_other: JSON.stringify({ pb_order_id: orderId }),
+      transtype: null,
+      result_url: resultBaseUrl + '/api/custom/odengi/result'
+    };
+    if (goodsList.length > 0) data.goods = goodsList;
+
+    // Build request
+    var mktime = String(Math.floor(Date.now() / 1000));
+    var bodyNoHash = { cmd: 'createInvoice', version: 1005, sid: sid, mktime: mktime, lang: 'ru', data: data };
+    var jsonStr = JSON.stringify(bodyNoHash);
+    var hash = md5.hmac(jsonStr, password);
+    var fullBody = JSON.parse(jsonStr);
+    fullBody.hash = hash;
+
+    var res = $http.send({
+      url: apiUrl, method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullBody), timeout: 30
+    });
+
+    var parsed;
+    try { parsed = JSON.parse(res.raw); } catch(e) {
+      return c.json(502, { error: 'Invalid API response' });
+    }
+    if (parsed.data && parsed.data.error) {
+      return c.json(502, { error: 'OD error ' + parsed.data.error + ': ' + (parsed.data.desc || '') });
+    }
+
+    var inv = parsed.data || {};
+
+    // Save to order
     try {
+      order.set('odengiInvoiceId', String(inv.invoice_id || ''));
+      order.set('odengiOrderId', odengiOrderId);
+      order.set('paymentMethod', 'odengi');
+      order.set('paymentStatus', 'odengi_pending');
       $app.dao().saveRecord(order);
-      $app.logger().info('odengi_payment_success', 'orderId', pbOrderId, 'trans_id', String(data.trans_id));
-    } catch (e) {
-      $app.logger().error('odengi_webhook_save_failed', 'error', String(e));
+    } catch(e) {
+      $app.logger().error('odengi_save_fail', 'err', String(e));
     }
-  } else if (statusPay === 2) {
-    order.set('paymentStatus', 'odengi_canceled');
-    try { $app.dao().saveRecord(order); } catch (_) {}
-    $app.logger().info('odengi_payment_canceled', 'orderId', pbOrderId);
-  }
 
-  return c.json(200, { ok: true });
+    return c.json(200, {
+      invoiceId: String(inv.invoice_id || ''),
+      paylink_url: String(inv.paylink_url || ''),
+      qr_url: String(inv.qr || inv.emv_qr || ''),
+      link_app: String(inv.link_app || ''),
+      site_pay: String(inv.site_pay || ''),
+      qr_data: String(inv.emv_qr_data || '')
+    });
+
+  } catch (e) {
+    $app.logger().error('odengi_create_err', 'err', String(e));
+    return c.json(500, { error: 'Internal error' });
+  }
 });
 
-// ─── Endpoint: Cancel Invoice ────────────────────────────────────────────────
-routerAdd('POST', '/api/custom/odengi/cancel', (c) => {
-  const body = $apis.requestInfo(c).data || {};
-  const orderId = body.orderId;
-  if (!orderId) return c.json(400, { error: 'orderId required' });
-
-  var order;
-  try { order = $app.dao().findRecordById('orders', orderId); }
-  catch (_) { return c.json(404, { error: 'Order not found' }); }
-
-  var invoiceId = order.get('odengiInvoiceId');
-  if (!invoiceId) return c.json(400, { error: 'No invoice to cancel' });
-
-  const cfg = getOdengiConfig();
-
+// ═══ Check Status ═══
+routerAdd('POST', '/api/custom/odengi/check-status', function(c) {
   try {
-    callOdengiApi(cfg, 'invoiceCancel', { invoice_id: invoiceId });
+    var md5 = require(__hooks + '/_lib/md5.js');
+    var info = $apis.requestInfo(c);
+
+    // ── Auth ──
+    var isAdmin = !!info.admin || (typeof info.hasSuperuserAuth === 'function' && info.hasSuperuserAuth());
+    var auth = info.authRecord;
+    if (!isAdmin && !auth) return c.json(401, { error: 'auth_required' });
+
+    var body = info.data || {};
+    var orderId = body.orderId;
+    if (!orderId) return c.json(400, { error: 'orderId required' });
+
+    var order;
+    try { order = $app.dao().findRecordById('orders', String(orderId)); }
+    catch (_) { return c.json(404, { error: 'Order not found' }); }
+
+    // ── Ownership ──
+    if (!isAdmin) {
+      var ownPhone = '', ownsByPhone = false, ownsByRel = false;
+      try { ownPhone = String(auth.get('phone') || ''); } catch (_) {}
+      try { ownsByPhone = !!ownPhone && String(order.get('clientPhone') || '') === ownPhone; } catch (_) {}
+      try { ownsByRel = String(order.get('client') || '') === String(auth.id); } catch (_) {}
+      if (!ownsByPhone && !ownsByRel) return c.json(403, { error: 'forbidden' });
+    }
+
+    var invoiceId = order.get('odengiInvoiceId');
+    var oid = order.get('odengiOrderId');
+    if (!invoiceId && !oid) return c.json(400, { error: 'No invoice for this order' });
+
+    // ── Config: environment ONLY ──
+    var sid = $os.getenv('ODENGI_SID') || '';
+    var password = $os.getenv('ODENGI_PASSWORD') || '';
+    var apiUrl = $os.getenv('ODENGI_API_URL') || 'https://api.dengi.o.kg/api/json/json.php';
+    if (!sid || !password) {
+      $app.logger().error('odengi_not_configured', 'endpoint', 'check-status');
+      return c.json(503, { error: 'payment_not_configured' });
+    }
+
+    // API call
+    var mktime = String(Math.floor(Date.now() / 1000));
+    var bodyNoHash = { cmd: 'statusPayment', version: 1005, sid: sid, mktime: mktime, lang: 'ru',
+      data: { invoice_id: invoiceId || '', order_id: oid || '', mark: null }
+    };
+    var jsonStr = JSON.stringify(bodyNoHash);
+    var hash = md5.hmac(jsonStr, password);
+    var fullBody = JSON.parse(jsonStr);
+    fullBody.hash = hash;
+
+    var res = $http.send({
+      url: apiUrl, method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullBody), timeout: 30
+    });
+
+    var parsed;
+    try { parsed = JSON.parse(res.raw); } catch(e) {
+      return c.json(502, { error: 'Invalid API response' });
+    }
+    if (parsed.data && parsed.data.error) {
+      return c.json(502, { error: 'Status error: ' + (parsed.data.desc || '') });
+    }
+
+    var sd = parsed.data || {};
+    var approved = false;
+    if (sd.status === 'approved') approved = true;
+    else if (sd.payments && Array.isArray(sd.payments)) {
+      for (var i = 0; i < sd.payments.length; i++) {
+        if (sd.payments[i].status === 'approved') { approved = true; break; }
+      }
+    }
+
+    if (approved && order.get('paymentStatus') !== 'paid') {
+      try {
+        order.set('paymentStatus', 'paid');
+        order.set('status', 'confirmed');
+        $app.dao().saveRecord(order);
+      } catch(_) {}
+    }
+
+    return c.json(200, {
+      status: sd.status || 'unknown',
+      payments: sd.payments || [],
+      paymentApproved: approved,
+      orderStatus: String(order.get('status') || ''),
+      paymentStatus: String(order.get('paymentStatus') || '')
+    });
   } catch (e) {
-    return c.json(502, { error: 'Cancel failed: ' + String(e) });
+    $app.logger().error('odengi_status_err', 'err', String(e));
+    return c.json(500, { error: 'Internal error' });
   }
+});
 
-  order.set('paymentStatus', 'odengi_canceled');
-  try { $app.dao().saveRecord(order); } catch (_) {}
+// ═══ Result Webhook (called by O!Деньги servers) ═══
+routerAdd('POST', '/api/custom/odengi/result', function(c) {
+  try {
+    var md5 = require(__hooks + '/_lib/md5.js');
+    var data = ($apis.requestInfo(c).data) || {};
 
-  return c.json(200, { ok: true });
+    $app.logger().info('odengi_webhook',
+      'trans_id', String(data.trans_id || ''),
+      'status_pay', String(data.status_pay || ''),
+      'order_id', String(data.order_id || ''));
+
+    // ── Config: environment ONLY ──
+    var password = $os.getenv('ODENGI_PASSWORD') || '';
+    if (!password) {
+      $app.logger().error('odengi_not_configured', 'endpoint', 'result-webhook');
+      return c.json(503, { ok: false, error: 'payment_not_configured' });
+    }
+
+    // ── SECURITY: signature is now MANDATORY. Missing/invalid hash = reject. ──
+    var whStr = String(data.trans_id||'') + ':::' + String(data.status_pay||'') + ':::' +
+      String(data.site_id||'') + ':::' + String(data.order_id||'') + ':::' +
+      String(data.amount||'') + ':::' + String(data.currency||'') + ':::' +
+      String(data.mktime||'') + ':::' + String(data.test||'');
+    var expectedHash = md5.hmac(whStr, password);
+    if (!data.hash || String(data.hash) !== expectedHash) {
+      $app.logger().error('odengi_wh_rejected_bad_hash',
+        'got', String(data.hash || '(none)'),
+        'trans_id', String(data.trans_id || ''),
+        'order_id', String(data.order_id || ''));
+      return c.json(403, { ok: false, error: 'bad_signature' });
+    }
+
+    // Find PB order ID
+    var pbOrderId = '';
+    var fo = data.fields_other;
+    if (typeof fo === 'string') { try { fo = JSON.parse(fo); } catch(_){} }
+    if (fo && fo.pb_order_id) pbOrderId = fo.pb_order_id;
+    if (!pbOrderId && data.order_id) {
+      var p = String(data.order_id).split('_');
+      if (p.length >= 2 && p[0] === 'KU') pbOrderId = p[1];
+    }
+    if (!pbOrderId) return c.json(200, { ok: false, error: 'No order ID' });
+
+    var order;
+    try { order = $app.dao().findRecordById('orders', pbOrderId); }
+    catch (_) { return c.json(200, { ok: false, error: 'Order not found' }); }
+
+    var sp = Number(data.status_pay || 0);
+    if (sp === 3) {
+      // ── SECURITY: verify amount (kopecks) and currency before marking paid ──
+      var expectedAmount = Math.round(Number(order.get('total') || 0) * 100);
+      var gotAmount = Math.round(Number(data.amount || 0));
+      if (gotAmount !== expectedAmount) {
+        $app.logger().error('odengi_wh_amount_mismatch',
+          'order', pbOrderId, 'expected', String(expectedAmount), 'got', String(gotAmount));
+        return c.json(200, { ok: false, error: 'amount_mismatch' });
+      }
+      if (data.currency && String(data.currency) !== 'KGS') {
+        $app.logger().error('odengi_wh_currency_mismatch',
+          'order', pbOrderId, 'got', String(data.currency));
+        return c.json(200, { ok: false, error: 'currency_mismatch' });
+      }
+
+      try {
+        order.set('paymentStatus', 'paid');
+        order.set('status', 'confirmed');
+        order.set('odengiTransId', String(data.trans_id || ''));
+        order.set('odengiPayerPhone', String(data.mobile || ''));
+        $app.dao().saveRecord(order);
+        $app.logger().info('odengi_wh_paid', 'order', pbOrderId, 'trans_id', String(data.trans_id || ''));
+      } catch(e) { $app.logger().error('odengi_wh_save', 'err', String(e)); }
+    } else if (sp === 2) {
+      try {
+        // Never downgrade a paid order to canceled.
+        if (String(order.get('paymentStatus') || '') !== 'paid') {
+          order.set('paymentStatus', 'odengi_canceled');
+          $app.dao().saveRecord(order);
+        }
+      } catch(_) {}
+    }
+
+    return c.json(200, { ok: true });
+  } catch (e) {
+    $app.logger().error('odengi_wh_err', 'err', String(e));
+    return c.json(200, { ok: false });
+  }
+});
+
+// ═══ Cancel Invoice ═══
+routerAdd('POST', '/api/custom/odengi/cancel', function(c) {
+  try {
+    var md5 = require(__hooks + '/_lib/md5.js');
+    var info = $apis.requestInfo(c);
+
+    // ── Auth ──
+    var isAdmin = !!info.admin || (typeof info.hasSuperuserAuth === 'function' && info.hasSuperuserAuth());
+    var auth = info.authRecord;
+    if (!isAdmin && !auth) return c.json(401, { error: 'auth_required' });
+
+    var body = info.data || {};
+    var orderId = body.orderId;
+    if (!orderId) return c.json(400, { error: 'orderId required' });
+
+    var order;
+    try { order = $app.dao().findRecordById('orders', String(orderId)); }
+    catch (_) { return c.json(404, { error: 'Order not found' }); }
+
+    // ── Ownership ──
+    if (!isAdmin) {
+      var ownPhone = '', ownsByPhone = false, ownsByRel = false;
+      try { ownPhone = String(auth.get('phone') || ''); } catch (_) {}
+      try { ownsByPhone = !!ownPhone && String(order.get('clientPhone') || '') === ownPhone; } catch (_) {}
+      try { ownsByRel = String(order.get('client') || '') === String(auth.id); } catch (_) {}
+      if (!ownsByPhone && !ownsByRel) return c.json(403, { error: 'forbidden' });
+    }
+
+    // ── Guard: never cancel a paid order's invoice via this endpoint ──
+    if (String(order.get('paymentStatus') || '') === 'paid') {
+      return c.json(400, { error: 'order_already_paid' });
+    }
+
+    var invoiceId = order.get('odengiInvoiceId');
+    if (!invoiceId) return c.json(400, { error: 'No invoice to cancel' });
+
+    // ── Config: environment ONLY ──
+    var sid = $os.getenv('ODENGI_SID') || '';
+    var password = $os.getenv('ODENGI_PASSWORD') || '';
+    var apiUrl = $os.getenv('ODENGI_API_URL') || 'https://api.dengi.o.kg/api/json/json.php';
+    if (!sid || !password) {
+      $app.logger().error('odengi_not_configured', 'endpoint', 'cancel');
+      return c.json(503, { error: 'payment_not_configured' });
+    }
+
+    // API call
+    var mktime = String(Math.floor(Date.now() / 1000));
+    var bodyNoHash = { cmd: 'invoiceCancel', version: 1005, sid: sid, mktime: mktime, lang: 'ru',
+      data: { invoice_id: invoiceId }
+    };
+    var jsonStr = JSON.stringify(bodyNoHash);
+    var hash = md5.hmac(jsonStr, password);
+    var fullBody = JSON.parse(jsonStr);
+    fullBody.hash = hash;
+
+    var res = $http.send({
+      url: apiUrl, method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fullBody), timeout: 30
+    });
+
+    try {
+      order.set('paymentStatus', 'odengi_canceled');
+      $app.dao().saveRecord(order);
+    } catch(_) {}
+
+    return c.json(200, { ok: true });
+  } catch (e) {
+    $app.logger().error('odengi_cancel_err', 'err', String(e));
+    return c.json(500, { error: 'Cancel error' });
+  }
 });

@@ -1,124 +1,35 @@
-// Pure-JS MD5 + HMAC-MD5 implementation for PocketBase JSVM (no Node crypto available).
+// MD5 + HMAC-MD5 for PocketBase JSVM using $security.md5 + $os.cmd(python3)
 // Usage:
-//   const md5 = require(`${__hooks}/_lib/md5.js`);
-//   md5("string")          → plain MD5 hex
-//   md5.hmac(msg, key)     → HMAC-MD5 hex
+//   var md5 = require(__hooks + '/_lib/md5.js');
+//   md5('hello')         → MD5 hex (uses $security.md5)
+//   md5.hmac(msg, key)   → HMAC-MD5 hex (uses python3 hmac)
 
 function md5(inputStr) {
-  return hexMD5(utf8Encode(String(inputStr)));
+  return $security.md5(String(inputStr));
 }
 
-function safeAdd(x, y) { var lsw = (x & 0xffff) + (y & 0xffff); return (((x >> 16) + (y >> 16) + (lsw >> 16)) << 16) | (lsw & 0xffff); }
-function bitRotateLeft(num, cnt) { return (num << cnt) | (num >>> (32 - cnt)); }
-function md5cmn(q, a, b, x, s, t) { return safeAdd(bitRotateLeft(safeAdd(safeAdd(a, q), safeAdd(x, t)), s), b); }
-function md5ff(a, b, c, d, x, s, t) { return md5cmn((b & c) | (~b & d), a, b, x, s, t); }
-function md5gg(a, b, c, d, x, s, t) { return md5cmn((b & d) | (c & ~d), a, b, x, s, t); }
-function md5hh(a, b, c, d, x, s, t) { return md5cmn(b ^ c ^ d, a, b, x, s, t); }
-function md5ii(a, b, c, d, x, s, t) { return md5cmn(c ^ (b | ~d), a, b, x, s, t); }
-
-function binlMD5(x, len) {
-  x[len >> 5] |= 0x80 << (len % 32);
-  x[((len + 64) >>> 9 << 4) + 14] = len;
-  var i, olda, oldb, oldc, oldd, a = 1732584193, b = -271733879, c = -1732584194, d = 271733878;
-  for (i = 0; i < x.length; i += 16) {
-    olda = a; oldb = b; oldc = c; oldd = d;
-    a = md5ff(a, b, c, d, x[i],      7, -680876936);  d = md5ff(d, a, b, c, x[i+1],  12, -389564586);
-    c = md5ff(c, d, a, b, x[i+2],  17,  606105819);  b = md5ff(b, c, d, a, x[i+3],  22, -1044525330);
-    a = md5ff(a, b, c, d, x[i+4],   7, -176418897);  d = md5ff(d, a, b, c, x[i+5],  12, 1200080426);
-    c = md5ff(c, d, a, b, x[i+6],  17, -1473231341); b = md5ff(b, c, d, a, x[i+7],  22, -45705983);
-    a = md5ff(a, b, c, d, x[i+8],   7, 1770035416);  d = md5ff(d, a, b, c, x[i+9],  12, -1958414417);
-    c = md5ff(c, d, a, b, x[i+10], 17, -42063);      b = md5ff(b, c, d, a, x[i+11], 22, -1990404162);
-    a = md5ff(a, b, c, d, x[i+12],  7, 1804603682);  d = md5ff(d, a, b, c, x[i+13], 12, -40341101);
-    c = md5ff(c, d, a, b, x[i+14], 17, -1502002290); b = md5ff(b, c, d, a, x[i+15], 22, 1236535329);
-    a = md5gg(a, b, c, d, x[i+1],   5, -165796510);  d = md5gg(d, a, b, c, x[i+6],   9, -1069501632);
-    c = md5gg(c, d, a, b, x[i+11], 14,  643717713);  b = md5gg(b, c, d, a, x[i],    20, -373897302);
-    a = md5gg(a, b, c, d, x[i+5],   5, -701558691);  d = md5gg(d, a, b, c, x[i+10],  9,  38016083);
-    c = md5gg(c, d, a, b, x[i+15], 14, -660478335);  b = md5gg(b, c, d, a, x[i+4],  20, -405537848);
-    a = md5gg(a, b, c, d, x[i+9],   5,  568446438);  d = md5gg(d, a, b, c, x[i+14],  9, -1019803690);
-    c = md5gg(c, d, a, b, x[i+3],  14, -187363961);  b = md5gg(b, c, d, a, x[i+8],  20, 1163531501);
-    a = md5gg(a, b, c, d, x[i+13],  5, -1444681467); d = md5gg(d, a, b, c, x[i+2],   9, -51403784);
-    c = md5gg(c, d, a, b, x[i+7],  14, 1735328473);  b = md5gg(b, c, d, a, x[i+12], 20, -1926607734);
-    a = md5hh(a, b, c, d, x[i+5],   4, -378558);     d = md5hh(d, a, b, c, x[i+8],  11, -2022574463);
-    c = md5hh(c, d, a, b, x[i+11], 16, 1839030562);  b = md5hh(b, c, d, a, x[i+14], 23, -35309556);
-    a = md5hh(a, b, c, d, x[i+1],   4, -1530992060); d = md5hh(d, a, b, c, x[i+4],  11, 1272893353);
-    c = md5hh(c, d, a, b, x[i+7],  16, -155497632);  b = md5hh(b, c, d, a, x[i+10], 23, -1094730640);
-    a = md5hh(a, b, c, d, x[i+13],  4,  681279174);  d = md5hh(d, a, b, c, x[i],    11, -358537222);
-    c = md5hh(c, d, a, b, x[i+3],  16, -722521979);  b = md5hh(b, c, d, a, x[i+6],  23,  76029189);
-    a = md5hh(a, b, c, d, x[i+9],   4, -640364487);  d = md5hh(d, a, b, c, x[i+12], 11, -421815835);
-    c = md5hh(c, d, a, b, x[i+11], 16,  530742520);  b = md5hh(b, c, d, a, x[i+2],  23, -995338651);
-    a = md5ii(a, b, c, d, x[i],     6, -198630844);  d = md5ii(d, a, b, c, x[i+7],  10, 1126891415);
-    c = md5ii(c, d, a, b, x[i+14], 15, -1416354905); b = md5ii(b, c, d, a, x[i+5],  21, -57434055);
-    a = md5ii(a, b, c, d, x[i+12],  6, 1700485571);  d = md5ii(d, a, b, c, x[i+3],  10, -1894986606);
-    c = md5ii(c, d, a, b, x[i+11], 15, -1051523);    b = md5ii(b, c, d, a, x[i+2],  21, -2054922799);
-    a = md5ii(a, b, c, d, x[i+9],   6, 1873313359);  d = md5ii(d, a, b, c, x[i],    10, -30611744);
-    c = md5ii(c, d, a, b, x[i+7],  15, -1560198380); b = md5ii(b, c, d, a, x[i+14], 21, 1309151649);
-    a = md5ii(a, b, c, d, x[i+5],   6, -145523070);  d = md5ii(d, a, b, c, x[i+12], 10, -1120210379);
-    c = md5ii(c, d, a, b, x[i+3],  15,  718787259);  b = md5ii(b, c, d, a, x[i+10], 21, -343485551);
-    a = safeAdd(a, olda); b = safeAdd(b, oldb); c = safeAdd(c, oldc); d = safeAdd(d, oldd);
-  }
-  return [a, b, c, d];
-}
-
-function rstrMD5(s) {
-  var x = [], i;
-  for (i = 0; i < s.length * 8; i += 8) { x[i >> 5] |= (s.charCodeAt(i / 8) & 0xff) << (i % 32); }
-  var bin = binlMD5(x, s.length * 8);
-  var r = '';
-  for (i = 0; i < bin.length * 32; i += 8) { r += String.fromCharCode((bin[i >> 5] >>> (i % 32)) & 0xff); }
-  return r;
-}
-
-function rstr2hex(s) {
-  var hex = '0123456789abcdef', r = '', i;
-  for (i = 0; i < s.length; i++) { var c = s.charCodeAt(i); r += hex.charAt((c >>> 4) & 0x0f) + hex.charAt(c & 0x0f); }
-  return r;
-}
-
-function hexMD5(s) {
-  return rstr2hex(rstrMD5(s));
-}
-
-function utf8Encode(s) {
-  s = s.replace(/\r\n/g, '\n');
-  var r = '';
-  for (var n = 0; n < s.length; n++) {
-    var c = s.charCodeAt(n);
-    if (c < 128) { r += String.fromCharCode(c); }
-    else if (c > 127 && c < 2048) { r += String.fromCharCode((c >> 6) | 192); r += String.fromCharCode((c & 63) | 128); }
-    else { r += String.fromCharCode((c >> 12) | 224); r += String.fromCharCode(((c >> 6) & 63) | 128); r += String.fromCharCode((c & 63) | 128); }
-  }
-  return r;
-}
-
-// ─── HMAC-MD5 ────────────────────────────────────────────────────────────────
-// HMAC(K, m) = H((K' ⊕ opad) ∥ H((K' ⊕ ipad) ∥ m))
-// Block size for MD5 = 64 bytes
 function hmacMD5(message, key) {
-  var msg = utf8Encode(String(message));
-  var k = utf8Encode(String(key));
-
-  // If key is longer than block size, hash it first
-  if (k.length > 64) {
-    k = rstrMD5(k);
+  var tmpFile = '/tmp/hmac_' + Date.now() + '.txt';
+  var pyCode = "import hmac,hashlib,sys;open('" + tmpFile + "','w').write(hmac.new(sys.argv[1].encode('utf-8'),sys.argv[2].encode('utf-8'),hashlib.md5).hexdigest())";
+  
+  try {
+    var cmd = $os.cmd('python3', '-c', pyCode, String(key), String(message));
+    cmd.run();
+    
+    var resultBytes = $os.readFile(tmpFile);
+    var result = '';
+    for (var i = 0; i < resultBytes.length; i++) {
+      result += String.fromCharCode(resultBytes[i]);
+    }
+    
+    // Cleanup
+    try { $os.remove(tmpFile); } catch(_) {}
+    
+    return result.trim();
+  } catch(e) {
+    $app.logger().error('hmac_md5_error', 'error', String(e));
+    throw new Error('HMAC-MD5 failed: ' + String(e));
   }
-
-  // Pad key to 64 bytes
-  while (k.length < 64) {
-    k += '\x00';
-  }
-
-  // Create inner and outer padding
-  var ipad = '', opad = '';
-  for (var i = 0; i < 64; i++) {
-    ipad += String.fromCharCode(k.charCodeAt(i) ^ 0x36);
-    opad += String.fromCharCode(k.charCodeAt(i) ^ 0x5c);
-  }
-
-  // HMAC = H(opad + H(ipad + message))
-  var innerHash = rstrMD5(ipad + msg);
-  var outerHash = rstrMD5(opad + innerHash);
-
-  return rstr2hex(outerHash);
 }
 
 md5.hmac = hmacMD5;

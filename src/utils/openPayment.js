@@ -1,4 +1,4 @@
-// Robust deep-link opener for payment apps (M-Bank, O!Bank, etc.)
+// Robust deep-link opener for payment apps (M-Bank, etc.)
 //
 // Why this exists:
 //   `window.location.href = 'mbank://...'` works in mobile browsers but is
@@ -43,17 +43,6 @@ async function tryOpenUrl(url) {
 // Known URL scheme variants per provider. M-Bank Kyrgyzstan currently uses
 // `mbank://transfer?...`; we keep extras as resilience against version churn.
 const SCHEMES = {
-  mbank: [
-    'mbank://transfer?phone={phone}&amount={amount}&comment={comment}',
-    'mbankkg://transfer?phone={phone}&amount={amount}&comment={comment}',
-    'mbank://qr?phone={phone}&amount={amount}',
-    'mbank://',
-  ],
-  obank: [
-    'obank://transfer?phone={phone}&amount={amount}&comment={comment}',
-    'optimabank://transfer?phone={phone}&amount={amount}',
-    'obank://',
-  ],
 };
 
 function fillTemplate(tpl, { phone, amount, comment }) {

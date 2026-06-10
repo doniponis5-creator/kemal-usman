@@ -1,0 +1,4 @@
+"NSCameraUsageDescription" = "Для загрузки фотографий товаров";
+"NSMicrophoneUsageDescription" = "Для записи аудио заметок об ароматах";
+"NSPhotoLibraryUsageDescription" = "Для выбора фотографий товаров из галереи";
+"NSLocationWhenInUseUsageDescription" = "Для определения адреса доставки";
