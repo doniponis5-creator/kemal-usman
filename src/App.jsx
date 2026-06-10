@@ -12,6 +12,7 @@ import {
   verifyOtp,
   adminLogin as adminLoginApi,
   logout as authLogout,
+  deleteAccount as authDeleteAccount,
 } from "./api/auth";
 // WhatsApp notifications now go through the server-side PB hook
 // (pb_hooks/whatsapp.pb.js). The green-api INSTANCE + TOKEN no longer
@@ -4009,7 +4010,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
   );
 }
 // ─── PROFILE SCREEN ────────────────────────────────────────────────────────────
-function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin, goToOrders, onOpenNotifications, unreadNotifCount = 0 }) {
+function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin, goToOrders, onOpenNotifications, unreadNotifCount = 0 }) {
   const { t, lang, setLang } = useLang();
   const [tab, setTab] = useState("bonus");
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -4364,6 +4365,17 @@ function ProfileScreen({ user, onLogout, bonusBalance, bonusHistory, referralCod
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Akkaunt o'chirish — App Store Guideline 5.1.1(v) majburiy talabi ── */}
+      {user && !user.isGuest && onDeleteAccount && (
+        <div style={{ padding: "8px 16px 28px" }}>
+          <button
+            onClick={onDeleteAccount}
+            style={{ width: "100%", background: "transparent", border: "none", color: T.danger, fontSize: 13, fontWeight: 600, padding: "12px 0", cursor: "pointer", fontFamily: "inherit" }}
+          >{t.deleteAccount}</button>
+          <div style={{ textAlign: "center", color: T.textMuted, fontSize: 11, marginTop: 2 }}>{t.deleteAccountHint}</div>
+        </div>
+      )}
 
       {showAdminModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -6521,6 +6533,22 @@ export default function App() {
     setReferralCode('');
   };
 
+  // App Store 5.1.1(v): in-app account deletion. Server hook
+  // /api/custom/account/delete soft-deletes + PII purge (pb_hooks/main.pb.js).
+  const handleDeleteAccount = async () => {
+    const msg = (TRANSLATIONS[lang] || TRANSLATIONS.ru).deleteAccountConfirm;
+    if (!window.confirm(msg)) return;
+    try {
+      await authDeleteAccount();
+      showToast((TRANSLATIONS[lang] || TRANSLATIONS.ru).accountDeleted);
+    } catch (e) {
+      captureError(e, { where: 'deleteAccount' });
+      showToast('Ошибка. Попробуйте позже.');
+      return;
+    }
+    handleLogout();
+  };
+
   const addToCart = (productId, variantId) => {
     // PRO: native haptic feedback on iOS / Android (no-op on web).
     haptic('light');
@@ -7195,7 +7223,7 @@ export default function App() {
                     aria-hidden={screen !== 'profile'}
                     inert={screen !== 'profile' ? '' : undefined}
                   >
-                    <ProfileScreen user={user} onLogout={handleLogout} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); window.location.hash = 'admin'; setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} onOpenNotifications={() => setShowNotifSheet(true)} unreadNotifCount={clientNotifications.filter(n => { const phone = user?.phone; if (!phone) return false; if (n.targetPhone && n.targetPhone !== phone) return false; const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : []; return !readBy.includes(phone); }).length} />
+                    <ProfileScreen user={user} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); window.location.hash = 'admin'; setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} onOpenNotifications={() => setShowNotifSheet(true)} unreadNotifCount={clientNotifications.filter(n => { const phone = user?.phone; if (!phone) return false; if (n.targetPhone && n.targetPhone !== phone) return false; const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : []; return !readBy.includes(phone); }).length} />
                   </div>
                 </>
               )}
