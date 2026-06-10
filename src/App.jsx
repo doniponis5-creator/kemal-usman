@@ -14546,10 +14546,13 @@ export default function App() {
   // This lets you run admin in one tab and client store in another.
   const [isAdmin, setIsAdmin] = useState(() => {
     try {
-      // If URL has #admin and PB token is valid → admin
+      // If URL has #admin and the token is a REAL ADMIN token → admin.
+      // SECURITY: a regular client token must never unlock the admin UI.
       if (window.location.hash === '#admin') {
-        if (pb.authStore.isValid) return true;
-        // Token expired — clean hash
+        const isAdminToken = pb.authStore.isValid &&
+          (pb.authStore.isAdmin || pb.authStore.model?.collectionName === '_superusers');
+        if (isAdminToken) return true;
+        // Not an admin token — clean hash
         window.location.hash = '';
       }
       // Legacy: migrate from localStorage-only (old sessions)
@@ -14607,7 +14610,9 @@ export default function App() {
     try { const s = localStorage.getItem('parfum_admin_saved'); if (s) { const d = JSON.parse(s); return d.email || ""; } } catch {} return "";
   });
   const [adminLoginPass, setAdminLoginPass] = useState(() => {
-    try { const s = localStorage.getItem('parfum_admin_saved'); if (s) { const d = JSON.parse(s); return d.pass || ""; } } catch {} return "";
+    // SECURITY: admin password is no longer persisted (it used to sit in
+  // localStorage in plaintext). Only the email is remembered.
+  return "";
   });
   const [adminLoginErr, setAdminLoginErr] = useState("");
   const [adminLoginLoading, setAdminLoginLoading] = useState(false);
@@ -14622,7 +14627,8 @@ export default function App() {
       await adminLoginApi(adminLoginEmail, adminLoginPass);
       // Save or clear credentials based on checkbox
       if (adminRemember) {
-        localStorage.setItem('parfum_admin_saved', JSON.stringify({ email: adminLoginEmail, pass: adminLoginPass }));
+        // SECURITY: remember the email only — never store the password.
+        localStorage.setItem('parfum_admin_saved', JSON.stringify({ email: adminLoginEmail }));
       } else {
         localStorage.removeItem('parfum_admin_saved');
       }
@@ -14718,7 +14724,10 @@ export default function App() {
     if (!pb.authStore.isValid) return;
     // Only activate admin if this tab has #admin in URL
     const hashAdmin = window.location.hash === '#admin';
-    if (hashAdmin && (pb.authStore.isAdmin || localStorage.getItem('parfum_is_admin') === 'true')) {
+    // SECURITY: only a verified admin token re-activates admin mode.
+    // (The old localStorage 'parfum_is_admin' fallback let any logged-in
+    // client open the admin UI by setting one flag — removed.)
+    if (hashAdmin && (pb.authStore.isAdmin || pb.authStore.model?.collectionName === '_superusers')) {
       setIsAdmin(true);
       localStorage.setItem('parfum_is_admin', 'true');
       setAdminScreen("orders");

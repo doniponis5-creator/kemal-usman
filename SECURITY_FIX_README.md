@@ -111,3 +111,38 @@ log'dagi `got`/`want` qiymatlarini menga ko'rsating — formulani moslab beraman
   avvalgidek — frontend'ning boshqa joylariga ta'sir yo'q.
 - Git tarixida eski parollar qolgan — repo'ni public qilishdan OLDIN
   `git filter-repo` bilan tozalash yoki yangi repo ochish kerak (P1 vazifa).
+
+---
+
+## ✚ QO'SHIMCHA (P1/P2 bosqichi — 2026-06-10, ikkinchi sessiya)
+
+Yana tuzatildi:
+| # | Muammo | Tuzatish |
+|---|---|---|
+| 8 | otp.pb.js snake_case maydonlarga yozardi (sxema camelCase) — referral tizimi ishlamasdi | otp.pb.js v2: camelCase; bonuslar endi faqat birinchi yetkazib berishda (main.pb.js dizayni) |
+| 9 | OTP kodi Math.random() bilan | $security crypto-random (fallback bilan) |
+| 10 | #admin hash + oddiy mijoz tokeni bilan admin panel ochilardi | Faqat haqiqiy admin token; localStorage bypass o'chirildi |
+| 11 | Admin paroli localStorage'da ochiq saqlanardi ("eslab qolish") | Endi faqat email eslab qolinadi |
+| 12 | ios/build (3,487 fayl) git'da, venv 363MB, .bak/.broken/debug fayllar | Tozalandi; bir martalik skriptlar tools/ ga; puppeteer devDeps |
+| 13 | WhatsApp endpoint'da rate-limit yo'q | 20 ta xabar / 10 daqiqa / foydalanuvchi |
+| 14 | Audio fade setInterval to'planishi | _fadeTimer cleanup |
+
+**5-QADAMdan keyin yana bitta buyruq:**
+```bash
+npm run pb:fix-bonus-fields
+```
+Bu `clients` sxemasini tekshiradi, kerak bo'lsa camelCase maydonlarni qo'shadi
+va eski snake_case maydonlardagi ma'lumotni ko'chiradi (hech narsa o'chirilmaydi).
+
+**6-QADAMdan keyin — avtomatik acceptance test:**
+```bash
+./scripts/test-security.sh
+```
+Hammasi ✅ bo'lsa — P0 acceptance rasman o'tdi.
+
+**Demo akkaunt:** App Store approval'dan keyin `.env.production`ga
+`VITE_DEMO_ACCOUNT=off` qo'shib qayta build qilsangiz, demo kirish o'chadi.
+
+**Sentry (P1.5):** sentry.io'da bepul akkaunt oching → React loyiha yarating →
+DSN'ni `.env.production`dagi `VITE_SENTRY_DSN=` ga qo'ying → qayta build.
+Kod allaqachon tayyor, faqat DSN yetishmayapti.

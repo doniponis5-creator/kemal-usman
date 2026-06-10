@@ -59,6 +59,8 @@ if (_audioEl) {
   });
 }
 
+let _fadeTimer = null;
+
 export function audioPlayerPlay(src) {
   if (!_audioEl || !src) return;
   if (_state.currentSrc !== src) {
@@ -81,11 +83,13 @@ export function audioPlayerPlay(src) {
       _notify();
     });
   }
+  // Clear any previous fade so rapid play() calls can't stack intervals.
+  if (_fadeTimer) { clearInterval(_fadeTimer); _fadeTimer = null; }
   let v = 0;
-  const fade = setInterval(() => {
+  _fadeTimer = setInterval(() => {
     v = Math.min(1, v + 0.1);
     try { _audioEl.volume = v; } catch {}
-    if (v >= 1) clearInterval(fade);
+    if (v >= 1) { clearInterval(_fadeTimer); _fadeTimer = null; }
   }, 20);
 }
 

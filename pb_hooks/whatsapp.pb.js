@@ -60,6 +60,25 @@ routerAdd('POST', '/api/custom/whatsapp/send', (c) => {
     return c.json(400, { error: 'chatId_and_message_required' });
   }
 
+  // ── Rate limit: max 20 sends / 10 minutes per caller (P2.3) ──
+  // Uses PB's in-memory app store; resets on restart, which is fine for
+  // abuse throttling. Admins are exempt.
+  if (!isAdmin) {
+    try {
+      var rlKey = 'wa_rl:' + (info.authRecord ? info.authRecord.id : ('order:' + orderId));
+      var now = Date.now();
+      var entry = $app.store().get(rlKey) || { start: now, count: 0 };
+      if (typeof entry === 'string') { try { entry = JSON.parse(entry); } catch (_) { entry = { start: now, count: 0 }; } }
+      if (now - Number(entry.start || 0) > 600000) entry = { start: now, count: 0 };
+      entry.count = Number(entry.count || 0) + 1;
+      $app.store().set(rlKey, entry);
+      if (entry.count > 20) {
+        $app.logger().warn('whatsapp: rate limited', 'key', rlKey, 'count', String(entry.count));
+        return c.json(429, { error: 'too_many_requests' });
+      }
+    } catch (_) { /* rate limiter must never break sending */ }
+  }
+
   const instance = $os.getenv('GREEN_API_INSTANCE');
   const token = $os.getenv('GREEN_API_TOKEN');
   if (!instance || !token) {

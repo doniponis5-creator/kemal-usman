@@ -5,12 +5,15 @@ import { authedFetch, pb, PB_URL } from './pb';
 import { setToken, clearToken } from '../utils/secureStorage';
 
 // Apple Review demo account — bypasses OTP for the review phone number.
+// Env-gated: set VITE_DEMO_ACCOUNT=off in .env.production to disable after
+// App Store approval. Default is ON because App Review needs it.
+const DEMO_ENABLED = import.meta.env.VITE_DEMO_ACCOUNT !== 'off';
 const DEMO_PHONE = '+996555000001';
 const DEMO_CODE = '123456';
 
 export async function requestOtp(phone) {
   // Skip real SMS for Apple Review demo account
-  if (phone.replace(/\D/g, '') === DEMO_PHONE.replace(/\D/g, '')) {
+  if (DEMO_ENABLED && phone.replace(/\D/g, '') === DEMO_PHONE.replace(/\D/g, '')) {
     return { success: true };
   }
   return authedFetch('/api/custom/otp/request', {
@@ -22,7 +25,7 @@ export async function requestOtp(phone) {
 export async function verifyOtp({ phone, code, name, referredBy }) {
   const cleanPhone = phone.replace(/\D/g, '');
   // Apple Review demo account — bypass real OTP verification
-  if (cleanPhone === DEMO_PHONE.replace(/\D/g, '') && code === DEMO_CODE) {
+  if (DEMO_ENABLED && cleanPhone === DEMO_PHONE.replace(/\D/g, '') && code === DEMO_CODE) {
     const demoRecord = {
       id: 'demo_apple_review',
       phone: DEMO_PHONE,
