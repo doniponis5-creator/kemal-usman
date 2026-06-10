@@ -146,3 +146,22 @@ Hammasi ✅ bo'lsa — P0 acceptance rasman o'tdi.
 **Sentry (P1.5):** sentry.io'da bepul akkaunt oching → React loyiha yarating →
 DSN'ni `.env.production`dagi `VITE_SENTRY_DSN=` ga qo'ying → qayta build.
 Kod allaqachon tayyor, faqat DSN yetishmayapti.
+
+---
+
+## ✚ UCHINCHI SESSIYA (P1.6 + P2.1 + P2.2)
+
+| # | Ish | Natija |
+|---|---|---|
+| 15 | i18n birlashtirildi | 240 qatorlik inline lug'at → `src/i18n/strings-ru.json` / `strings-kg.json` (yagona manba, kg 100% to'liq — 203/203 kalit). O'lik nested ru/kg/ky.json o'chirildi |
+| 16 | ProductCard memoizatsiya | Katalogda 100+ karta endi keraksiz qayta render bo'lmaydi |
+| 17 | Pul logikasiga 8 ta integration test | `npm run test:money` — narx tamper, bonus overflow, debit, welcome dublikat va h.k. |
+
+**Deploy'dan keyin test tartibi:**
+```bash
+npm run test:security   # P0 acceptance (curl)
+npm run test:money      # pul logikasi (8 test, +996700009999 ga yozadi va o'chiradi)
+```
+
+**Qasddan keyinga qoldirilgan** (jonli test talab qiladi, alohida sessiyada):
+App.jsx'ni to'liq fayllarga bo'lish (P2.1 full), Sentry DSN (siz olishingiz kerak).

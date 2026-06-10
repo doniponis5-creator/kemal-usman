@@ -16,7 +16,9 @@
     "release": "npm run build && npx cap sync ios && npm run prerelease",
     "audit": "npm audit --audit-level=high",
     "pb:remove-odengi-secrets": "node scripts/pb-remove-odengi-secrets.js",
-    "pb:fix-bonus-fields": "node scripts/pb-fix-bonus-fields.js"
+    "pb:fix-bonus-fields": "node scripts/pb-fix-bonus-fields.js",
+    "test:money": "node scripts/test-money-logic.js",
+    "test:security": "bash scripts/test-security.sh"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",
