@@ -59,12 +59,27 @@ routerAdd('POST', '/api/custom/odengi/create-invoice', function(c) {
     var total = Number(order.get('total') || 0);
     if (total <= 0) return c.json(400, { error: 'Order total must be > 0' });
 
-    // ── Config: environment ONLY ──
-    var sid = '5084412514';
-    var password = 'ER@L6H&KMGH@P9X';
+    // ── Config: env → pb_data/odengi_credentials.json fallback (PB 0.22 fix) ──
+    // Server jarayonida env bo'lmasa (nohup/systemd'siz), kredensiallar
+    // pb_data/odengi_credentials.json dan o'qiladi — bu fayl git'da YO'Q va
+    // deploy-odengi.sh tomonidan lokal .env qiymatlaridan yaratiladi.
+    var sid = '', password = '';
     var apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
-    var testMode = Number(0);
+    var testMode = 0;
     var resultBaseUrl = 'https://api.kemalusman.kg';
+    try { sid = $os.getenv('ODENGI_SID') || ''; } catch (_) {}
+    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    if (!sid || !password) {
+      try {
+        var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
+        var cred = JSON.parse(credRaw);
+        if (!sid && cred.sid) sid = String(cred.sid);
+        if (!password && cred.password) password = String(cred.password);
+        if (cred.apiUrl) apiUrl = String(cred.apiUrl);
+        if (cred.testMode !== undefined) testMode = Number(cred.testMode) || 0;
+        if (cred.resultBaseUrl) resultBaseUrl = String(cred.resultBaseUrl);
+      } catch (_) { /* fayl yo'q — quyida 503 */ }
+    }
     if (!sid || !password) {
       $app.logger().error('odengi_not_configured', 'hint', 'set ODENGI_SID and ODENGI_PASSWORD in /etc/pocketbase/env and restart pocketbase');
       return c.json(503, { error: 'payment_not_configured' });
@@ -188,10 +203,27 @@ routerAdd('POST', '/api/custom/odengi/check-status', function(c) {
     var oid = order.get('odengiOrderId');
     if (!invoiceId && !oid) return c.json(400, { error: 'No invoice for this order' });
 
-    // ── Config: environment ONLY ──
-    var sid = '5084412514';
-    var password = 'ER@L6H&KMGH@P9X';
+    // ── Config: env → pb_data/odengi_credentials.json fallback (PB 0.22 fix) ──
+    // Server jarayonida env bo'lmasa (nohup/systemd'siz), kredensiallar
+    // pb_data/odengi_credentials.json dan o'qiladi — bu fayl git'da YO'Q va
+    // deploy-odengi.sh tomonidan lokal .env qiymatlaridan yaratiladi.
+    var sid = '', password = '';
     var apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
+    var testMode = 0;
+    var resultBaseUrl = 'https://api.kemalusman.kg';
+    try { sid = $os.getenv('ODENGI_SID') || ''; } catch (_) {}
+    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    if (!sid || !password) {
+      try {
+        var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
+        var cred = JSON.parse(credRaw);
+        if (!sid && cred.sid) sid = String(cred.sid);
+        if (!password && cred.password) password = String(cred.password);
+        if (cred.apiUrl) apiUrl = String(cred.apiUrl);
+        if (cred.testMode !== undefined) testMode = Number(cred.testMode) || 0;
+        if (cred.resultBaseUrl) resultBaseUrl = String(cred.resultBaseUrl);
+      } catch (_) { /* fayl yo'q — quyida 503 */ }
+    }
     if (!sid || !password) {
       $app.logger().error('odengi_not_configured', 'endpoint', 'check-status');
       return c.json(503, { error: 'payment_not_configured' });
@@ -262,8 +294,15 @@ routerAdd('POST', '/api/custom/odengi/result', function(c) {
       'status_pay', String(data.status_pay || ''),
       'order_id', String(data.order_id || ''));
 
-    // ── Config: environment ONLY ──
-    var password = 'ER@L6H&KMGH@P9X';
+    // ── Config: env → pb_data fayl fallback (PB 0.22 fix) ──
+    var password = '';
+    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    if (!password) {
+      try {
+        var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
+        password = String((JSON.parse(credRaw) || {}).password || '');
+      } catch (_) {}
+    }
     if (!password) {
       $app.logger().error('odengi_not_configured', 'endpoint', 'result-webhook');
       return c.json(503, { ok: false, error: 'payment_not_configured' });
@@ -375,10 +414,27 @@ routerAdd('POST', '/api/custom/odengi/cancel', function(c) {
     var invoiceId = order.get('odengiInvoiceId');
     if (!invoiceId) return c.json(400, { error: 'No invoice to cancel' });
 
-    // ── Config: environment ONLY ──
-    var sid = '5084412514';
-    var password = 'ER@L6H&KMGH@P9X';
+    // ── Config: env → pb_data/odengi_credentials.json fallback (PB 0.22 fix) ──
+    // Server jarayonida env bo'lmasa (nohup/systemd'siz), kredensiallar
+    // pb_data/odengi_credentials.json dan o'qiladi — bu fayl git'da YO'Q va
+    // deploy-odengi.sh tomonidan lokal .env qiymatlaridan yaratiladi.
+    var sid = '', password = '';
     var apiUrl = 'https://api.dengi.o.kg/api/json/json.php';
+    var testMode = 0;
+    var resultBaseUrl = 'https://api.kemalusman.kg';
+    try { sid = $os.getenv('ODENGI_SID') || ''; } catch (_) {}
+    try { password = $os.getenv('ODENGI_PASSWORD') || ''; } catch (_) {}
+    if (!sid || !password) {
+      try {
+        var credRaw = toString($os.readFile($app.dataDir() + '/odengi_credentials.json'));
+        var cred = JSON.parse(credRaw);
+        if (!sid && cred.sid) sid = String(cred.sid);
+        if (!password && cred.password) password = String(cred.password);
+        if (cred.apiUrl) apiUrl = String(cred.apiUrl);
+        if (cred.testMode !== undefined) testMode = Number(cred.testMode) || 0;
+        if (cred.resultBaseUrl) resultBaseUrl = String(cred.resultBaseUrl);
+      } catch (_) { /* fayl yo'q — quyida 503 */ }
+    }
     if (!sid || !password) {
       $app.logger().error('odengi_not_configured', 'endpoint', 'cancel');
       return c.json(503, { error: 'payment_not_configured' });

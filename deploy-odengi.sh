@@ -2,7 +2,7 @@
 # deploy-odengi.sh — Deploy security-hardened hooks + frontend to VPS
 # Run from the parfum-shop directory on your Mac:  ./deploy-odengi.sh
 #
-# v2 (2026-06-10) — security fix release:
+# v3 (2026-06-10) — PB 0.22 kredensial fayl fix:
 #   • uploads ALL pb_hooks (odengi v4, main, otp, whatsapp, _lib)
 #   • verifies ODENGI_SID / ODENGI_PASSWORD exist in the server env BEFORE
 #     restarting — payments fail closed without them
@@ -15,20 +15,23 @@ ENV_FILE="/etc/pocketbase/env"  # systemd EnvironmentFile (yo'q bo'lsa skript og
 
 echo "=== Kemal Usman — secure deploy ==="
 
-# 0. Server env check — payments will NOT work without these
-echo "0) Checking O!Dengi env on server..."
-if ssh root@$VPS "grep -qs '^ODENGI_SID=.\+' $ENV_FILE && grep -qs '^ODENGI_PASSWORD=.\+' $ENV_FILE"; then
-  echo "   ✅ ODENGI_SID + ODENGI_PASSWORD set in $ENV_FILE"
-else
-  echo "   ⚠️  ODENGI_SID / ODENGI_PASSWORD NOT found in $ENV_FILE"
-  echo "   To'lovlar ishlamaydi! Avval serverda quyidagini bajaring:"
-  echo "     ssh root@$VPS"
-  echo "     mkdir -p /etc/pocketbase && nano $ENV_FILE   # quyidagilarni yozing:"
-  echo "       ODENGI_SID=<merchant sid>"
-  echo "       ODENGI_PASSWORD=<YANGI rotated parol>"
-  echo "     # systemd ishlatilsa unit faylda EnvironmentFile=$ENV_FILE bo'lishi shart"
-  read -p "   Davom etaymi baribir? (y/N) " yn
+# 0. Kredensial faylni serverga yaratish (PB 0.22 — env o'rniga pb_data fayl).
+# Lokal .env dan ODENGI_SID / ODENGI_PASSWORD o'qiladi va serverda
+# $PB_DIR/pb_data/odengi_credentials.json yaratiladi (git'da YO'Q, chmod 600).
+echo "0) O!Dengi kredensiallarini serverga joylash..."
+ODENGI_SID=$(grep -E '^ODENGI_SID=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")
+ODENGI_PASSWORD=$(grep -E '^ODENGI_PASSWORD=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")
+if [ -z "$ODENGI_SID" ] || [ -z "$ODENGI_PASSWORD" ]; then
+  echo "   ⚠️  Lokal .env faylida ODENGI_SID / ODENGI_PASSWORD yo'q."
+  echo "   .env ga qo'shing (O!Dengi kabinetida ROTATE qilingan YANGI parol bilan):"
+  echo "     ODENGI_SID=5084412514"
+  echo "     ODENGI_PASSWORD=<yangi_parol>"
+  read -p "   Kredensialsiz davom etaymi? To'lov 503 qaytaradi. (y/N) " yn
   [ "$yn" = "y" ] || exit 1
+else
+  printf '{"sid":"%s","password":"%s","resultBaseUrl":"https://api.kemalusman.kg"}\n' "$ODENGI_SID" "$ODENGI_PASSWORD" | \
+    ssh root@$VPS "cat > $PB_DIR/pb_data/odengi_credentials.json && chmod 600 $PB_DIR/pb_data/odengi_credentials.json"
+  echo "   ✅ odengi_credentials.json serverga yozildi (pb_data/, git tashqarisi)"
 fi
 
 # 1. Upload ALL PocketBase hooks (old debug hooks removed locally — clean dir sync)
