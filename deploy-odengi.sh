@@ -10,7 +10,7 @@
 
 set -e
 VPS="145.223.100.16"
-PB_DIR="/root/pb"            # PocketBase katalogi serverda
+PB_DIR="/root/parfum-backend"            # PocketBase katalogi serverda
 ENV_FILE="/etc/pocketbase/env"  # systemd EnvironmentFile (yo'q bo'lsa skript ogohlantiradi)
 
 echo "=== Kemal Usman — secure deploy ==="
@@ -43,7 +43,7 @@ echo "   Done."
 
 # 3. Upload dist
 echo "3) Uploading dist..."
-rsync -avz --delete dist/ root@$VPS:$PB_DIR/pb_public/
+rsync -avz --delete dist/ root@$VPS:/var/www/parfum/
 echo "   Done."
 
 # 4. Restart PocketBase to pick up new hooks + env
