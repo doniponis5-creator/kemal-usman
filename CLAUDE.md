@@ -32,21 +32,31 @@ parfum-shop/
 └── pb-fix-rules.js      # Fixes PB access rules
 ```
 
-## App.jsx Sections (in order)
+## Code Layout (P2.1 refactor, 2026-06-10)
 
-1. **TRANSLATIONS** — `ru` and `kg` (Kyrgyz) string maps; `LangContext` + `useLang()` hook
-2. **DESIGN SYSTEM** — `T` color tokens, `card()`, `btnGreen()`, `btnOutline()`, `inputStyle` helpers
-3. **ICONS** — `IC` object of inline SVG elements
-4. **DATA** — `PAYMENT_METHODS`, `BG_PRESETS`, `INITIAL_PRODUCTS`, `DEFAULT_SETTINGS`, `DEFAULT_BANNERS`
-5. **POCKETBASE API** — `api` object wrapping all PB calls (products, orders, clients)
-6. **UI PRIMITIVES** — `Toast`, `StatusChip`, `LangToggle`, `NavBar`
-7. **IMAGE UPLOAD + CROP** — `CropModal`, `ImageUpload`, `MultiImageUpload`
-8. **BANNER SLIDER** — `BannerSlider`
-9. **USER SCREENS** — `LoginScreen`, `CatalogScreen`, `CartScreen`, `MyOrdersScreen`, `ProfileScreen`
-10. **ADMIN SCREENS** — `AdminOrdersScreen`, `AdminProductsScreen`, `AdminStatsScreen`, `AdminBannersScreen`, `AdminBonusScreen`, `AdminSettingsScreen`
-11. **MBANK PAYMENT** — `MBankPayment` (deeplink to M-Bank app)
-12. **AUDIO COMPONENTS** — `ProductAudioRecorder`, `AudioRecordBtn`, `ClientAudioBtn`
-13. **APP ROOT** — `App()` — top-level state, routing, data loading
+App.jsx (~7,400 lines) endi faqat: umumiy komponentlar (Toast, NavBar, Crop/Upload,
+StoryViewer, BannerSlider, ProductCard...), user ekranlar (Login, Catalog, Cart,
+MyOrders, Profile), OdengiPayment, audio komponentlar va App() root.
+
+Ajratilgan modullar (App.jsx dan SOF MEXANIK ko'chirilgan):
+
+| Fayl | Mazmun |
+|---|---|
+| `src/theme.js` | `T` tokenlar, `card()`, `btnGreen()`, `btnOutline()`, `inputStyle` |
+| `src/icons.jsx` | `IC` SVG ikonkalar |
+| `src/i18n/lang.jsx` | `TRANSLATIONS`, `LangContext`, `useLang()` |
+| `src/i18n/strings-ru.json` / `strings-kg.json` | Barcha UI matnlar (yagona manba) |
+| `src/appData.js` | `PAYMENT_METHODS`, `BG_PRESETS`, `DEFAULT_SETTINGS`, `INITIAL_PRODUCTS`, `DEFAULT_BANNERS` |
+| `src/api/backend.js` | `api` obyekt (PB wrapper) — kontraktni o'zgartirmang |
+| `src/utils/format.js` | `formatSum`, `pickName`, `pickDesc`, `generateReferralCode` |
+| `src/screens/AdminScreens.jsx` | Barcha 9 admin ekran — React.lazy chunk |
+| `src/screens/DesktopLayout.jsx` | Desktop rejim — React.lazy chunk |
+
+Lazy chunklar `withSuspense` (src/utils/lazyScreen.jsx) bilan o'ralgan. Admin va
+Desktop kodi mobil mijozlarga YUKLANMAYDI (main bundle 614KB→288KB).
+
+Yangi ekran qo'shganda: user ekran bo'lsa App.jsx'da, admin bo'lsa AdminScreens.jsx'da
+qoldiring va export qiling — lazy wrapper App.jsx'da avtomatik mavjud bo'ladi.
 
 ## PocketBase Collections
 
@@ -96,7 +106,7 @@ There is no React Router. Navigation is done via `useState`:
 
 ## Important Rules
 
-- **Do not split App.jsx into multiple files** unless explicitly asked — the entire app is intentionally one file.
+- App.jsx allaqachon modullarga bo'lingan (yuqoridagi jadval). Yangi ajratishda: sof mexanik ko'chirish + har qadamda `npx vite build` + `eslint no-undef` tekshiruvi shart.
 - **Do not change the PocketBase URL** (`http://145.223.100.16:8090`) without updating `pb-setup.js` too.
 - Products use a `variants` array field, not separate price columns. Always work with `variants` when reading/writing prices or stock.
 - The admin password lives in `settings.adminPassword` (default `"admin123"`), not hardcoded — always check `settings` before comparing.
@@ -131,7 +141,7 @@ npm run lint     # ESLint check
 - The `products` collection uses a `variants` JSON array — never flatten it to separate fields
 
 ### 3. APP.JSX — ONE FILE RULE
-- NEVER split `App.jsx` into multiple files unless explicitly instructed
+- App.jsx'ni faqat sof mexanik usulda bo'lish mumkin (logika o'zgarmasin, build+lint har qadamda)
 - NEVER remove existing components or functions — only add or fix
 - NEVER change the `PB_URL` (`http://145.223.100.16:8090`) without updating `pb-setup.js`
 - NEVER hardcode phone numbers, prices, or passwords — always read from `settings`
