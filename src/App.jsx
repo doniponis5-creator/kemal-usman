@@ -6355,6 +6355,11 @@ export default function App() {
       }
     } catch (e) {
       console.warn("PocketBase load error:", e);
+      // APP STORE 2.1a/2.2 fix: agar server vaqtincha ishlamasa, katalog
+      // HECH QACHON bo'sh ko'rinmasin — lokal demo-katalog (public/perfumes/
+      // SVG'lari bilan) fallback sifatida ko'rsatiladi. Server qaytishi bilan
+      // keyingi loadAll real ma'lumotni ustidan yozadi.
+      setProducts(prev => (prev && prev.length > 0) ? prev : INITIAL_PRODUCTS);
     } finally {
       setPbLoading(false);
     }

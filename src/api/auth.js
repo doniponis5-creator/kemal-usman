@@ -4,18 +4,10 @@
 import { authedFetch, pb, PB_URL } from './pb';
 import { setToken, clearToken } from '../utils/secureStorage';
 
-// Apple Review demo account — bypasses OTP for the review phone number.
-// Env-gated: set VITE_DEMO_ACCOUNT=off in .env.production to disable after
-// App Store approval. Default is ON because App Review needs it.
-const DEMO_ENABLED = import.meta.env.VITE_DEMO_ACCOUNT !== 'off';
-const DEMO_PHONE = '+996555000001';
-const DEMO_CODE = '123456';
 
 export async function requestOtp(phone) {
-  // Skip real SMS for Apple Review demo account
-  if (DEMO_ENABLED && phone.replace(/\D/g, '') === DEMO_PHONE.replace(/\D/g, '')) {
-    return { success: true };
-  }
+  // Apple Review demo akkaunt (+996555000001) endi SERVER tomonda
+  // qayta ishlanadi (pb_hooks/otp.pb.js) — real token, to'liq funksional.
   return authedFetch('/api/custom/otp/request', {
     method: 'POST',
     body: JSON.stringify({ phone }),
@@ -23,31 +15,6 @@ export async function requestOtp(phone) {
 }
 
 export async function verifyOtp({ phone, code, name, referredBy }) {
-  const cleanPhone = phone.replace(/\D/g, '');
-  // Apple Review demo account — bypass real OTP verification
-  if (DEMO_ENABLED && cleanPhone === DEMO_PHONE.replace(/\D/g, '') && code === DEMO_CODE) {
-    const demoRecord = {
-      id: 'demo_apple_review',
-      phone: DEMO_PHONE,
-      name: name || 'Apple Reviewer',
-      bonusBalance: 500,
-      bonusHistory: [],
-      referralCode: 'DEMO-REVIEW',
-      collectionId: 'clients',
-      collectionName: 'clients',
-      created: new Date().toISOString(),
-      updated: new Date().toISOString(),
-    };
-    // Create a minimal JWT-like token so pb.authStore.save() doesn't throw.
-    // Format: base64(header).base64(payload).base64(sig) — PB SDK just checks structure.
-    const hdr = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-    const pld = btoa(JSON.stringify({ id: 'demo_apple_review', type: 'authRecord', collectionId: 'clients', exp: Math.floor(Date.now() / 1000) + 86400 * 365 }));
-    const demoToken = hdr + '.' + pld + '.' + btoa('demo_signature');
-    try { await setToken(demoToken); } catch (_) {}
-    try { pb.authStore.save(demoToken, demoRecord); } catch (_) {}
-    return { record: demoRecord, isNewClient: false };
-  }
-
   const res = await authedFetch('/api/custom/otp/verify', {
     method: 'POST',
     body: JSON.stringify({ phone, code, name, referredBy }),

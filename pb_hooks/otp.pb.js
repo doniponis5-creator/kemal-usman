@@ -26,6 +26,16 @@ routerAdd('POST', '/api/custom/otp/request', function(c) {
 
   if (!phone || phone.length < 10) return c.json(400, { error: 'invalid_phone' });
 
+  // ── APPLE REVIEW DEMO ACCOUNT ──────────────────────────────────────────────
+  // +996555000001 — App Review uchun. SMS yuborilmaydi, kod doim 123456
+  // (/verify ichida tekshiriladi). O'chirish: serverda DEMO_REVIEW_DISABLED=1.
+  var DEMO_PHONE = '+996555000001';
+  var demoOff = false;
+  try { demoOff = !!$os.getenv('DEMO_REVIEW_DISABLED'); } catch (_) {}
+  if (!demoOff && phone === DEMO_PHONE) {
+    return c.json(200, { ok: true, ttl: 300 });
+  }
+
   var since  = new Date(Date.now() - 3600000).toISOString();
   var recent = $app.dao().findRecordsByFilter(
     'otp_codes', 'phone = {:p} && created >= {:s}', '-created', 100, 0, { p: phone, s: since }
@@ -74,9 +84,17 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
 
   if (!phone || code.length !== 6) return c.json(400, { error: 'invalid_input' });
 
+  // ── APPLE REVIEW DEMO: real akkaunt, real token — to'liq funksional ──
+  var DEMO_PHONE = '+996555000001';
+  var demoOff = false;
+  try { demoOff = !!$os.getenv('DEMO_REVIEW_DISABLED'); } catch (_) {}
+  var isDemo = !demoOff && phone === DEMO_PHONE;
+  if (isDemo && code !== '123456') return c.json(400, { error: 'wrong_code' });
+
   // ── OTP check ─────────────────────────────────────────────────────────────
   var nowIso = new Date().toISOString();
   var otpRec;
+  if (!isDemo) {
   try {
     var recs = $app.dao().findRecordsByFilter(
       'otp_codes', 'phone = {:p} && used = false && expiresAt >= {:n}',
@@ -95,6 +113,7 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
   }
   otpRec.set('used', true);
   $app.dao().saveRecord(otpRec);
+  } // end !isDemo
 
   // ── Find or create the client ─────────────────────────────────────────────
   // NOTE: no bonus crediting here. Welcome + referral bonuses are credited by
