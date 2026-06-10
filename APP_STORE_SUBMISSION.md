@@ -14,7 +14,7 @@
 
 ## 📋 Sizning qadamlar (Xcode'da)
 1. `npm run build && npx cap sync ios` (men qilib qo'ydim — dist ichkarida yangi)
-2. Xcode: `ios/App/App.xcworkspace` oching (xcodeproj emas!)
+2. Xcode: `ios/App/App.xcodeproj` oching (bu loyiha CocoaPods emas, Swift Package Manager ishlatadi — shuning uchun .xcworkspace yo'q, .xcodeproj to'g'ri)
 3. Signing & Capabilities → Team tanlang
 4. CURRENT_PROJECT_VERSION → 4 (yoki keyingisi)
 5. Real iPhone'da test: login → katalog → savat → naqd buyurtma → profil → **akkaunt o'chirish tugmasi ko'rinishini tekshiring**
