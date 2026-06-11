@@ -183,11 +183,19 @@ onRecordAfterCreateRequest((e) => {
     try { client = txDao.findFirstRecordByFilter('clients', 'phone = {:phone}', { phone }); }
     catch (_) { return; }
     const balance = Number(client.get('bonus_balance') || 0);
-    let history = client.get('bonus_history') || [];
-    if (typeof history === 'string') { try { history = JSON.parse(history); } catch { history = []; } }
+    // PB JSVM: JSON maydon Go JsonRaw (bayt-massiv) sifatida keladi — to'g'ridan
+    // to'g'ri .push() qilish goja'ni quvvatdan chiqaradi (server 500 ga o'tib
+    // qoladi!). Avval String() → JSON.parse, yozishda esa JSON.stringify.
+    let history = [];
+    try {
+      const rawH = client.get('bonus_history');
+      const hStr = (typeof rawH === 'string') ? rawH : String(rawH || '');
+      history = hStr ? JSON.parse(hStr) : [];
+    } catch (_) { history = []; }
+    if (!Array.isArray(history)) history = [];
     history.push({ type: 'spent', amount: -allowedBonus, label: 'Order #' + e.record.id, date: new Date().toISOString() });
     client.set('bonus_balance', Math.max(0, balance - allowedBonus));
-    client.set('bonus_history', history);
+    client.set('bonus_history', JSON.stringify(history));
     txDao.saveRecord(client);
   });
 }, 'orders');
@@ -233,7 +241,11 @@ onRecordBeforeUpdateRequest((e) => {
   // Frontend'ga javob kalitlari camelCase bo'lib map qilinadi.
   let balance = Number(client.get('bonus_balance') || 0);
   let history = [];
-  try { history = JSON.parse(client.get('bonus_history') || '[]'); } catch (_) { history = []; }
+  try {
+    const rawH = client.get('bonus_history');
+    const hStr = (typeof rawH === 'string') ? rawH : String(rawH || '');
+    history = hStr ? JSON.parse(hStr) : [];
+  } catch (_) { history = []; }
   if (!Array.isArray(history)) history = [];
 
   // Is this the client's first delivery? (Excludes the order being delivered now.)
@@ -281,7 +293,12 @@ onRecordBeforeUpdateRequest((e) => {
         if (referrer && referrer.id !== client.id) {
           const refBal = Number(referrer.get('bonus_balance') || 0) + referrerBonus;
           let refHistory = [];
-          try { refHistory = JSON.parse(referrer.get('bonus_history') || '[]'); } catch (_) { refHistory = []; }
+          try {
+            const rawRH = referrer.get('bonus_history');
+            const rhStr = (typeof rawRH === 'string') ? rawRH : String(rawRH || '');
+            refHistory = rhStr ? JSON.parse(rhStr) : [];
+          } catch (_) { refHistory = []; }
+          if (!Array.isArray(refHistory)) refHistory = [];
           refHistory.push({ type: 'referral', amount: referrerBonus, label: 'Referral payout for ' + phone, date: new Date().toISOString() });
           referrer.set('bonus_balance', refBal);
           referrer.set('bonus_history', JSON.stringify(refHistory));
