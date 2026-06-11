@@ -62,7 +62,13 @@ async function main() {
   await adminAuth();
   console.log('✅ Authenticated as admin');
 
-  const col = await pb.collections.getOne('settings');
+  let col = null;
+  try { col = await pb.collections.getOne('settings'); }
+  catch {
+    console.log("OK: 'settings' kolleksiyasi mavjud emas - sir maydonlar ham yo'q.");
+    console.log("   (Yaratish uchun: node scripts/pb-ensure-settings.js)");
+    return;
+  }
 
   // PB < 0.23 keeps fields in `schema`; newer versions use `fields`.
   const fieldKey = Array.isArray(col.schema) ? 'schema' : 'fields';

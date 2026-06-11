@@ -18,7 +18,8 @@
     "pb:remove-odengi-secrets": "node scripts/pb-remove-odengi-secrets.js",
     "pb:fix-bonus-fields": "node scripts/pb-fix-bonus-fields.js",
     "test:money": "node scripts/test-money-logic.js",
-    "test:security": "bash scripts/test-security.sh"
+    "test:security": "bash scripts/test-security.sh",
+    "pb:ensure-settings": "node scripts/pb-ensure-settings.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.1",

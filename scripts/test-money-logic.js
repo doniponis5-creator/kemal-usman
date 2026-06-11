@@ -11,7 +11,7 @@
 //   T5. Buyurtma yaratilganda bonus DARHOL yechiladi (ikki fazali debit)
 //   T6. 'delivered' bo'lganda: foiz bonus + birinchi yetkazmada welcome bonus
 //   T7. Welcome bonus IKKINCHI marta berilmaydi
-//   T8. camelCase maydonlar ishlayapti (bonusBalance o'qish/yozish)
+//   T8. snake_case maydonlar ishlayapti (bonus_balance o'qish/yozish)
 //
 // Test ma'lumotlari +996700009999 telefoniga yoziladi va OXIRIDA O'CHIRILADI.
 
@@ -73,27 +73,30 @@ async function run() {
   await cleanup();
 
   // ── Tayyorgarlik: real mahsulot + test mijoz (500 bonus bilan) ──
-  const products = await pb.collection('products').getList(1, 1);
-  if (!products.items.length) { console.error('❌ Mahsulot yo\'q'); process.exit(1); }
-  const product = products.items[0];
-  const variants = typeof product.variants === 'string' ? JSON.parse(product.variants) : (product.variants || []);
-  const variant = variants.find(v => v.inStock !== false) || variants[0];
-  if (!variant) { console.error('❌ In-stock variant yo\'q'); process.exit(1); }
+  // Omborda BOR variantli mahsulotni qidiramiz (birinchi 50 tadan)
+  const page = await pb.collection('products').getList(1, 50);
+  let product = null, variant = null;
+  for (const p of page.items) {
+    const vs = typeof p.variants === 'string' ? (() => { try { return JSON.parse(p.variants); } catch { return []; } })() : (p.variants || []);
+    const v = vs.find(x => x.inStock !== false && Number(x.price) > 0);
+    if (v) { product = p; variant = v; break; }
+  }
+  if (!product) { console.error('Omborda bor va narxli variantli mahsulot topilmadi'); process.exit(1); }
   const realPrice = Number(variant.price);
   info(`Test mahsulot: ${product.name} / ${variant.label} = ${realPrice} som`);
 
   const client = await pb.collection('clients').create({
     username: TEST_PHONE.replace(/\D/g, ''),
-    phone: TEST_PHONE, name: 'MONEY TEST', bonusBalance: 500, bonusHistory: '[]',
+    phone: TEST_PHONE, name: 'MONEY TEST', bonus_balance: 500, bonus_history: '[]',
     email: TEST_PHONE.replace(/\D/g, '') + '@test.local', emailVisibility: false,
     password: 'TestPass123!xyz', passwordConfirm: 'TestPass123!xyz', verified: true,
   });
 
-  // ── T8: camelCase o'qish ──
+  // ── T8: snake_case o'qish ──
   const fresh = await pb.collection('clients').getOne(client.id);
-  Number(fresh.bonusBalance) === 500
-    ? pass('T8: bonusBalance camelCase yozildi/o\'qildi (=500)')
-    : fail(`T8: bonusBalance kutilgan 500, olingan ${fresh.bonusBalance} — sxema maydon nomini tekshiring!`);
+  Number(fresh.bonus_balance) === 500
+    ? pass('T8: bonus_balance yozildi/o\'qildi (=500)')
+    : fail(`T8: bonus_balance kutilgan 500, olingan ${fresh.bonus_balance} — sxema maydon nomini tekshiring!`);
 
   // ── T1: narx tamper ──
   const qty = 2;
@@ -120,9 +123,9 @@ async function run() {
     : fail(`T2: bonusDiscount ${o2.bonusDiscount}, kutilgan ${expectedBonus}`);
 
   const afterDebit = await pb.collection('clients').getOne(client.id);
-  Number(afterDebit.bonusBalance) === 500 - expectedBonus
-    ? pass(`T5: bonus darhol yechildi (500 → ${afterDebit.bonusBalance})`)
-    : fail(`T5: balans ${afterDebit.bonusBalance}, kutilgan ${500 - expectedBonus}`);
+  Number(afterDebit.bonus_balance) === 500 - expectedBonus
+    ? pass(`T5: bonus darhol yechildi (500 → ${afterDebit.bonus_balance})`)
+    : fail(`T5: balans ${afterDebit.bonus_balance}, kutilgan ${500 - expectedBonus}`);
 
   // ── T4: soxta productId ──
   try {
@@ -136,13 +139,13 @@ async function run() {
   }
 
   // ── T6: delivered → foiz bonus + welcome (birinchi yetkazma) ──
-  const balBefore = Number((await pb.collection('clients').getOne(client.id)).bonusBalance);
+  const balBefore = Number((await pb.collection('clients').getOne(client.id)).bonus_balance);
   await pb.collection('orders').update(o1.id, { status: 'delivered' });
   const afterDeliver = await pb.collection('clients').getOne(client.id);
-  const histAfter = typeof afterDeliver.bonusHistory === 'string' ? JSON.parse(afterDeliver.bonusHistory || '[]') : (afterDeliver.bonusHistory || []);
+  const histAfter = typeof afterDeliver.bonus_history === 'string' ? JSON.parse(afterDeliver.bonus_history || '[]') : (afterDeliver.bonus_history || []);
   const gotEarned = histAfter.some(h => h.type === 'earned');
   const gotWelcome = histAfter.some(h => h.type === 'welcome');
-  gotEarned ? pass(`T6a: yetkazmadan foiz bonus yozildi (balans ${balBefore} → ${afterDeliver.bonusBalance})`)
+  gotEarned ? pass(`T6a: yetkazmadan foiz bonus yozildi (balans ${balBefore} → ${afterDeliver.bonus_balance})`)
             : fail('T6a: earned bonus tarixda YO\'Q');
   gotWelcome ? pass('T6b: birinchi yetkazmada welcome bonus berildi')
              : info('T6b: welcome bonus berilmadi (settings.welcomeBonus=0 bo\'lishi mumkin — tekshiring)');
@@ -150,7 +153,7 @@ async function run() {
   // ── T7: welcome ikkinchi marta berilmaydi ──
   await pb.collection('orders').update(o2.id, { status: 'delivered' });
   const after2 = await pb.collection('clients').getOne(client.id);
-  const hist2 = typeof after2.bonusHistory === 'string' ? JSON.parse(after2.bonusHistory || '[]') : (after2.bonusHistory || []);
+  const hist2 = typeof after2.bonus_history === 'string' ? JSON.parse(after2.bonus_history || '[]') : (after2.bonus_history || []);
   const welcomeCount = hist2.filter(h => h.type === 'welcome').length;
   welcomeCount <= 1 ? pass(`T7: welcome bonus faqat ${welcomeCount} marta (dublikat yo'q)`)
                     : fail(`T7: welcome bonus ${welcomeCount} marta berildi!`);
