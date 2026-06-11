@@ -6,7 +6,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/backend.js";
 import { sendWhatsApp as sendWhatsAppServer } from "../api/whatsapp";
 import { PB_URL, audioUrl, fileUrl, pb } from "../api/pb";
-import { sendWhatsApp } from "../api/whatsapp";
 import { BG_PRESETS, INITIAL_PRODUCTS } from "../appData.js";
 import { MotionScreen } from "../components/MotionScreen";
 import { NumberCounter } from "../components/NumberCounter";

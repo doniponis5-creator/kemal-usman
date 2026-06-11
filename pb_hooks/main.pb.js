@@ -351,6 +351,37 @@ routerAdd('GET', '/api/custom/me', (c) => {
   });
 }, $apis.requireRecordAuth('clients'));
 
+// Bildirishnomani o'qilgan deb belgilash — XAVFSIZ yo'l.
+// Ilgari mijoz to'g'ridan-to'g'ri notifications yozuvini update qilardi —
+// bu update qoidasini ochiq qoldirishni talab qilardi (har kim matnni
+// o'zgartira olardi!). Endi qoidalar superuser-only, mijoz esa faqat shu
+// endpoint orqali O'Z telefonini readBy ro'yxatiga qo'shadi.
+routerAdd('POST', '/api/custom/notifications/mark-read', (c) => {
+  const auth = c.get('authRecord');
+  if (!auth) return c.json(401, { error: 'unauthorized' });
+  const data = $apis.requestInfo(c).data || {};
+  const id = String(data.id || '');
+  if (!id) return c.json(400, { error: 'id_required' });
+  let rec;
+  try { rec = $app.dao().findRecordById('notifications', id); }
+  catch (_) { return c.json(404, { error: 'not_found' }); }
+  const phone = String(auth.get('phone') || '');
+  if (!phone) return c.json(400, { error: 'no_phone' });
+  let readBy = [];
+  try {
+    const raw = rec.get('readBy');
+    const str = (typeof raw === 'string') ? raw : String(raw || '');
+    readBy = str ? JSON.parse(str) : [];
+  } catch (_) { readBy = []; }
+  if (!Array.isArray(readBy)) readBy = [];
+  if (!readBy.includes(phone)) {
+    readBy.push(phone);
+    rec.set('readBy', JSON.stringify(readBy));
+    try { $app.dao().saveRecord(rec); } catch (e) { return c.json(500, { error: 'save_failed' }); }
+  }
+  return c.json(200, { ok: true });
+}, $apis.requireRecordAuth('clients'));
+
 // Public custom endpoint: POST /api/custom/account/delete — soft-delete & PII purge.
 routerAdd('POST', '/api/custom/account/delete', (c) => {
   const auth = c.get('authRecord');

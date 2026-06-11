@@ -96,6 +96,17 @@ const RULES = {
     deleteRule: '@request.auth.collectionName = "_superusers"',
   },
 
+  // ─── NOTIFICATIONS ───────────────────────────────────────────
+  // O'qish: ommaviy xabarlar hammaga, shaxsiy (targetPhone) faqat egasiga.
+  // Yozish: faqat admin (mark-read mijoz uchun custom hook orqali).
+  notifications: {
+    listRule:   'targetPhone = "" || targetPhone = @request.auth.phone',
+    viewRule:   'targetPhone = "" || targetPhone = @request.auth.phone',
+    createRule: null,
+    updateRule: null,
+    deleteRule: null,
+  },
+
   // ─── BANNERS ─────────────────────────────────────────────────
   banners: {
     listRule:   '',

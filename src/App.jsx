@@ -2733,6 +2733,30 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
 
   const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setImgIsLandscape(false); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
 
+  // Bildirishnomadan / WhatsApp deeplink'dan (?product=ID) mahsulot ochish.
+  // Notif sheet 'open:product' event yuboradi; WA xabarlardagi
+  // https://kemalusman.kg/?product=ID havolalari ham shu yerda ishlaydi
+  // (ilgari bu parametr UMUMAN o'qilmasdi — havola shunchaki bosh sahifa ochardi).
+  useEffect(() => {
+    const openById = (pid) => {
+      if (!pid) return;
+      const p = products.find(x => String(x.id) === String(pid));
+      if (p && (p.variants || []).length > 0) openDetail(p);
+    };
+    const onEvent = (e) => openById(e.detail);
+    window.addEventListener('open:product', onEvent);
+    try {
+      const pid = new URLSearchParams(window.location.search).get('product');
+      if (pid) {
+        openById(pid);
+        // Bir marta ochilgach URL'dan tozalaymiz (refresh'da qayta ochilmasin)
+        window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+      }
+    } catch { /* ignore */ }
+    return () => window.removeEventListener('open:product', onEvent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products]);
+
   // Manual scroll wiring for the detail body — React's synthetic onScroll
   // misses fires inside Capacitor's WKWebView momentum scroll, so attach
   // a native listener via ref + addEventListener. Effect re-runs every time
@@ -7661,7 +7685,9 @@ export default function App() {
                           }
                           if (linkedProduct) {
                             setShowNotifSheet(false);
-                            // Navigate to product — set screen to catalog and trigger product detail
+                            setScreen('catalog');
+                            // CatalogScreen'dagi listener mahsulot kartasini ochadi
+                            setTimeout(() => window.dispatchEvent(new CustomEvent('open:product', { detail: linkedProduct.id })), 150);
                           }
                         }}
                         style={{
@@ -7685,7 +7711,7 @@ export default function App() {
                               )}
                               <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{n.title}</span>
                             </div>
-                            <div style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.4, marginBottom: linkedProduct ? 8 : 0 }}>{n.body}</div>
+                            <div style={{ fontSize: 13, color: T.textSecond, lineHeight: 1.4, marginBottom: linkedProduct ? 8 : 0 }}>{n.body}</div>
                             {linkedProduct && (
                               <div style={{ padding: "4px 8px", borderRadius: 6, background: "rgba(0,122,255,0.08)", fontSize: 11, color: "#007AFF", fontWeight: 600, display: "inline-block" }}>
                                 🔗 {linkedProduct.brand} — {linkedProduct.name}

@@ -70,15 +70,17 @@ export const api = {
   }),
   createNotification: (data) => pb.collection("notifications").create(data, { requestKey: null }),
   deleteNotification: (id) => pb.collection("notifications").delete(id, { requestKey: null }),
-  markNotificationRead: async (id, phone) => {
+  markNotificationRead: async (id, _phone) => {
+    // Server hook orqali — mijoz faqat O'ZINI readBy'ga qo'shadi
+    // (to'g'ridan-to'g'ri update endi superuser-only qoida bilan yopilgan).
     try {
-      const rec = await pb.collection("notifications").getOne(id, { requestKey: null });
-      const readBy = (() => { try { return Array.isArray(rec.readBy) ? rec.readBy : JSON.parse(rec.readBy || '[]'); } catch { return []; } })();
-      if (!readBy.includes(phone)) {
-        readBy.push(phone);
-        await pb.collection("notifications").update(id, { readBy: JSON.stringify(readBy) }, { requestKey: null });
-      }
-    } catch (e) { console.warn("markRead error:", e); }
+      const { authedFetch } = await import('./pb');
+      await authedFetch('/api/custom/notifications/mark-read', {
+        method: 'POST',
+        body: JSON.stringify({ id }),
+      });
+      return true;
+    } catch (e) { console.warn('markNotificationRead:', e); return false; }
   },
 
   // ─── Banners (PocketBase-synced via site_media) ───────────────
