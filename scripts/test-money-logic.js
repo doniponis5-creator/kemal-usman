@@ -73,15 +73,20 @@ async function run() {
   await cleanup();
 
   // ── Tayyorgarlik: real mahsulot + test mijoz (500 bonus bilan) ──
-  // Omborda BOR variantli mahsulotni qidiramiz (birinchi 50 tadan)
-  const page = await pb.collection('products').getList(1, 50);
+  // Omborda BOR variantli mahsulotni qidiramiz (BUTUN katalog bo'ylab —
+  // 723 tadan faqat ~6 tasi omborda, ular istalgan sahifada bo'lishi mumkin)
+  const allProducts = await pb.collection('products').getFullList({ batch: 200, requestKey: null });
   let product = null, variant = null;
-  for (const p of page.items) {
+  for (const p of allProducts) {
     const vs = typeof p.variants === 'string' ? (() => { try { return JSON.parse(p.variants); } catch { return []; } })() : (p.variants || []);
     const v = vs.find(x => x.inStock !== false && Number(x.price) > 0);
     if (v) { product = p; variant = v; break; }
   }
-  if (!product) { console.error('Omborda bor va narxli variantli mahsulot topilmadi'); process.exit(1); }
+  if (!product) {
+    console.error('❌ Butun katalogda omborda bor (inStock) va narxi > 0 variantli mahsulot yo\'q.');
+    console.error('   Admin panelda bitta mahsulotga narx qo\'yib, "В наличии" qiling, keyin qayta urinib ko\'ring.');
+    process.exit(1);
+  }
   const realPrice = Number(variant.price);
   info(`Test mahsulot: ${product.name} / ${variant.label} = ${realPrice} som`);
 
