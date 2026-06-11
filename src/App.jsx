@@ -6571,6 +6571,72 @@ export default function App() {
     handleLogout();
   };
 
+  // ═══ ADMIN: REAL-TIME YANGI BUYURTMA ALERT ═══════════════════════════════
+  // PB realtime (SSE) ga obuna bo'lamiz: yangi buyurtma kelganda ovoz + toast
+  // + ro'yxat avtomatik yangilanadi. Realtime ishlamasa — 30s polling fallback.
+  const ordersRef = useRef(orders);
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
+
+  const playNewOrderSound = () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      o.start();
+      o.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.18); // D6 — ikkinchi nota
+      o.stop(ctx.currentTime + 0.65);
+      setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 900);
+    } catch { /* audio bloklangan bo'lishi mumkin — jim o'tamiz */ }
+  };
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let unsub = null, poll = null, stopped = false;
+    const normalizeOrder = (o) => ({
+      ...o,
+      items: Array.isArray(o.items) ? o.items : (o.items ? (() => { try { return JSON.parse(o.items); } catch { return []; } })() : []),
+    });
+    const onNewOrder = (rec) => {
+      const n = normalizeOrder(rec);
+      setOrders(prev => prev.some(x => x.id === n.id) ? prev : [n, ...prev]);
+      playNewOrderSound();
+      haptic('medium');
+      showToast(`🛍 ${lang === 'kg' ? 'Жаңы заказ!' : 'Новый заказ!'} ${n.clientName || n.clientPhone || ''} — ${formatSum(n.total || 0)}`);
+    };
+    (async () => {
+      try {
+        unsub = await pb.collection('orders').subscribe('*', (e) => {
+          if (stopped || !e?.record) return;
+          if (e.action === 'create') onNewOrder(e.record);
+          else if (e.action === 'update') setOrders(prev => prev.map(o => o.id === e.record.id ? { ...o, ...normalizeOrder(e.record) } : o));
+          else if (e.action === 'delete') setOrders(prev => prev.filter(o => o.id !== e.record.id));
+        });
+        logger.log('realtime orders: subscribed');
+      } catch (err) {
+        logger.warn('realtime unavailable — polling fallback (30s)', err);
+        poll = setInterval(async () => {
+          try {
+            const fresh = await api.getOrders();
+            const known = new Set(ordersRef.current.map(o => o.id));
+            fresh.filter(o => !known.has(o.id)).forEach(onNewOrder);
+          } catch { /* offline — keyingi sikl */ }
+        }, 30000);
+      }
+    })();
+    return () => {
+      stopped = true;
+      try { if (typeof unsub === 'function') unsub(); } catch { /* ignore */ }
+      if (poll) clearInterval(poll);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
+
   const addToCart = (productId, variantId) => {
     // PRO: native haptic feedback on iOS / Android (no-op on web).
     haptic('light');
@@ -7105,18 +7171,28 @@ export default function App() {
               { id: 'reviews',       label: lang === 'kg' ? 'Пикирлер' : 'Отзывы' },
               { id: 'stats',         label: t.stats     || 'Статистика' },
               { id: 'settings',      label: t.settings  || 'Настройки'  },
-            ].map(tab => (
+            ].map(tab => {
+              const newCount = tab.id === 'orders' ? orders.filter(o => o.status === 'new').length : 0;
+              return (
               <div key={tab.id} onClick={() => setAdminScreen(tab.id)}
                 style={{
                   padding: '14px 20px', fontSize: 12, fontWeight: 600,
                   letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer',
                   color: adminScreen === tab.id ? '#111' : '#BBB',
                   borderBottom: adminScreen === tab.id ? '2px solid #111' : '2px solid transparent',
-                  marginBottom: -1,
+                  marginBottom: -1, display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                 {tab.label}
+                {newCount > 0 && (
+                  <span style={{
+                    background: '#FF3B30', color: '#fff', borderRadius: 9,
+                    minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 10, fontWeight: 800,
+                    padding: '0 5px', letterSpacing: 0,
+                  }}>{newCount}</span>
+                )}
               </div>
-            ))}
+            ); })}
           </div>
 
           {/* Admin screen content */}

@@ -563,6 +563,47 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
   const upd = (id, f, v) => setProducts(prev => prev.map(p => p.id === id ? { ...p, [f]: v } : p));
   const updVar = (pId, vId, f, v) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.map(vr => vr.id === vId ? { ...vr, [f]: v } : vr) } : p));
   const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", isPopular: false, isHit: false, isNew: false, isAuthor: false, featured: false, priority: 0, shortDesc: "", tags: "", scheduled: false, showFrom: "", showUntil: "", relatedIds: [], variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
+
+  // ═══ DRAFT AUTOSAVE — yangi (hali PB'ga saqlanmagan) mahsulot yo'qolmasin ═══
+  // Yangi mahsulotning id'si raqam (Date.now). U to'ldirilayotganda har 0.8s
+  // localStorage'ga yoziladi; sahifa yopilib qolsa — qaytib ochilganda tiklanadi.
+  // PB'ga saqlangach (id 15 belgili bo'ladi) draft avtomatik tozalanadi.
+  const draftTimer = useRef(null);
+  useEffect(() => {
+    if (draftTimer.current) clearTimeout(draftTimer.current);
+    draftTimer.current = setTimeout(() => {
+      try {
+        const unsaved = products.filter(p =>
+          typeof p.id === 'number' && (p.name || p.brand || (p.images || []).length > 0));
+        if (unsaved.length > 0) {
+          localStorage.setItem('parfum_product_drafts', JSON.stringify(unsaved));
+        } else {
+          localStorage.removeItem('parfum_product_drafts');
+        }
+      } catch { /* localStorage to'lgan bo'lishi mumkin (katta rasm) — jim */ }
+    }, 800);
+    return () => { if (draftTimer.current) clearTimeout(draftTimer.current); };
+  }, [products]);
+
+  useEffect(() => {
+    // Mount'da: tiklanmagan draftlarni ro'yxatga qaytarish
+    try {
+      const raw = localStorage.getItem('parfum_product_drafts');
+      if (!raw) return;
+      const drafts = JSON.parse(raw);
+      if (!Array.isArray(drafts) || drafts.length === 0) return;
+      const known = new Set(products.map(p => p.id));
+      const toAdd = drafts.filter(d => d && typeof d.id === 'number' && !known.has(d.id));
+      if (toAdd.length === 0) return;
+      setProducts(prev => {
+        const ids = new Set(prev.map(p => p.id));
+        const add = toAdd.filter(d => !ids.has(d.id));
+        return add.length ? [...prev, ...add] : prev;
+      });
+      showToast?.(lang === 'kg' ? '📝 Черновик калыбына келтирилди' : '📝 Черновик восстановлен');
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Delete confirmation now handled by the in-app modal — no native confirm.
   const delProd = async (id) => {
     const prod = products.find(p => p.id === id);
