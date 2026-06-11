@@ -133,13 +133,14 @@ const RULES = {
   },
 
   // ─── REVIEWS ─────────────────────────────────────────────────
+  // Jonli sxemada reviews'da egalik maydoni yo'q (orderId/name/text/rating/
+  // approved). Tahrirlash/o'chirish — faqat admin (qoidalarni chetlab o'tadi).
   reviews: {
     listRule:   '',
     viewRule:   '',
     createRule: '@request.auth.id != ""',
-    updateRule: '@request.auth.id = client'
-                + ' || @request.auth.collectionName = "_superusers"',
-    deleteRule: '@request.auth.collectionName = "_superusers"',
+    updateRule: null,
+    deleteRule: null,
   },
 
 };
