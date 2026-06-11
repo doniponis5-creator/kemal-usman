@@ -150,7 +150,23 @@ const RULES = {
 async function applyRules() {
   console.log('🔐 pb-secure-rules.js — locking collections...\n');
 
-  await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASS);
+  // LEGACY PB (<0.23): avval eski /api/admins endpointi, keyin SDK fallback
+  let authed = false;
+  try {
+    const res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity: ADMIN_EMAIL, password: ADMIN_PASS }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      pb.authStore.save(d.token, d.admin || d.record || null);
+      authed = true;
+    }
+  } catch { /* fallback */ }
+  if (!authed) {
+    try { await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASS); }
+    catch { await pb.collection('_superusers').authWithPassword(ADMIN_EMAIL, ADMIN_PASS); }
+  }
   console.log('✅ Authenticated as admin\n');
 
   const collections = await pb.collections.getFullList();
