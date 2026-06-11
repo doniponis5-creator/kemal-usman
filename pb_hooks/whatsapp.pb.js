@@ -90,14 +90,21 @@ routerAdd('POST', '/api/custom/whatsapp/send', (c) => {
     return c.json(500, { error: 'whatsapp_not_configured' });
   }
 
+  // Optional image attachment: { fileUrl, caption } → green-api sendFileByUrl.
+  const fileUrl = data.fileUrl ? String(data.fileUrl) : '';
   try {
-    const url = `https://api.green-api.com/waInstance${instance}/sendMessage/${token}`;
+    const url = fileUrl
+      ? `https://api.green-api.com/waInstance${instance}/sendFileByUrl/${token}`
+      : `https://api.green-api.com/waInstance${instance}/sendMessage/${token}`;
+    const payload = fileUrl
+      ? { chatId: chatId, urlFile: fileUrl, fileName: 'photo.jpg', caption: message }
+      : { chatId: chatId, message: message };
     const res = $http.send({
       url: url,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chatId: chatId, message: message }),
-      timeout: 10,
+      body: JSON.stringify(payload),
+      timeout: 15,
     });
 
     if (res.statusCode !== 200) {

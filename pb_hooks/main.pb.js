@@ -130,8 +130,13 @@ onRecordBeforeCreateRequest((e) => {
   // Pull max-discount-percent from settings.
   let useBonusPct = 30;
   try {
-    const s = $app.dao().findRecordById('settings', 'main');
-    useBonusPct = Number(s.get('useBonusPercent') || 30);
+    let s = null;
+    try { s = $app.dao().findRecordById('settings', 'main'); } catch (_) {}
+    if (!s) {
+      const ss = $app.dao().findRecordsByFilter('settings', "id != ''", '-created', 1, 0);
+      if (ss && ss.length > 0) s = ss[0];
+    }
+    if (s) useBonusPct = Number(s.get('useBonusPercent') || 30);
   } catch (_) { /* default */ }
 
   // RULE 2: bonus can only be spent on orders ≥ MIN_ORDER_FOR_BONUS som.
@@ -208,12 +213,19 @@ onRecordBeforeUpdateRequest((e) => {
   let pct = 5, welcomeAmount = 0, welcomeOn = true,
       friendBonus = 0, referrerBonus = 0;
   try {
-    const s = $app.dao().findRecordById('settings', 'main');
-    pct = Number(s.get('bonusPercent') || 5);
-    welcomeAmount = Number(s.get('welcomeBonus') || 0);
-    welcomeOn = s.get('welcomeBonusEnabled') !== false;
-    friendBonus = Number(s.get('referralFriendBonus') || 0);
-    referrerBonus = Number(s.get('referralBonus') || 0);
+    let s = null;
+    try { s = $app.dao().findRecordById('settings', 'main'); } catch (_) {}
+    if (!s) {
+      const ss = $app.dao().findRecordsByFilter('settings', "id != ''", '-created', 1, 0);
+      if (ss && ss.length > 0) s = ss[0];
+    }
+    if (s) {
+      pct = Number(s.get('bonusPercent') || 5);
+      welcomeAmount = Number(s.get('welcomeBonus') || 0);
+      welcomeOn = s.get('welcomeBonusEnabled') !== false;
+      friendBonus = Number(s.get('referralFriendBonus') || 0);
+      referrerBonus = Number(s.get('referralBonus') || 0);
+    }
   } catch (_) { /* defaults */ }
 
   // PocketBase schema uses camelCase: bonusBalance, bonusHistory,

@@ -12,7 +12,7 @@
 
 import { pb, PB_URL } from './pb';
 
-export const sendWhatsApp = async ({ phone, message, orderId } = {}) => {
+export const sendWhatsApp = async ({ phone, message, orderId, fileUrl } = {}) => {
   if (!phone || !message) return { ok: false, error: 'missing_args' };
 
   // Normalize to digits and append green-api's chatId suffix. Same shape
@@ -35,6 +35,7 @@ export const sendWhatsApp = async ({ phone, message, orderId } = {}) => {
         chatId,
         message,
         orderId: orderId || null,
+        fileUrl: fileUrl || null,
       }),
     });
 

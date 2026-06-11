@@ -165,3 +165,19 @@ npm run test:money      # pul logikasi (8 test, +996700009999 ga yozadi va o'chi
 
 **Qasddan keyinga qoldirilgan** (jonli test talab qiladi, alohida sessiyada):
 App.jsx'ni to'liq fayllarga bo'lish (P2.1 full), Sentry DSN (siz olishingiz kerak).
+
+---
+
+## ✚ ADMIN PANEL AUDIT FIXLARI (2026-06-10, kech)
+
+| # | Muammo | Fix |
+|---|---|---|
+| 18 | **Green API token admin bundle'da ochiq edi** (AdminScreens chunk'ini istalgan kishi yuklab token'ni o'qiy olardi) | Yuborish endi server hook orqali; token faqat serverda. **Green-api kabinetida token'ni ROTATE qiling!** |
+| 19 | Admin sozlamalari faqat localStorage'da — server hooks (bonus %, yetkazish) va boshqa qurilmalar ko'rmasdi | `api.saveSettings` + admin o'zgartirganda PB'ga avtomatik sync (1.2s debounce) + yuklashda PB'dan merge |
+| 20 | `loadPaymentSettings` yuklangan, lekin natija tashlab yuborilardi (bo'sh spread bug) | To'g'ri qo'llanadi |
+| 21 | Server hook'lar settings'ni faqat id='main' bilan qidirardi (topilmasa jim default) | Fallback: birinchi settings yozuvi |
+| 22 | Klientlar ro'yxati hammasini birdan render qilardi | 100 tadan sahifalash + "Показать ещё" |
+| 23 | Bulk amallarda xatolar jim yutilardi | Toast'da nechta saqlanmagani ko'rsatiladi |
+| 24 | WhatsApp rasm yuborish to'g'ridan-to'g'ri green-api'ga edi | Server hook endi sendFileByUrl'ni ham qo'llab-quvvatlaydi |
+
+**Deploy талаб qilinadi:** pb_hooks (whatsapp, main) + frontend o'zgardi → `./deploy-odengi.sh`

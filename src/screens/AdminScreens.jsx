@@ -4,6 +4,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/backend.js";
+import { sendWhatsApp as sendWhatsAppServer } from "../api/whatsapp";
 import { PB_URL, audioUrl, fileUrl, pb } from "../api/pb";
 import { sendWhatsApp } from "../api/whatsapp";
 import { BG_PRESETS, INITIAL_PRODUCTS } from "../appData.js";
@@ -1161,28 +1162,32 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
       return { ...p, variants: (p.variants || []).map(v => ({ ...v, inStock })) };
     }));
     // Persist to PB
+    let failed = 0;
     for (const id of ids) {
       const prod = products.find(p => p.id === id);
       if (prod?.collectionId) {
         const updatedV = (prod.variants || []).map(v => ({ ...v, inStock }));
-        try { await api.updateProduct(id, { variants: JSON.stringify(updatedV) }); } catch (e) { console.warn('bulk stock:', e); }
+        try { await api.updateProduct(id, { variants: JSON.stringify(updatedV) }); } catch (e) { failed++; console.warn('bulk stock:', e); }
       }
     }
     setSelected(new Set());
-    showToast?.(inStock ? `${ids.length} товаров → В наличии` : `${ids.length} товаров → Нет в наличии`);
+    showToast?.(failed
+      ? `⚠️ ${ids.length - failed} OK, ${failed} не сохранилось — проверьте интернет`
+      : (inStock ? `${ids.length} товаров → В наличии` : `${ids.length} товаров → Нет в наличии`));
   };
   const bulkSetCategory = async (cat) => {
     const ids = [...selected];
     setProducts(prev => prev.map(p => ids.includes(p.id) ? { ...p, category: cat } : p));
     // Persist to PB
+    let failed = 0;
     for (const id of ids) {
       const prod = products.find(p => p.id === id);
       if (prod?.collectionId) {
-        try { await api.updateProduct(id, { category: cat }); } catch (e) { console.warn('bulk cat:', e); }
+        try { await api.updateProduct(id, { category: cat }); } catch (e) { failed++; console.warn('bulk cat:', e); }
       }
     }
     setSelected(new Set());
-    showToast?.(`${ids.length} товаров → ${cat}`);
+    showToast?.(failed ? `⚠️ ${ids.length - failed} OK, ${failed} не сохранилось` : `${ids.length} товаров → ${cat}`);
   };
 
   // CSV Export
@@ -2707,6 +2712,8 @@ export function AdminClientsScreen({ clients = [], orders = [], showToast }) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("recent"); // 'recent', 'orders', 'spent', 'bonus'
   const [selectedClient, setSelectedClient] = useState(null);
+  // Performance: minglab mijozda ham UI qotmasligi uchun sahifalab ko'rsatamiz.
+  const [visibleCount, setVisibleCount] = useState(100);
 
   // Compute client stats
   const clientStats = useMemo(() => {
@@ -2837,7 +2844,7 @@ export function AdminClientsScreen({ clients = [], orders = [], showToast }) {
             {lang === 'kg' ? 'Кардарлар табылган жок' : 'Клиенты не найдены'}
           </div>
         )}
-        {sorted.map((client, idx) => (
+        {sorted.slice(0, visibleCount).map((client, idx) => (
           <motion.div
             key={client.phone || idx}
             initial={{ opacity: 0, y: 8 }}
@@ -2882,6 +2889,12 @@ export function AdminClientsScreen({ clients = [], orders = [], showToast }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.textMuted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </motion.div>
         ))}
+        {sorted.length > visibleCount && (
+          <button
+            onClick={() => setVisibleCount(v => v + 100)}
+            style={{ width: "100%", padding: "13px 0", background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, color: T.text, fontSize: 13, fontWeight: 700, cursor: "pointer", marginTop: 4 }}
+          >{lang === 'kg' ? 'Дагы көрсөтүү' : 'Показать ещё'} ({sorted.length - visibleCount})</button>
+        )}
       </div>
 
       {/* Client detail modal */}
@@ -3515,37 +3528,17 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
     })();
   }, []);
 
-  // ── Green API WhatsApp sender ──
-  const GREEN_API_INSTANCE = "7105189394";
-  const GREEN_API_TOKEN = "adfaf904f03c4cb492566e23430559dbfda69af35b5a45d894";
-  const GREEN_API_URL = `https://api.green-api.com/waInstance${GREEN_API_INSTANCE}`;
-
+  // ── WhatsApp sender — SERVER hook orqali (token mijozga chiqmaydi) ──
+  // Eski versiyada token shu yerda hardcode edi (bundle'da ochiq!).
+  // Endi pb_hooks/whatsapp.pb.js ga yuboriladi; token faqat serverda.
   const sendWAMessage = async (phone, message) => {
-    const normalized = String(phone).replace(/\D/g, '');
-    if (!normalized || normalized.length < 9) return false;
-    const chatId = `${normalized}@c.us`;
-    try {
-      const r = await fetch(`${GREEN_API_URL}/sendMessage/${GREEN_API_TOKEN}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, message }),
-      });
-      return r.ok;
-    } catch { return false; }
+    const r = await sendWhatsAppServer({ phone, message });
+    return !!r.ok;
   };
 
   const sendWAImageWithText = async (phone, imageUrl, caption) => {
-    const normalized = String(phone).replace(/\D/g, '');
-    if (!normalized || normalized.length < 9) return false;
-    const chatId = `${normalized}@c.us`;
-    try {
-      const r = await fetch(`${GREEN_API_URL}/sendFileByUrl/${GREEN_API_TOKEN}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, urlFile: imageUrl, fileName: "photo.jpg", caption }),
-      });
-      return r.ok;
-    } catch { return false; }
+    const r = await sendWhatsAppServer({ phone, message: caption, fileUrl: imageUrl });
+    return !!r.ok;
   };
 
   // Send notification

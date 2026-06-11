@@ -149,6 +149,29 @@ export const api = {
     } catch { /* ignore */ }
   },
 
+  // ─── Global Settings (PB `settings` kolleksiyasi — server hooks ham o'qiydi) ──
+  // getSettings: birinchi yozuvni qaytaradi (id='main' bo'lishi shart emas).
+  // saveSettings: mavjud yozuvni yangilaydi, bo'lmasa yaratadi (faqat admin
+  // token bilan ishlaydi — kolleksiya update/create rule superuser-only).
+  getSettings: async () => {
+    try {
+      const recs = await pb.collection("settings").getFullList({ requestKey: null });
+      return recs.length > 0 ? recs[0] : null;
+    } catch (e) { console.warn('getSettings error:', e); return null; }
+  },
+  saveSettings: async (data) => {
+    // PB meta maydonlarini va katta media'larni yubormaslik
+    const { id, created, updated, collectionId, collectionName,
+            instagramScreen, loginBg, instaStories, ...clean } = data || {};
+    try {
+      const recs = await pb.collection("settings").getFullList({ requestKey: null });
+      if (recs.length > 0) {
+        return await pb.collection("settings").update(recs[0].id, clean, { requestKey: null });
+      }
+      return await pb.collection("settings").create(clean, { requestKey: null });
+    } catch (e) { console.warn('saveSettings error:', e); return null; }
+  },
+
   // ─── Payment Settings ─────────────
   // Stored in site_media as key="payment_settings", file=JSON blob.
   // Shape: { }

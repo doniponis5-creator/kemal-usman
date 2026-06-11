@@ -6269,7 +6269,18 @@ export default function App() {
       const { loginBg, ...rest } = settings;
       localStorage.setItem('parfum_settings', JSON.stringify(rest));
     } catch { /* ignore */ }
-  }, [settings]);
+    // ADMIN: sozlamalarni PocketBase'ga ham yozish (debounce) — server
+    // hooks (bonus %, yetkazish narxi...) va boshqa qurilmalar ko'rsin.
+    if (isAdmin && pb.authStore.isValid) {
+      if (settingsSaveTimer.current) clearTimeout(settingsSaveTimer.current);
+      settingsSaveTimer.current = setTimeout(() => {
+        api.saveSettings(settings).then(r => {
+          if (!r) console.warn('settings PB sync failed');
+        });
+      }, 1200);
+    }
+  }, [settings, isAdmin]);
+  const settingsSaveTimer = useRef(null);
 
   // Load data from PocketBase. Extracted so PullToRefresh can call it.
   const loadAll = React.useCallback(async () => {
@@ -6339,11 +6350,17 @@ export default function App() {
       // Load payment settings from PocketBase
       const paymentData = await api.loadPaymentSettings().catch(() => null);
       if (paymentData) {
-        setSettings(prev => ({
-          ...prev,
-                    
-                    
-        }));
+        // FIX: ilgari bu spread bo'sh edi — yuklangan to'lov sozlamalari
+        // tashlab yuborilardi. Endi to'g'ri qo'llanadi.
+        setSettings(prev => ({ ...prev, ...paymentData }));
+      }
+
+      // Global settings PB'dan — admin boshqa qurilmada o'zgartirgan bo'lsa
+      // ham hamma joyda bir xil bo'lsin. localStorage faqat tezkor kesh.
+      const pbSettings = await api.getSettings().catch(() => null);
+      if (pbSettings) {
+        const { id, created, updated, collectionId, collectionName, ...rest } = pbSettings;
+        setSettings(prev => ({ ...prev, ...rest }));
       }
 
       // Load banners from PocketBase — overrides localStorage so ALL devices
