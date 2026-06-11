@@ -53,20 +53,28 @@ async function adminAuth() {
 }
 
 async function cleanup() {
-  // testdan qolgan klient + buyurtmalarni o'chirish (verbose — sharpa yozuvlarni ko'rish uchun)
+  // Har bir so'rov alohida try/catch — bittasi yiqilsa qolganlari ishlayveradi.
+  // MUHIM: bitta telefonli IKKITA mijoz qolsa, hook eskisini topib oladi va
+  // testlar buziladi — shuning uchun uch xil belgi bo'yicha qidiramiz.
+  let deleted = { orders: 0, clients: 0 };
   try {
     const orders = await pb.collection('orders').getFullList({ filter: `clientPhone = "${TEST_PHONE}"`, requestKey: null });
-    for (const o of orders) await pb.collection('orders').delete(o.id);
-    const uname = TEST_PHONE.replace(/\D/g, '');
-    const clients = await pb.collection('clients').getFullList({
-      filter: `phone = "${TEST_PHONE}" || username ~ "${uname}" || name = "MONEY TEST"`,
-      requestKey: null,
-    });
-    for (const c of clients) await pb.collection('clients').delete(c.id);
-    if (orders.length || clients.length) info(`cleanup: ${orders.length} buyurtma, ${clients.length} klient o'chirildi`);
-  } catch (e) {
-    console.warn('  ⚠️ cleanup xatosi:', e?.response?.message || e.message);
+    for (const o of orders) { try { await pb.collection('orders').delete(o.id); deleted.orders++; } catch (_) {} }
+  } catch (e) { console.warn("  ⚠️ cleanup(orders):", e?.response?.message || e.message); }
+  const ids = new Set();
+  for (const flt of [`phone = "${TEST_PHONE}"`, `name = "MONEY TEST"`]) {
+    try {
+      const cs = await pb.collection('clients').getFullList({ filter: flt, requestKey: null });
+      cs.forEach(c => ids.add(c.id));
+    } catch (e) { console.warn(`  ⚠️ cleanup(${flt}):`, e?.response?.message || e.message); }
   }
+  for (const id of ids) { try { await pb.collection('clients').delete(id); deleted.clients++; } catch (_) {} }
+  if (deleted.orders || deleted.clients) info(`cleanup: ${deleted.orders} buyurtma, ${deleted.clients} klient o'chirildi`);
+  // Tekshiruv: telefon bo'yicha klient qolmadimi?
+  try {
+    const left = await pb.collection('clients').getFullList({ filter: `phone = "${TEST_PHONE}"`, requestKey: null });
+    if (left.length > 0) console.warn(`  ⚠️ DIQQAT: ${left.length} ta sharpa klient hali ham bor — testlar noto'g'ri bo'lishi mumkin!`);
+  } catch (_) {}
 }
 
 async function run() {
