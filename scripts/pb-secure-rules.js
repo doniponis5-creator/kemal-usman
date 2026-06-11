@@ -66,16 +66,14 @@ const RULES = {
   },
 
   // ─── ORDERS ──────────────────────────────────────────────────
+  // Jonli sxemada orders'da `client` relation yo'q — egalik clientPhone orqali.
+  // Admin (legacy token) qoidalarni baribir chetlab o'tadi.
   orders: {
-    listRule:   '@request.auth.id != ""'
-                + ' && (client = @request.auth.id'
-                + '  || @request.auth.collectionName = "_superusers")',
-    viewRule:   '@request.auth.id != ""'
-                + ' && (client = @request.auth.id'
-                + '  || @request.auth.collectionName = "_superusers")',
+    listRule:   'clientPhone = @request.auth.phone',
+    viewRule:   'clientPhone = @request.auth.phone',
     createRule: '@request.auth.id != ""',
-    updateRule: '@request.auth.collectionName = "_superusers"',
-    deleteRule: '@request.auth.collectionName = "_superusers"',
+    updateRule: null,
+    deleteRule: null,
   },
 
   // ─── OTP CODES ───────────────────────────────────────────────
@@ -199,9 +197,15 @@ async function applyRules() {
       continue;
     }
 
-    await pb.collections.update(col.id, rules);
-    console.log(`🔒 ${name} — rules updated`);
-    changed++;
+    try {
+      await pb.collections.update(col.id, rules);
+      console.log(`🔒 ${name} — rules updated`);
+      changed++;
+    } catch (e) {
+      console.error(`❌ ${name} — ${e?.response?.message || e.message}`,
+        e?.response?.data ? JSON.stringify(e.response.data) : '');
+      missing++;
+    }
   }
 
   console.log(`\n📊 Result: ${changed} updated, ${skipped} already correct, ${missing} missing`);
