@@ -57,7 +57,10 @@ async function cleanup() {
   try {
     const orders = await pb.collection('orders').getFullList({ filter: `clientPhone = "${TEST_PHONE}"` });
     for (const o of orders) await pb.collection('orders').delete(o.id);
-    const clients = await pb.collection('clients').getFullList({ filter: `phone = "${TEST_PHONE}"` });
+    const uname = TEST_PHONE.replace(/\D/g, '');
+    const clients = await pb.collection('clients').getFullList({
+      filter: `phone = "${TEST_PHONE}" || username = "${uname}" || email = "${uname}@test.local"`,
+    });
     for (const c of clients) await pb.collection('clients').delete(c.id);
   } catch (_) {}
 }
