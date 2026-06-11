@@ -53,16 +53,20 @@ async function adminAuth() {
 }
 
 async function cleanup() {
-  // testdan qolgan клиент + buyurtmalarni o'chirish
+  // testdan qolgan klient + buyurtmalarni o'chirish (verbose — sharpa yozuvlarni ko'rish uchun)
   try {
-    const orders = await pb.collection('orders').getFullList({ filter: `clientPhone = "${TEST_PHONE}"` });
+    const orders = await pb.collection('orders').getFullList({ filter: `clientPhone = "${TEST_PHONE}"`, requestKey: null });
     for (const o of orders) await pb.collection('orders').delete(o.id);
     const uname = TEST_PHONE.replace(/\D/g, '');
     const clients = await pb.collection('clients').getFullList({
-      filter: `phone = "${TEST_PHONE}" || username = "${uname}" || email = "${uname}@test.local"`,
+      filter: `phone = "${TEST_PHONE}" || username ~ "${uname}" || name = "MONEY TEST"`,
+      requestKey: null,
     });
     for (const c of clients) await pb.collection('clients').delete(c.id);
-  } catch (_) {}
+    if (orders.length || clients.length) info(`cleanup: ${orders.length} buyurtma, ${clients.length} klient o'chirildi`);
+  } catch (e) {
+    console.warn('  ⚠️ cleanup xatosi:', e?.response?.message || e.message);
+  }
 }
 
 async function run() {
@@ -93,10 +97,11 @@ async function run() {
   const realPrice = Number(variant.price);
   info(`Test mahsulot: ${product.name} / ${variant.label} = ${realPrice} som`);
 
+  const RUN = Date.now().toString(36);
   const client = await pb.collection('clients').create({
-    username: TEST_PHONE.replace(/\D/g, ''),
+    username: TEST_PHONE.replace(/\D/g, '') + RUN,
     phone: TEST_PHONE, name: 'MONEY TEST', bonus_balance: 500, bonus_history: '[]',
-    email: TEST_PHONE.replace(/\D/g, '') + '@test.local', emailVisibility: false,
+    email: TEST_PHONE.replace(/\D/g, '') + RUN + '@kemalusman.local', emailVisibility: false,
     password: 'TestPass123!xyz', passwordConfirm: 'TestPass123!xyz', verified: true,
   });
 
