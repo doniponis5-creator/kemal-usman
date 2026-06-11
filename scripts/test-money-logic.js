@@ -19,7 +19,7 @@ import PocketBase from 'pocketbase';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const PB_URL = (process.env.VITE_PB_URL || 'http://127.0.0.1:8090').replace(/\/$/, '');
+const PB_URL = (process.env.VITE_PB_URL || 'https://api.kemalusman.kg').replace(/\/$/, '');
 const TEST_PHONE = '+996700009999';
 
 const pb = new PocketBase(PB_URL);
@@ -27,6 +27,30 @@ let passed = 0, failed = 0;
 const pass = (m) => { console.log(`  ✅ ${m}`); passed++; };
 const fail = (m) => { console.error(`  ❌ ${m}`); failed++; };
 const info = (m) => console.log(`  ℹ️  ${m}`);
+
+async function adminAuth() {
+  // LEGACY PB (<0.23): jonli server /api/admins/auth-with-password ishlatadi
+  // (src/api/auth.js dagi adminLogin bilan bir xil yondashuv). Yangi SDK
+  // to'g'ridan-to'g'ri _superusers endpointiga uradi va 404 oladi — shuning
+  // uchun avval legacy endpoint, keyin SDK fallback.
+  try {
+    const res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity: process.env.PB_ADMIN_EMAIL, password: (process.env.PB_ADMIN_PASS || process.env.PB_ADMIN_PASSWORD) }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      pb.authStore.save(data.token, data.admin || data.record || null);
+      return;
+    }
+    if (res.status === 400) throw new Error('Email yoki parol noto\'g\'ri (.env dagi PB_process.env.PB_ADMIN_EMAIL/PB_(process.env.PB_ADMIN_PASS || process.env.PB_ADMIN_PASSWORD) ni tekshiring)');
+  } catch (e) {
+    if (String(e.message || '').includes('parol')) throw e;
+  }
+  try { await pb.admins.authWithPassword(process.env.PB_ADMIN_EMAIL, (process.env.PB_ADMIN_PASS || process.env.PB_ADMIN_PASSWORD)); return; } catch { /* keyingisi */ }
+  await pb.collection('_superusers').authWithPassword(process.env.PB_ADMIN_EMAIL, (process.env.PB_ADMIN_PASS || process.env.PB_ADMIN_PASSWORD));
+}
 
 async function cleanup() {
   // testdan qolgan клиент + buyurtmalarni o'chirish
@@ -43,8 +67,7 @@ async function run() {
   const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
   const ADMIN_PASS = process.env.PB_ADMIN_PASS || process.env.PB_ADMIN_PASSWORD;
   if (!ADMIN_EMAIL || !ADMIN_PASS) { console.error('❌ Set PB_ADMIN_EMAIL/PB_ADMIN_PASS in .env'); process.exit(1); }
-  try { await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASS); }
-  catch { await pb.collection('_superusers').authWithPassword(ADMIN_EMAIL, ADMIN_PASS); }
+  await adminAuth();
   info('Admin auth OK');
 
   await cleanup();

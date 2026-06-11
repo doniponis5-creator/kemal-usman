@@ -18,7 +18,7 @@ import PocketBase from 'pocketbase';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-const PB_URL = (process.env.VITE_PB_URL || 'http://127.0.0.1:8090').replace(/\/$/, '');
+const PB_URL = (process.env.VITE_PB_URL || 'https://api.kemalusman.kg').replace(/\/$/, '');
 const ADMIN_EMAIL = process.env.PB_ADMIN_EMAIL;
 const ADMIN_PASS = process.env.PB_ADMIN_PASS || process.env.PB_ADMIN_PASSWORD;
 
@@ -43,8 +43,27 @@ const LEGACY_MAP = {
 const pb = new PocketBase(PB_URL);
 
 async function adminAuth() {
-  try { await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASS); }
-  catch { await pb.collection('_superusers').authWithPassword(ADMIN_EMAIL, ADMIN_PASS); }
+  // LEGACY PB (<0.23): jonli server /api/admins/auth-with-password ishlatadi
+  // (src/api/auth.js dagi adminLogin bilan bir xil yondashuv). Yangi SDK
+  // to'g'ridan-to'g'ri _superusers endpointiga uradi va 404 oladi — shuning
+  // uchun avval legacy endpoint, keyin SDK fallback.
+  try {
+    const res = await fetch(`${PB_URL}/api/admins/auth-with-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity: ADMIN_EMAIL, password: ADMIN_PASS }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      pb.authStore.save(data.token, data.admin || data.record || null);
+      return;
+    }
+    if (res.status === 400) throw new Error('Email yoki parol noto\'g\'ri (.env dagi PB_ADMIN_EMAIL/PB_ADMIN_PASS ni tekshiring)');
+  } catch (e) {
+    if (String(e.message || '').includes('parol')) throw e;
+  }
+  try { await pb.admins.authWithPassword(ADMIN_EMAIL, ADMIN_PASS); return; } catch { /* keyingisi */ }
+  await pb.collection('_superusers').authWithPassword(ADMIN_EMAIL, ADMIN_PASS);
 }
 
 function isEmpty(v) {
