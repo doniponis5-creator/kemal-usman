@@ -2,12 +2,9 @@
 // OTP authentication — WhatsApp delivery via green-api.
 //
 // v2 (2026-06-10) — FIELD NAME FIX + security hardening:
-//   • The clients schema uses camelCase: bonusBalance, bonusHistory,
-//     referralCode, referredBy (verified against main.pb.js after-create hook,
-//     the frontend, scripts/pb-verify-orders.js and FIXES_APPLIED.md).
-//     The previous version wrote snake_case (bonus_balance, referred_by) —
-//     those writes were silently IGNORED by PocketBase, which meant the
-//     referral system never recorded who invited whom.
+//   • CLIENTS SXEMASI (jonli serverda 2026-06-10 da TASDIQLANGAN): snake_case
+//     — bonus_balance, bonus_history, referral_code, referred_by.
+//     Frontend'ga javob kalitlari camelCase qilib map qilinadi (pastda).
 //   • Welcome / referral bonuses are NOT credited here. By design (see
 //     main.pb.js RULE 1 + RULE 3) they fire on the FIRST DELIVERED order —
 //     this prevents fake-account farming. This hook only records referredBy.
@@ -144,9 +141,9 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
       username:     d,
       phone:        phone,
       name:         name,
-      bonusBalance: 0,
-      bonusHistory: '[]',
-      referredBy:   referredBy || null,
+      bonus_balance: 0,
+      bonus_history: '[]',
+      referred_by:  referredBy || null,
       email:        d + '@kemalusman.local',
       emailVisibility: false,
       verified:     true,
@@ -161,9 +158,9 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
     // Self-referral guard: if someone typed their own fresh code, clear it so
     // the first-delivery payout (main.pb.js) can't self-credit.
     try {
-      var ownCode = client.get('referralCode');
+      var ownCode = client.get('referral_code');
       if (referredBy && ownCode && String(referredBy) === String(ownCode)) {
-        client.set('referredBy', null);
+        client.set('referred_by', null);
         $app.dao().saveRecord(client);
         $app.logger().info('otp: self-referral cleared', 'phone', phone);
       }
@@ -176,10 +173,10 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
   }
 
   // ── Build response (camelCase reads — matches the live schema) ────────────
-  var finalBalance = Number(client.get('bonusBalance') || 0);
+  var finalBalance = Number(client.get('bonus_balance') || 0);
   var finalHistory = [];
   try {
-    var rawHist = client.get('bonusHistory');
+    var rawHist = client.get('bonus_history');
     finalHistory = JSON.parse((typeof rawHist === 'string') ? (rawHist || '[]') : String(rawHist || '[]'));
   } catch (_) { finalHistory = []; }
   if (!Array.isArray(finalHistory)) finalHistory = [];
@@ -194,7 +191,7 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
       name:         client.get('name'),
       bonusBalance: finalBalance,
       bonusHistory: finalHistory,
-      referralCode: client.get('referralCode'),
+      referralCode: client.get('referral_code'),
     },
   });
 });

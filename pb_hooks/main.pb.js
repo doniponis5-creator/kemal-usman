@@ -154,7 +154,7 @@ onRecordBeforeCreateRequest((e) => {
   if (phone) {
     try {
       const client = $app.dao().findFirstRecordByFilter('clients', 'phone = {:phone}', { phone });
-      bonusBalance = Number(client.get('bonusBalance') || 0);
+      bonusBalance = Number(client.get('bonus_balance') || 0);
     } catch (_) { /* guest */ }
   }
 
@@ -182,12 +182,12 @@ onRecordAfterCreateRequest((e) => {
     let client;
     try { client = txDao.findFirstRecordByFilter('clients', 'phone = {:phone}', { phone }); }
     catch (_) { return; }
-    const balance = Number(client.get('bonusBalance') || 0);
-    let history = client.get('bonusHistory') || [];
+    const balance = Number(client.get('bonus_balance') || 0);
+    let history = client.get('bonus_history') || [];
     if (typeof history === 'string') { try { history = JSON.parse(history); } catch { history = []; } }
     history.push({ type: 'spent', amount: -allowedBonus, label: 'Order #' + e.record.id, date: new Date().toISOString() });
-    client.set('bonusBalance', Math.max(0, balance - allowedBonus));
-    client.set('bonusHistory', history);
+    client.set('bonus_balance', Math.max(0, balance - allowedBonus));
+    client.set('bonus_history', history);
     txDao.saveRecord(client);
   });
 }, 'orders');
@@ -228,11 +228,12 @@ onRecordBeforeUpdateRequest((e) => {
     }
   } catch (_) { /* defaults */ }
 
-  // PocketBase schema uses camelCase: bonusBalance, bonusHistory,
-  // referralCode, referredBy — consistent with the frontend.
-  let balance = Number(client.get('bonusBalance') || 0);
+  // HAQIQIY sxema (jonli serverda tasdiqlangan 2026-06-10): snake_case —
+  // bonus_balance, bonus_history, referral_code, referred_by.
+  // Frontend'ga javob kalitlari camelCase bo'lib map qilinadi.
+  let balance = Number(client.get('bonus_balance') || 0);
   let history = [];
-  try { history = JSON.parse(client.get('bonusHistory') || '[]'); } catch (_) { history = []; }
+  try { history = JSON.parse(client.get('bonus_history') || '[]'); } catch (_) { history = []; }
   if (!Array.isArray(history)) history = [];
 
   // Is this the client's first delivery? (Excludes the order being delivered now.)
@@ -263,10 +264,10 @@ onRecordBeforeUpdateRequest((e) => {
   }
 
   // 3. Referral payout on first delivery — skip if already given at registration.
-  const usedRef = client.get('referredBy');
+  const usedRef = client.get('referred_by');
   const hasReferralInHistory = history.some(function(h) { return h && h.type === 'referral'; });
   if (isFirstDelivery && usedRef && !hasReferralInHistory) {
-    const ownCode = client.get('referralCode');
+    const ownCode = client.get('referral_code');
     if (ownCode && String(usedRef) === String(ownCode)) {
       $app.logger().info('referral: self-referral blocked', 'phone', phone);
     } else {
@@ -276,14 +277,14 @@ onRecordBeforeUpdateRequest((e) => {
       }
       if (referrerBonus > 0) {
         let referrer;
-        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referralCode = {:c}', { c: usedRef }); } catch (_) {}
+        try { referrer = $app.dao().findFirstRecordByFilter('clients', 'referral_code = {:c}', { c: usedRef }); } catch (_) {}
         if (referrer && referrer.id !== client.id) {
-          const refBal = Number(referrer.get('bonusBalance') || 0) + referrerBonus;
+          const refBal = Number(referrer.get('bonus_balance') || 0) + referrerBonus;
           let refHistory = [];
-          try { refHistory = JSON.parse(referrer.get('bonusHistory') || '[]'); } catch (_) { refHistory = []; }
+          try { refHistory = JSON.parse(referrer.get('bonus_history') || '[]'); } catch (_) { refHistory = []; }
           refHistory.push({ type: 'referral', amount: referrerBonus, label: 'Referral payout for ' + phone, date: new Date().toISOString() });
-          referrer.set('bonusBalance', refBal);
-          referrer.set('bonusHistory', JSON.stringify(refHistory));
+          referrer.set('bonus_balance', refBal);
+          referrer.set('bonus_history', JSON.stringify(refHistory));
           $app.dao().saveRecord(referrer);
           $app.logger().info('referral: payout credited', 'referrerId', referrer.id, 'amount', referrerBonus);
         }
@@ -291,8 +292,8 @@ onRecordBeforeUpdateRequest((e) => {
     }
   }
 
-  client.set('bonusBalance', balance);
-  client.set('bonusHistory', JSON.stringify(history));
+  client.set('bonus_balance', balance);
+  client.set('bonus_history', JSON.stringify(history));
   $app.dao().saveRecord(client);
 }, 'orders');
 
@@ -308,15 +309,15 @@ onRecordAfterCreateRequest((e) => {
   if (!phone) return;
 
   // Generate a unique referral code if missing.
-  if (!e.record.get('referralCode')) {
+  if (!e.record.get('referral_code')) {
     const code = (phone.replace(/\D/g, '').slice(-4) + Math.floor(1000 + Math.random() * 9000)).toUpperCase();
-    e.record.set('referralCode', code);
+    e.record.set('referral_code', code);
     $app.dao().saveRecord(e.record);
   }
 
-  if (e.record.get('referredBy')) {
+  if (e.record.get('referred_by')) {
     $app.logger().info('client: pending referral on first delivery',
-      'phone', phone, 'referredBy', e.record.get('referredBy'));
+      'phone', phone, 'referredBy', e.record.get('referred_by'));
   }
 }, 'clients');
 
@@ -328,8 +329,8 @@ routerAdd('GET', '/api/custom/me', (c) => {
     id: auth.id,
     phone: auth.get('phone'),
     name: auth.get('name'),
-    bonusBalance: auth.get('bonusBalance'),
-    referralCode: auth.get('referralCode'),
+    bonusBalance: auth.get('bonus_balance'),
+    referralCode: auth.get('referral_code'),
   });
 }, $apis.requireRecordAuth('clients'));
 
@@ -339,9 +340,9 @@ routerAdd('POST', '/api/custom/account/delete', (c) => {
   if (!auth) return c.json(401, { error: 'unauthorized' });
   auth.set('phone', 'deleted_' + auth.id);
   auth.set('name', 'Deleted user');
-  auth.set('bonusHistory', '[]');
-  auth.set('bonusBalance', 0);
-  auth.set('referralCode', null);
+  auth.set('bonus_history', '[]');
+  auth.set('bonus_balance', 0);
+  auth.set('referral_code', null);
   auth.set('deletedAt', new Date().toISOString());
   $app.dao().saveRecord(auth);
   return c.json(200, { ok: true });
