@@ -3451,9 +3451,9 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                 <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 2 }}>{IC.close}</button>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => updateQty(item, -1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 16, fontWeight: 700, color: T.text }}>−</button>
+                  <button onClick={() => { haptic('light'); updateQty(item, -1); }} style={{ width: 36, height: 36, borderRadius: 10, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 18, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
                   <motion.span key={item.qty} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 460, damping: 22 }} style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text, display: 'inline-block' }}>{item.qty}</motion.span>
-                  <button onClick={() => updateQty(item, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: T.accent, border: "none", cursor: "pointer", fontSize: 16, fontWeight: 700, color: "#fff" }}>+</button>
+                  <button onClick={() => { haptic('light'); updateQty(item, 1); }} style={{ width: 36, height: 36, borderRadius: 10, background: T.accent, border: "none", cursor: "pointer", fontSize: 18, fontWeight: 700, color: "#fff", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                 </div>
                 <motion.div key={(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return fp * item.qty; })()} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return formatSum(fp * item.qty); })()}</motion.div>
               </div>
@@ -3865,6 +3865,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 // ─── MY ORDERS SCREEN ──────────────────────────────────────────────────────────
 export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }) {
   const { t, lang } = useLang();
+  const [payingOrderId, setPayingOrderId] = useState(null);
   const [reviewOrderId, setReviewOrderId] = useState(null);
   const [reviewText, setReviewText] = useState('');
   const [reviewRating, setReviewRating] = useState(5);
@@ -3922,6 +3923,39 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
               <div style={{ marginBottom: 14 }}>
                 <OrderTimeline status={order.status} lang={lang} />
               </div>
+              {/* To'lov tugamagan onlayn buyurtma — davom ettirish (limbo-fix) */}
+              {(order.payMethod === 'odengi' || order.paymentMethod === 'odengi') &&
+                order.paymentStatus !== 'paid' && order.status !== 'cancelled' && (
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  disabled={payingOrderId === order.id}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    haptic('medium');
+                    setPayingOrderId(order.id);
+                    try {
+                      const inv = await createOdengiInvoice(order.id);
+                      const url = inv.paylink_url || inv.site_pay || inv.link_app;
+                      if (url) {
+                        window.open(url, '_blank');
+                        pollOdengiPayment(order.id, { timeoutMs: 180000 }).then(paid => {
+                          if (paid) showToast?.(lang === 'kg' ? '✅ Төлөм кабыл алынды!' : '✅ Оплата получена!');
+                        });
+                      } else {
+                        showToast?.(lang === 'kg' ? 'Төлөм шилтемеси алынбады' : 'Не удалось получить ссылку на оплату', 'error');
+                      }
+                    } catch (err) {
+                      showToast?.(err?.message === 'order_already_paid'
+                        ? (lang === 'kg' ? 'Заказ мурунтан төлөнгөн' : 'Заказ уже оплачен')
+                        : (lang === 'kg' ? 'Ката — кайра аракет кылыңыз' : 'Ошибка — попробуйте ещё раз'), 'error');
+                    } finally {
+                      setPayingOrderId(null);
+                    }
+                  }}
+                  style={{ ...btnGreen({ padding: '11px 16px', fontSize: 13, marginBottom: 12 }), opacity: payingOrderId === order.id ? 0.6 : 1 }}>
+                  {payingOrderId === order.id ? '...' : (lang === 'kg' ? '💳 Төлөмдү улантуу' : '💳 Продолжить оплату')}
+                </motion.button>
+              )}
               {(order.items || []).map((item, idx) => (
                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ color: T.textSecond, fontSize: 13 }}>{item.name} × {item.qty}</span>
@@ -6329,6 +6363,16 @@ export default function App() {
           };
         });
         setProducts(mapped);
+        // Offline kesh: keyingi ochilishda internet bo'lmasa ham katalog chiqsin.
+        try {
+          const slim = mapped.slice(0, 150).map(p => ({
+            id: p.id, collectionId: p.collectionId, name: p.name, brand: p.brand,
+            category: p.category, img: p.img, images: (p.images || []).slice(0, 1),
+            desc: (p.desc || '').slice(0, 200), variants: p.variants,
+            isHit: p.isHit, isNew: p.isNew, isPopular: p.isPopular, priority: p.priority,
+          }));
+          localStorage.setItem('parfum_products_cache', JSON.stringify(slim));
+        } catch { /* localStorage to'lgan — kesh shart emas */ }
       }
       if (pbOrders.length > 0) setOrders(pbOrders.map(o => ({
         ...o,
@@ -6393,10 +6437,16 @@ export default function App() {
     } catch (e) {
       console.warn("PocketBase load error:", e);
       // APP STORE 2.1a/2.2 fix: agar server vaqtincha ishlamasa, katalog
-      // HECH QACHON bo'sh ko'rinmasin — lokal demo-katalog (public/perfumes/
-      // SVG'lari bilan) fallback sifatida ko'rsatiladi. Server qaytishi bilan
-      // keyingi loadAll real ma'lumotni ustidan yozadi.
-      setProducts(prev => (prev && prev.length > 0) ? prev : INITIAL_PRODUCTS);
+      // HECH QACHON bo'sh ko'rinmasin. Tartib: oxirgi muvaffaqiyatli yuklangan
+      // katalog keshi → bo'lmasa lokal demo-katalog.
+      setProducts(prev => {
+        if (prev && prev.length > 0) return prev;
+        try {
+          const cached = JSON.parse(localStorage.getItem('parfum_products_cache') || 'null');
+          if (Array.isArray(cached) && cached.length > 0) return cached;
+        } catch { /* ignore */ }
+        return INITIAL_PRODUCTS;
+      });
     } finally {
       setPbLoading(false);
     }
