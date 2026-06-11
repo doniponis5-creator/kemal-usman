@@ -125,7 +125,7 @@ function Toast({ toast, onDismiss }) {
             color: "#F5F5F5",
             padding: "12px 22px",
             borderRadius: 30,
-            fontSize: 13.5,
+            fontSize: 14,
             fontWeight: 600,
             letterSpacing: -0.1,
             maxWidth: "min(86vw, 480px)",
@@ -342,7 +342,7 @@ function CropModal({ src, onDone, onCancel }) {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div style={{ background: '#fff', borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: '#111', textAlign: 'center', marginBottom: 4 }}>Обрезать фото</div>
-        <div style={{ fontSize: 12, color: '#aaa', textAlign: 'center', marginBottom: 16 }}>Перетащите фото на нужное место</div>
+        <div style={{ fontSize: 12, color: '#AEAEB2', textAlign: 'center', marginBottom: 16 }}>Перетащите фото на нужное место</div>
         <div style={{ position: 'relative', margin: '0 auto 16px', width: SIZE, height: SIZE, borderRadius: 14, overflow: 'hidden', cursor: 'grab', border: '2px solid #111', background: '#fff' }}>
           <canvas
             ref={canvasRef}
@@ -361,7 +361,7 @@ function CropModal({ src, onDone, onCancel }) {
           ))}
         </div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6, textAlign: 'center' }}>Масштаб</div>
+          <div style={{ fontSize: 11, color: '#AEAEB2', marginBottom: 6, textAlign: 'center' }}>Масштаб</div>
           <input type="range" min={0.3} max={3} step={0.01} value={scale} onChange={e => setScale(Number(e.target.value))} style={{ width: '100%' }} />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -1246,7 +1246,7 @@ function BannerSlider({ banners }) {
   const [imgErrors, setImgErrors] = useState({});
   useEffect(() => {
     if (!banners.length) return;
-    const timer = setInterval(() => setIdx(i => (i + 1) % banners.length), 3000);
+    const timer = setInterval(() => setIdx(i => (i + 1) % banners.length), 4500);
     return () => clearInterval(timer);
   }, [banners.length]);
   if (!banners.length) return null;
@@ -1258,22 +1258,43 @@ function BannerSlider({ banners }) {
   const fallbackBg = b.bg || "linear-gradient(135deg, #111111 0%, #000000 100%)";
   return (
     <div style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", aspectRatio: "21 / 9" }}>
-      <div style={{ width: "100%", height: "100%", background: fallbackBg, position: "relative" }}>
-        {b.img && !imgErrors[b.id] && (
-          <img
-            src={b.img} alt=""
-            onError={() => setImgErrors(prev => ({ ...prev, [b.id]: true }))}
-            style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", display: "block" }}
-          />
-        )}
-        <div style={{ position: "absolute", inset: 0, padding: "20px 22px", display: "flex", flexDirection: "column", justifyContent: "center", background: b.img && !imgErrors[b.id] ? "rgba(0,0,0,0.35)" : "transparent" }}>
-          {b.title && <div style={{ color: "#fff", fontSize: 20, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>{b.title}</div>}
-          {b.subtitle && <div style={{ color: "rgba(255,255,255,0.85)", fontSize: 13 }}>{b.subtitle}</div>}
-        </div>
-      </div>
+      {/* PRO: crossfade + sekin Ken Burns zoom — premium jonlilik */}
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={b.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.7, ease: "easeInOut" }}
+          style={{ position: "absolute", inset: 0, background: fallbackBg }}
+        >
+          {b.img && !imgErrors[b.id] && (
+            <motion.img
+              src={b.img} alt=""
+              onError={() => setImgErrors(prev => ({ ...prev, [b.id]: true }))}
+              initial={{ scale: 1.08 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 5, ease: "linear" }}
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", display: "block" }}
+            />
+          )}
+          {/* Gradient scrim — matn kontrasti har qanday rasmda kafolatlanadi.
+              Admin overlayTop/overlayBottom maydonlarini hurmat qiladi. */}
+          <div style={{
+            position: "absolute", inset: 0, padding: "20px 22px",
+            display: "flex", flexDirection: "column", justifyContent: "center",
+            background: b.img && !imgErrors[b.id]
+              ? `linear-gradient(to bottom, rgba(0,0,0,${b.overlayTop ?? 0.18}), rgba(0,0,0,${b.overlayBottom ?? 0.48}))`
+              : "transparent",
+          }}>
+            {b.title && <div style={{ color: "#fff", fontSize: 20, fontWeight: 800, lineHeight: 1.2, marginBottom: 8, textShadow: "0 1px 14px rgba(0,0,0,0.35)" }}>{b.title}</div>}
+            {b.subtitle && <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 14, textShadow: "0 1px 10px rgba(0,0,0,0.35)" }}>{b.subtitle}</div>}
+          </div>
+        </motion.div>
+      </AnimatePresence>
       {validBanners.length > 1 && (
         <div style={{ position: "absolute", bottom: 10, right: 14, display: "flex", gap: 5 }}>
-          {validBanners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.3s", cursor: "pointer" }} />)}
+          {validBanners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.35s", cursor: "pointer" }} />)}
         </div>
       )}
     </div>
@@ -1352,10 +1373,10 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
   const inp = {
     width: "100%", padding: "14px 16px", fontSize: 15,
-    background: "#F5F5F5", border: "1px solid #E5E5E5",
+    background: "#F5F5F5", border: "1px solid #E5E5EA",
     borderRadius: 14, color: "#111", outline: "none", boxSizing: "border-box",
   };
-  const lbl = { fontSize: 10, color: "#888", marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
+  const lbl = { fontSize: 10, color: "#8E8E93", marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
 
   return (
     <AnimatePresence>
@@ -1382,13 +1403,13 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
             }}
           >
             {/* Handle */}
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#DDD", margin: "0 auto 20px" }} />
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#E0E0E0", margin: "0 auto 20px" }} />
 
             {/* Title */}
             <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 4, textAlign: "center" }}>
               {lang === "ru" ? "Регистрация" : "Катталуу"}
             </div>
-            <div style={{ fontSize: 13, color: "#888", marginBottom: 20, textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "#8E8E93", marginBottom: 20, textAlign: "center" }}>
               {lang === "ru" ? "Для оформления заказа зарегистрируйтесь" : "Заказ берүү үчүн катталыңыз"}
             </div>
 
@@ -1419,7 +1440,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
                 {/* Referral */}
                 <div style={{ marginBottom: 14 }}>
-                  <button onClick={() => setShowRefInput(p => !p)} style={{ background: "none", border: "none", color: "#AAA", fontSize: 12, cursor: "pointer", padding: 0, letterSpacing: 0.5 }}>
+                  <button onClick={() => setShowRefInput(p => !p)} style={{ background: "none", border: "none", color: "#AEAEB2", fontSize: 12, cursor: "pointer", padding: 0, letterSpacing: 0.5 }}>
                     {lang === "ru" ? "Есть реферальный код? +" : "Реферал код барбы? +"}
                   </button>
                   {showRefInput && (
@@ -1473,7 +1494,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button onClick={() => { setOtpStep("idle"); setOtpCode(""); setErr(""); }}
-                    style={{ background: "none", border: "none", color: "#888", fontSize: 12, cursor: "pointer", padding: 0 }}>
+                    style={{ background: "none", border: "none", color: "#8E8E93", fontSize: 12, cursor: "pointer", padding: 0 }}>
                     {lang === "ru" ? "Изменить номер" : "Номерди өзгөртүү"}
                   </button>
                   <button onClick={() => { if (resendCooldown <= 0 && !otpLoading) handleRequestOtp(); }}
@@ -1618,11 +1639,11 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   if (desktopMode) {
     const inputDesktop = {
       width: '100%', padding: '13px 16px', fontSize: 15,
-      background: '#F5F5F5', border: '1px solid #E5E5E5',
+      background: '#F5F5F5', border: '1px solid #E5E5EA',
       borderRadius: 14, color: '#111', outline: 'none',
       boxSizing: 'border-box',
     };
-    const labelDesktop = { fontSize: 10, color: '#888', marginBottom: 6, letterSpacing: 2, textTransform: 'uppercase' };
+    const labelDesktop = { fontSize: 10, color: '#8E8E93', marginBottom: 6, letterSpacing: 2, textTransform: 'uppercase' };
     return (
       <div style={{ width: '100%' }}>
         {/* Phone */}
@@ -1652,7 +1673,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
             {/* Referral */}
             <div style={{ width: '100%', marginBottom: 14 }}>
-              <button onClick={() => setShowRefInput(p => !p)} style={{ background: 'none', border: 'none', color: '#AAA', fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
+              <button onClick={() => setShowRefInput(p => !p)} style={{ background: 'none', border: 'none', color: '#AEAEB2', fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
                 {lang === 'ru' ? 'Есть реферальный код? +' : 'Реферал код барбы? +'}
               </button>
               {showRefInput && (
@@ -1711,7 +1732,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <button onClick={() => { setOtpStep('idle'); setOtpCode(''); setErr(''); }}
-                style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
+                style={{ background: 'none', border: 'none', color: '#8E8E93', fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
                 {lang === 'ru' ? 'Изменить номер' : 'Номерди өзгөртүү'}
               </button>
               <button onClick={handleResendOtp} disabled={resendCooldown > 0 || otpLoading}
@@ -1725,7 +1746,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
         {/* Guest */}
         {onGuest && (
           <button onClick={setGuestMode} style={{
-            background: 'none', border: '1.5px solid #D1D1D6', color: '#888', fontSize: 13,
+            background: 'none', border: '1.5px solid #D1D1D6', color: '#8E8E93', fontSize: 13,
             cursor: 'pointer', letterSpacing: 1, padding: '12px 0', borderRadius: 14,
             width: '100%', fontWeight: 600, textTransform: 'uppercase',
           }}>
@@ -2145,7 +2166,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
               gap: 12,
               padding: isMobile ? "10px 14px" : "12px 20px",
               cursor: "pointer",
-              borderBottom: idx < results.length - 1 ? "1px solid #F0F0F0" : "none",
+              borderBottom: idx < results.length - 1 ? "1px solid #F2F2F7" : "none",
               transition: "background 0.15s",
             }}
             onMouseEnter={e => { if (!isMobile) e.currentTarget.style.background = '#F8F8F8'; }}
@@ -2157,7 +2178,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
               height: isMobile ? 48 : 56,
               borderRadius: 10,
               background: "#FFFFFF",
-              border: "1px solid #F0F0F0",
+              border: "1px solid #F2F2F7",
               overflow: "hidden",
               flexShrink: 0,
               display: "flex",
@@ -2189,7 +2210,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
               </div>
               <div style={{
                 fontSize: isMobile ? 12 : 13,
-                color: "#999",
+                color: "#8E8E93",
                 marginTop: 2,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -2204,7 +2225,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
                 <>
                   {si ? (
                     <>
-                      <div style={{ fontSize: 11, color: "#bbb", textDecoration: "line-through" }}>
+                      <div style={{ fontSize: 11, color: "#AEAEB2", textDecoration: "line-through" }}>
                         {price.toLocaleString()} сом
                       </div>
                       <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "#E53935" }}>
@@ -2267,7 +2288,7 @@ export function SaleCountdownBadge({ product }) {
         position: 'absolute', top: 8, left: 8, right: 8,
         background: 'rgba(0,0,0,0.82)',
         backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-        borderRadius: 11, padding: '8px 12px',
+        borderRadius: 12, padding: '8px 12px',
         display: 'flex', flexDirection: 'column', gap: 6,
         zIndex: 5,
       }}
@@ -2275,7 +2296,7 @@ export function SaleCountdownBadge({ product }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#E53935', animation: 'salePulse 1.5s infinite' }} />
-          <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
             Скидка -{sale.percent}%
           </span>
         </div>
@@ -2312,9 +2333,9 @@ function SaleProgressBar({ product }) {
     <div style={{ marginTop: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
         <span style={{ fontSize: 10, color: '#FF3B30', fontWeight: 600 }}>−{sale.percent}%</span>
-        <span style={{ fontSize: 10, color: '#999' }}>{label}</span>
+        <span style={{ fontSize: 10, color: '#8E8E93' }}>{label}</span>
       </div>
-      <div style={{ height: 3, background: '#F0F0F0', borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{ height: 3, background: '#F2F2F7', borderRadius: 2, overflow: 'hidden' }}>
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${sale.progress * 100}%` }}
@@ -2489,8 +2510,8 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
           {p?.isAuthor && (
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 4,
-              background: "#111", color: "#fff", borderRadius: 7,
-              padding: "3px 9px 3px 6px", fontSize: 9.5, fontWeight: 700,
+              background: "#111", color: "#fff", borderRadius: 8,
+              padding: "3px 9px 3px 6px", fontSize: 10, fontWeight: 700,
               letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
               boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
             }}>
@@ -2525,7 +2546,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
               saleMinP !== null ? (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ color: '#FF3B30', fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(saleMinP)}</span>
-                  <span style={{ color: '#BBB', fontSize: 12, textDecoration: 'line-through' }}>{formatSum(minP)}</span>
+                  <span style={{ color: '#AEAEB2', fontSize: 12, textDecoration: 'line-through' }}>{formatSum(minP)}</span>
                 </div>
               ) : minP > 0 ? (
                 <span style={{ color: "#111111", fontWeight: 600, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(minP)}</span>
@@ -2892,7 +2913,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           }}>
 
             <div style={{ marginBottom: 20 }}>
-              <div style={{ color: "#aaa", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
+              <div style={{ color: "#AEAEB2", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
               <div style={{ color: "#111", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 8 }}>{pickName(detail, lang)}</div>
               {/* Sale badge + countdown in detail */}
               {(() => {
@@ -2911,7 +2932,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       maskImage: descExpanded ? "none" : "linear-gradient(to bottom, #000 60%, transparent 100%)",
                     }}
                   >
-                    <DescRenderer text={pickDesc(detail, lang)} color="#6b6b70" iconColor="#999" />
+                    <DescRenderer text={pickDesc(detail, lang)} color="#6b6b70" iconColor="#8E8E93" />
                   </motion.div>
                   <button
                     onClick={() => { haptic('light'); setDescExpanded(v => !v); }}
@@ -2935,7 +2956,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               )}
             </div>
 
-            <div style={{ height: 1, background: "#f0f0f0", marginBottom: 20 }} />
+            <div style={{ height: 1, background: "#F2F2F7", marginBottom: 20 }} />
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "#111", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
@@ -2979,11 +3000,11 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                             return (
                               <div style={{ marginTop: 4 }}>
                                 <span style={{ fontSize: 12, fontWeight: 700, color: isSel ? "#fff" : "#FF3B30" }}>{formatSum(sp)}</span>
-                                <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,0.4)" : "#bbb", textDecoration: "line-through", marginLeft: 4 }}>{formatSum(v.price)}</span>
+                                <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,0.4)" : "#AEAEB2", textDecoration: "line-through", marginLeft: 4 }}>{formatSum(v.price)}</span>
                               </div>
                             );
                           }
-                          return <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : "#999", marginTop: 4 }}>{formatSum(v.price)}</div>;
+                          return <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : "#8E8E93", marginTop: 4 }}>{formatSum(v.price)}</div>;
                         })()}
                       </motion.button>
                     </motion.div>
@@ -3031,7 +3052,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                         <span style={{ color: "#FF3B30", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
                           {formatSum(salePrice(selVariant.price, si.percent))}
                         </span>
-                        <span style={{ color: "#bbb", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
+                        <span style={{ color: "#AEAEB2", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
                           {formatSum(selVariant.price)}
                         </span>
                       </>
@@ -3123,7 +3144,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}
         >
           <div style={{ display: "flex", alignItems: "center", background: "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="#aaa" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#aaa" strokeWidth="2" /></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="#AEAEB2" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#AEAEB2" strokeWidth="2" /></svg>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: "#111", width: "100%", fontFamily: "inherit" }} />
             <AnimatePresence>
               {search && (
@@ -3134,7 +3155,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   exit={{ opacity: 0, scale: 0.6 }}
                   transition={{ type: "spring", stiffness: 420, damping: 28 }}
                   onClick={() => setSearch("")}
-                  style={{ background: "none", border: "none", padding: 2, cursor: "pointer", display: "flex", alignItems: "center", color: "#aaa", flexShrink: 0 }}
+                  style={{ background: "none", border: "none", padding: 2, cursor: "pointer", display: "flex", alignItems: "center", color: "#AEAEB2", flexShrink: 0 }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </motion.button>
@@ -3298,12 +3319,12 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                 >
                   <div style={{ display: "flex", gap: 2, marginBottom: 10 }}>
                     {[1,2,3,4,5].map(s => (
-                      <svg key={s} width="13" height="13" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? "#111" : "#ddd"}>
+                      <svg key={s} width="13" height="13" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? "#111" : "#E0E0E0"}>
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                       </svg>
                     ))}
                   </div>
-                  <div style={{ fontSize: 13, color: "#333", lineHeight: 1.6, marginBottom: 14, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div style={{ fontSize: 13, color: "#3A3A3C", lineHeight: 1.6, marginBottom: 14, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     "{r.text}"
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -3635,8 +3656,8 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       </div>
       {/* Comment */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ background: "#fff", border: "0.5px solid #e5e5e5", borderRadius: 16, padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "#aaa", marginBottom: 10 }}>Комментарий к заказу</div>
+        <div style={{ background: "#fff", border: "0.5px solid #E5E5EA", borderRadius: 16, padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: "#AEAEB2", marginBottom: 10 }}>Комментарий к заказу</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {[
               { icon: "📞", text: "Позвоните перед доставкой", value: "Позвоните перед доставкой" },
@@ -3743,7 +3764,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                 }}
               >
                 <motion.div
-                  animate={{ color: selected ? '#fff' : '#999' }}
+                  animate={{ color: selected ? '#fff' : '#8E8E93' }}
                   transition={{ duration: 0.2 }}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                 >
@@ -3752,7 +3773,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                 <motion.span
                   animate={{ color: selected ? '#fff' : T.text }}
                   transition={{ duration: 0.2 }}
-                  style={{ fontWeight: 600, fontSize: 14.5, flex: 1, letterSpacing: -0.2 }}
+                  style={{ fontWeight: 600, fontSize: 15, flex: 1, letterSpacing: -0.2 }}
                 >
                   {opt.label}
                 </motion.span>
@@ -3827,7 +3848,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       <div style={{ padding: "0 16px", marginBottom: 8 }}>
         {/* Out-of-stock warning banner */}
         {hasOutOfStock && (
-          <div style={{ background: '#FFF3CD', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: '#FFF8E1', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>⚠️</span>
             <span style={{ fontSize: 13, color: '#664D03', fontWeight: 500 }}>
               {lang === 'kg' ? 'Себетте кампада жок товарлар бар. Аларды өчүрүңүз.' : 'В корзине есть товары, которых нет в наличии. Удалите их для оформления.'}
@@ -3835,7 +3856,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           </div>
         )}
         {total <= 0 && items.length > 0 && !hasOutOfStock && (
-          <div style={{ background: '#FFF3CD', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ background: '#FFF8E1', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 18 }}>⚠️</span>
             <span style={{ fontSize: 13, color: '#664D03', fontWeight: 500 }}>
               {lang === 'kg' ? 'Заказдын суммасы 0 болушу мүмкүн эмес' : 'Сумма заказа не может быть 0 сом'}
@@ -3962,7 +3983,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                   <span style={{ color: T.text, fontSize: 13, fontWeight: 600 }}>{formatSum(item.price * item.qty)}</span>
                 </div>
               ))}
-              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 10, paddingTop: 10, borderTop: '0.5px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ color: T.textMuted, fontSize: 11, marginTop: 10, paddingTop: 10, borderTop: '0.5px solid #F2F2F7', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>{order.date}</span>
                 {order.status === 'delivered' && !reviews?.find(r => r.orderId === order.id) && (
                   <motion.button
@@ -3983,14 +4004,14 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
-                  style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid #f0f0f0' }}>
+                  style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid #F2F2F7' }}>
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#111', marginBottom: 8 }}>
                       {lang === 'kg' ? 'Баа бериңиз:' : 'Ваша оценка:'}
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {[1,2,3,4,5].map(s => (
-                        <svg key={s} onClick={() => setReviewRating(s)} width="24" height="24" viewBox="0 0 24 24" fill={s <= reviewRating ? '#111' : '#ddd'} style={{ cursor: 'pointer' }}>
+                        <svg key={s} onClick={() => setReviewRating(s)} width="24" height="24" viewBox="0 0 24 24" fill={s <= reviewRating ? '#111' : '#E0E0E0'} style={{ cursor: 'pointer' }}>
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                         </svg>
                       ))}
@@ -4032,7 +4053,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                         : (lang === 'kg' ? 'Жөнөтүү' : 'Отправить')}
                     </motion.button>
                     <button onClick={() => setReviewOrderId(null)}
-                      style={{ background: 'none', border: 'none', fontSize: 12, color: '#999', cursor: 'pointer', padding: '10px 14px' }}>
+                      style={{ background: 'none', border: 'none', fontSize: 12, color: '#8E8E93', cursor: 'pointer', padding: '10px 14px' }}>
                       {lang === 'kg' ? 'Жокко чыгаруу' : 'Отмена'}
                     </button>
                   </div>
@@ -4620,13 +4641,13 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                 transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                 style={{
                   width: 52, height: 52, borderRadius: '50%',
-                  border: '3px solid #F0F0F0',
+                  border: '3px solid #F2F2F7',
                   borderTopColor: '#FF6B00',
                 }}
               />
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#333' }}>Создание счёта{dots}</div>
-            <div style={{ fontSize: 13, color: '#999', marginTop: 6 }}>Подождите немного</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#3A3A3C' }}>Создание счёта{dots}</div>
+            <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 6 }}>Подождите немного</div>
           </motion.div>
         )}
 
@@ -4645,7 +4666,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 style={{
                   background: '#FAFAFA', borderRadius: 16, padding: 16,
-                  marginBottom: 16, border: '1px solid #F0F0F0',
+                  marginBottom: 16, border: '1px solid #F2F2F7',
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
                 }}
               >
@@ -4656,7 +4677,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                     borderRadius: 12, border: '1px solid #eee',
                   }}
                 />
-                <div style={{ fontSize: 12, color: '#999', marginTop: 10, letterSpacing: 0.2 }}>
+                <div style={{ fontSize: 12, color: '#8E8E93', marginTop: 10, letterSpacing: 0.2 }}>
                   Сканируйте QR-код для оплаты
                 </div>
               </motion.div>
@@ -4664,9 +4685,9 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
 
             {/* Divider with text */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 16px' }}>
-              <div style={{ flex: 1, height: 0.5, background: '#E5E5E5' }} />
-              <span style={{ fontSize: 11, color: '#BBB', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>или</span>
-              <div style={{ flex: 1, height: 0.5, background: '#E5E5E5' }} />
+              <div style={{ flex: 1, height: 0.5, background: '#E5E5EA' }} />
+              <span style={{ fontSize: 11, color: '#AEAEB2', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>или</span>
+              <div style={{ flex: 1, height: 0.5, background: '#E5E5EA' }} />
             </div>
 
             {/* Open wallet button */}
@@ -4700,10 +4721,10 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                 transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
                 style={{
                   width: 16, height: 16, borderRadius: '50%',
-                  border: '2px solid #F0F0F0', borderTopColor: '#FF6B00',
+                  border: '2px solid #F2F2F7', borderTopColor: '#FF6B00',
                 }}
               />
-              <span style={{ fontSize: 13, color: '#999', fontWeight: 500 }}>
+              <span style={{ fontSize: 13, color: '#8E8E93', fontWeight: 500 }}>
                 {statusText || 'Ожидание оплаты'}{dots}
               </span>
             </div>
@@ -4759,7 +4780,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
               transition={{ delay: 0.25 }}
             >
               <div style={{ fontSize: 20, fontWeight: 800, color: '#111', marginBottom: 4 }}>Оплата прошла!</div>
-              <div style={{ fontSize: 14, color: '#999' }}>Заказ успешно оплачен</div>
+              <div style={{ fontSize: 14, color: '#8E8E93' }}>Заказ успешно оплачен</div>
             </motion.div>
           </motion.div>
         )}
@@ -4784,7 +4805,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
               </svg>
             </motion.div>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 6 }}>Ошибка оплаты</div>
-            <div style={{ fontSize: 13, color: '#999', marginBottom: 24, lineHeight: 1.5, padding: '0 12px' }}>{error}</div>
+            <div style={{ fontSize: 13, color: '#8E8E93', marginBottom: 24, lineHeight: 1.5, padding: '0 12px' }}>{error}</div>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleCancel}
@@ -4893,7 +4914,7 @@ function OrderReceipt({ order, settings, onClose }) {
         transition={{ type: 'spring', stiffness: 320, damping: 30 }}
         style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
       >
-        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5E5', margin: '0 auto 16px' }} />
+        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5EA', margin: '0 auto 16px' }} />
 
         {/* Success icon */}
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -4908,14 +4929,14 @@ function OrderReceipt({ order, settings, onClose }) {
             </svg>
           </motion.div>
           <div style={{ fontSize: 20, fontWeight: 800, color: '#111', marginBottom: 4 }}>Заказ оформлен!</div>
-          <div style={{ fontSize: 13, color: '#888' }}>Заказ №{order.id}</div>
+          <div style={{ fontSize: 13, color: '#8E8E93' }}>Заказ №{order.id}</div>
         </div>
 
         {/* Receipt card */}
-        <div style={{ background: '#FAFAFA', borderRadius: 14, padding: '16px', marginBottom: 16, border: '1px solid #F0F0F0' }}>
+        <div style={{ background: '#FAFAFA', borderRadius: 14, padding: '16px', marginBottom: 16, border: '1px solid #F2F2F7' }}>
           {/* Dashed top border for receipt feel */}
           <div style={{ borderBottom: '1px dashed #E0E0E0', paddingBottom: 12, marginBottom: 12 }}>
-            <div style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: '#BBB', fontWeight: 700, textAlign: 'center' }}>Kemal Usman Parfum</div>
+            <div style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: '#AEAEB2', fontWeight: 700, textAlign: 'center' }}>Kemal Usman Parfum</div>
             <div style={{ fontSize: 10, color: '#CCC', textAlign: 'center', marginTop: 2 }}>{order.date}</div>
           </div>
 
@@ -4923,8 +4944,8 @@ function OrderReceipt({ order, settings, onClose }) {
           {items.map((item, idx) => (
             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#333', lineHeight: 1.3 }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: '#999' }}>{item.qty} шт. × {item.price.toLocaleString()} сом</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#3A3A3C', lineHeight: 1.3 }}>{item.name}</div>
+                <div style={{ fontSize: 11, color: '#8E8E93' }}>{item.qty} шт. × {item.price.toLocaleString()} сом</div>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#111', flexShrink: 0, marginLeft: 8 }}>{(item.price * item.qty).toLocaleString()} сом</div>
             </div>
@@ -4932,11 +4953,11 @@ function OrderReceipt({ order, settings, onClose }) {
 
           <div style={{ borderTop: '1px dashed #E0E0E0', paddingTop: 12, marginTop: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: '#888' }}>Оплата</span>
+              <span style={{ fontSize: 12, color: '#8E8E93' }}>Оплата</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{payLabel}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: '#888' }}>Доставка</span>
+              <span style={{ fontSize: 12, color: '#8E8E93' }}>Доставка</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{deliveryLabel}</span>
             </div>
             {order.bonusDiscount > 0 && (
@@ -4947,7 +4968,7 @@ function OrderReceipt({ order, settings, onClose }) {
             )}
           </div>
 
-          <div style={{ borderTop: '1.5px solid #DDD', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ borderTop: '1.5px solid #E0E0E0', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 16, fontWeight: 800, color: '#111' }}>Итого</span>
             <span style={{ fontSize: 18, fontWeight: 900, color: '#111' }}>{(order.total || 0).toLocaleString()} сом</span>
           </div>
@@ -4997,7 +5018,7 @@ function OrderReceipt({ order, settings, onClose }) {
                 style={{
                   flex: 1, padding: '13px 8px',
                   background: selectedImage ? '#E8F5E9' : '#F5F5F5',
-                  color: selectedImage ? '#2E7D32' : '#333',
+                  color: selectedImage ? '#2E7D32' : '#3A3A3C',
                   border: selectedImage ? '1.5px solid #A5D6A7' : '1.5px solid #E0E0E0',
                   borderRadius: 14, fontSize: 12, fontWeight: 700, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -5038,7 +5059,7 @@ function OrderReceipt({ order, settings, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 style={{
                   width: '100%', padding: 15, marginBottom: 10,
-                  background: sending ? '#999' : '#111', color: '#fff', border: 'none', borderRadius: 14,
+                  background: sending ? '#8E8E93' : '#111', color: '#fff', border: 'none', borderRadius: 14,
                   fontSize: 14, fontWeight: 700, cursor: sending ? 'default' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
@@ -5056,7 +5077,7 @@ function OrderReceipt({ order, settings, onClose }) {
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onClose}
-          style={{ width: '100%', padding: 15, background: isBankPayment ? '#F5F5F5' : '#111', color: isBankPayment ? '#333' : '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+          style={{ width: '100%', padding: 15, background: isBankPayment ? '#F5F5F5' : '#111', color: isBankPayment ? '#3A3A3C' : '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
         >
           Готово
         </motion.button>
@@ -5312,14 +5333,14 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{
-                    color: '#fff', fontSize: 13.5, fontWeight: 700,
+                    color: '#fff', fontSize: 14, fontWeight: 700,
                     letterSpacing: -0.3,
                     textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                   }}>
                     {ctaLabel}
                   </span>
                   <span style={{
-                    color: 'rgba(255,255,255,0.5)', fontSize: 11.5, fontWeight: 500,
+                    color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 500,
                     fontVariantNumeric: 'tabular-nums',
                   }}>
                     {cartCount} {itemsWord} · <AnimatedSum value={cartTotal} duration={0.55} />
@@ -5600,7 +5621,7 @@ export function ProductAudioRecorder({ productId, onAudioUploaded }) {
             <style>{`@keyframes recWave{0%,100%{transform:scaleY(0.2)}25%{transform:scaleY(0.8)}50%{transform:scaleY(1)}75%{transform:scaleY(0.5)}}`}</style>
             {Array.from({ length: 40 }).map((_, i) => (
               <div key={i} style={{
-                flex: 1, height: 28, borderRadius: 1.5,
+                flex: 1, height: 28, borderRadius: 2,
                 background: `linear-gradient(180deg, #FF3B30 0%, #FF6B6B 100%)`,
                 transformOrigin: 'center',
                 animation: status === 'recording' ? `recWave ${0.6 + (i % 5) * 0.15}s ease-in-out infinite` : 'none',
@@ -5835,7 +5856,7 @@ function AudioRecordBtn({ productId }) {
   );
   return (
     <button onClick={handleRecord}
-      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #AAAAAA', background: 'none', fontSize: 12, color: '#666666', cursor: 'pointer' }}>
+      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #AEAEB2', background: 'none', fontSize: 12, color: '#666666', cursor: 'pointer' }}>
       Записать аромат (10с)
     </button>
   );
@@ -5899,7 +5920,7 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
           <div style={{ display: 'flex', gap: 1.5, alignItems: 'center', height: 12 }}>
             <style>{`@keyframes abPro{0%,100%{height:3px}50%{height:10px}}`}</style>
             {[0,1,2,3].map(i => (
-              <div key={i} style={{ width: 2, borderRadius: 1, background: '#FF3B30', animation: 'abPro 0.65s ease-in-out infinite', animationDelay: `${i*0.1}s`, height: 3 }}/>
+              <div key={i} style={{ width: 2, borderRadius: 2, background: '#FF3B30', animation: 'abPro 0.65s ease-in-out infinite', animationDelay: `${i*0.1}s`, height: 3 }}/>
             ))}
           </div>
         ) : (
@@ -7077,7 +7098,7 @@ export default function App() {
                     padding: '5px 12px', fontSize: 10, letterSpacing: 2,
                     textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700,
                     background: lang === l ? '#111' : '#F5F5F5',
-                    color: lang === l ? '#fff' : '#888',
+                    color: lang === l ? '#fff' : '#8E8E93',
                   }}>
                   {l === 'ru' ? 'РУС' : 'КЫР'}
                 </div>
@@ -7089,7 +7110,7 @@ export default function App() {
               <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 5, textTransform: 'uppercase', color: '#111' }}>
                 Kemal Usman
               </div>
-              <div style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#BBB', marginTop: 4 }}>
+              <div style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#AEAEB2', marginTop: 4 }}>
                 Parfum
               </div>
             </div>
@@ -7272,14 +7293,14 @@ export default function App() {
                 style={{
                   padding: '14px 20px', fontSize: 12, fontWeight: 600,
                   letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer',
-                  color: adminScreen === tab.id ? '#111' : '#BBB',
+                  color: adminScreen === tab.id ? '#111' : '#AEAEB2',
                   borderBottom: adminScreen === tab.id ? '2px solid #111' : '2px solid transparent',
                   marginBottom: -1, display: 'flex', alignItems: 'center', gap: 6,
                 }}>
                 {tab.label}
                 {newCount > 0 && (
                   <span style={{
-                    background: '#FF3B30', color: '#fff', borderRadius: 9,
+                    background: '#FF3B30', color: '#fff', borderRadius: 10,
                     minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center',
                     justifyContent: 'center', fontSize: 10, fontWeight: 800,
                     padding: '0 5px', letterSpacing: 0,
@@ -7467,14 +7488,14 @@ export default function App() {
               </div>
               {/* Remember me checkbox */}
               <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer", padding: "4px 0", WebkitTapHighlightColor: "transparent" }} onClick={() => setAdminRemember(v => !v)}>
-                <div style={{ width: 22, height: 22, borderRadius: 7, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
                   {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <span style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>{t.remember_me}</span>
               </label>
               {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#333" }}>{t.cancel}</button>
+                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
                 <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
               </div>
             </div>
@@ -7502,14 +7523,14 @@ export default function App() {
             </div>
             {/* Remember me checkbox */}
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer", padding: "4px 0", WebkitTapHighlightColor: "transparent" }} onClick={() => setAdminRemember(v => !v)}>
-              <div style={{ width: 22, height: 22, borderRadius: 7, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
                 {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
               <span style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>{t.remember_me}</span>
             </label>
             {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#333" }}>{t.cancel}</button>
+              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
               <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
             </div>
           </div>
@@ -7578,7 +7599,7 @@ export default function App() {
                         style={{
                           padding: "14px 16px", borderRadius: 16, marginBottom: 8, cursor: "pointer",
                           background: isRead ? "#FAFAFA" : "#F0F7FF",
-                          border: isRead ? "1px solid #F0F0F0" : "1px solid #D0E4FF",
+                          border: isRead ? "1px solid #F2F2F7" : "1px solid #D0E4FF",
                           transition: "all 0.2s",
                         }}
                       >

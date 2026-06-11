@@ -11,7 +11,7 @@ export const T = {
   accentPale: "rgba(0,0,0,0.04)",
   text: "#111111",
   textSecond: "#666666",
-  textMuted: "#AAAAAA",
+  textMuted: "#AEAEB2",
   border: "#EEEEEE",
   card: "#FFFFFF",
   // iOS premium depth — tight contact + soft ambient (y:8, blur:20, low opacity)

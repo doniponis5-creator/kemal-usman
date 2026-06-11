@@ -45,7 +45,7 @@ export function SortFilterSheet({ open, onClose, sort, onSortChange, lang = 'ru'
             }}
           >
             {/* drag-handle */}
-            <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5E5', margin: '0 auto 18px' }} />
+            <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5EA', margin: '0 auto 18px' }} />
 
             <div style={{ fontSize: 17, fontWeight: 800, color: '#111', marginBottom: 18 }}>
               {lang === 'kg' ? 'Иргөө' : 'Сортировка'}
@@ -86,7 +86,7 @@ export function SortFilterSheet({ open, onClose, sort, onSortChange, lang = 'ru'
                           exit={{ scale: 0, opacity: 0 }}
                           transition={{ type: 'spring', stiffness: 460, damping: 22 }}
                           style={{
-                            width: 22, height: 22, borderRadius: 11,
+                            width: 22, height: 22, borderRadius: 12,
                             background: '#111',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}

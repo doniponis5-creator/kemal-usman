@@ -308,14 +308,14 @@ export function DesktopLayout({
         {/* Info */}
         <div style={{ padding: '14px 16px 16px' }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-            <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#aaa', fontWeight: 500, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+            <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#AEAEB2', fontWeight: 500, flex: 1, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
               {product.brand}
             </div>
             {product?.isAuthor && (
               <div style={{
                 display: "inline-flex", alignItems: "center", gap: 4,
                 background: "#111", color: "#fff", borderRadius: 6,
-                padding: "3px 8px 3px 5px", fontSize: 8.5, fontWeight: 700,
+                padding: "3px 8px 3px 5px", fontSize: 9, fontWeight: 700,
                 letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.15)", flexShrink: 0,
               }}>
@@ -328,7 +328,7 @@ export function DesktopLayout({
             overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
             {product.name}
           </div>
-          <div style={{ fontSize: 11, color: '#bbb', marginBottom: 12, lineHeight: 1.5, height: 33,
+          <div style={{ fontSize: 11, color: '#AEAEB2', marginBottom: 12, lineHeight: 1.5, height: 33,
             overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
             {(() => { const d = pickDesc(product, lang); const lines = d.split('\n').filter(l => l.trim() && !l.trim().startsWith('🔝') && !l.trim().startsWith('💎') && !l.trim().startsWith('🌿') && !l.trim().startsWith('📋')); return lines.join(' ').trim() || d; })()}
           </div>
@@ -337,11 +337,11 @@ export function DesktopLayout({
             {_saleMinP ? (
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                 <span style={{ fontSize: 16, fontWeight: 800, color: '#FF3B30' }}>от {_saleMinP} <span style={{ fontSize: 11, fontWeight: 500 }}>сом</span></span>
-                <span style={{ fontSize: 12, color: '#BBB', textDecoration: 'line-through' }}>{_minP}</span>
+                <span style={{ fontSize: 12, color: '#AEAEB2', textDecoration: 'line-through' }}>{_minP}</span>
               </div>
             ) : (
               <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>
-                от {_minP} <span style={{ fontSize: 11, fontWeight: 500, color: '#999' }}>сом</span>
+                от {_minP} <span style={{ fontSize: 11, fontWeight: 500, color: '#8E8E93' }}>сом</span>
               </div>
             )}
             <div onClick={e => e.stopPropagation()}>
@@ -412,10 +412,10 @@ export function DesktopLayout({
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={(e) => { if (e.target === e.currentTarget) setScreen('catalog'); }}>
           <div style={{ background: '#fff', borderRadius: 20, width: '90%', maxWidth: 600, maxHeight: '85vh', overflow: 'auto', position: 'relative', boxShadow: '0 25px 60px rgba(0,0,0,0.15)' }}>
-            <div style={{ position: 'sticky', top: 0, background: '#fff', borderBottom: '1px solid #f0f0f0', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', zIndex: 1 }}>
+            <div style={{ position: 'sticky', top: 0, background: '#fff', borderBottom: '1px solid #F2F2F7', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '20px 20px 0 0', zIndex: 1 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>{lang === 'kg' ? 'Менин заказтарым' : 'Мои заказы'}</div>
               <div onClick={() => setScreen('catalog')} style={{ cursor: 'pointer', width: 32, height: 32, borderRadius: 10, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/></svg>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round"/></svg>
               </div>
             </div>
             <div style={{ padding: '0 4px 20px' }}>
@@ -481,7 +481,7 @@ export function DesktopLayout({
 
       {/* ── HEADER ── */}
       <div style={{ position: 'fixed', top: 38, left: 0, right: 0, zIndex: 1000,
-        background: '#fff', borderBottom: '1px solid #E5E5E5' }}>
+        background: '#fff', borderBottom: '1px solid #E5E5EA' }}>
         {/* Row 1 — Logo + Icons */}
         <div style={{ height: 68, padding: '0 48px', display: 'flex',
           alignItems: 'center', justifyContent: 'space-between' }}>
@@ -522,14 +522,14 @@ export function DesktopLayout({
                   <motion.div
                     initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
                     style={{ position: 'absolute', top: '100%', right: 0, width: 280,
-                      background: '#fff', border: '1px solid #E5E5E5', borderRadius: 16, zIndex: 1001, marginTop: 8,
+                      background: '#fff', border: '1px solid #E5E5EA', borderRadius: 16, zIndex: 1001, marginTop: 8,
                       boxShadow: '0 8px 32px rgba(0,0,0,0.12)', overflow: 'hidden' }}
                   >
                     {user ? (
                       <>
                         <div style={{ padding: '12px 16px', borderBottom: '1px solid #F5F5F5' }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{user.name}</div>
-                          <div style={{ fontSize: 11, color: '#BBB' }}>{user.phone}</div>
+                          <div style={{ fontSize: 11, color: '#AEAEB2' }}>{user.phone}</div>
                         </div>
                         {[
                           { label: 'Мои заказы', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="#555" strokeWidth="1.4"/><path d="M8 10h8M8 14h5" stroke="#555" strokeWidth="1.4" strokeLinecap="round"/></svg>, action: () => { setScreen('myorders'); setUserMenuOpen(false); } },
@@ -550,25 +550,25 @@ export function DesktopLayout({
                       <div style={{ padding: '24px 20px', minWidth: 240 }}>
                         <div style={{ textAlign: 'center', marginBottom: 16 }}>
                           <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#F5F5F5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke="#999" strokeWidth="1.5"/></svg>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round"/><circle cx="12" cy="7" r="4" stroke="#8E8E93" strokeWidth="1.5"/></svg>
                           </div>
                           <div style={{ fontSize: 15, fontWeight: 700, color: '#111', letterSpacing: -0.2 }}>Войти в аккаунт</div>
-                          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>Бонусы, история заказов и кэшбэк</div>
+                          <div style={{ fontSize: 12, color: '#8E8E93', marginTop: 4 }}>Бонусы, история заказов и кэшбэк</div>
                         </div>
                         <div onClick={() => { setUserMenuOpen(false); setGuestMode(false); }}
                           style={{ width: '100%', background: '#111', color: '#fff', padding: '12px 0',
                             textAlign: 'center', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase',
                             cursor: 'pointer', marginBottom: 8, borderRadius: 12, fontWeight: 700 }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                          onMouseEnter={e => e.currentTarget.style.background = '#3A3A3C'}
                           onMouseLeave={e => e.currentTarget.style.background = '#111'}>
                           Войти
                         </div>
                         <div onClick={() => { setGuestMode(true); setUserMenuOpen(false); }}
-                          style={{ width: '100%', textAlign: 'center', fontSize: 13, color: '#888', cursor: 'pointer',
-                            letterSpacing: 1, padding: '12px 0', border: '1.5px solid #E5E5E5', borderRadius: 12,
+                          style={{ width: '100%', textAlign: 'center', fontSize: 13, color: '#8E8E93', cursor: 'pointer',
+                            letterSpacing: 1, padding: '12px 0', border: '1.5px solid #E5E5EA', borderRadius: 12,
                             fontWeight: 700, textTransform: 'uppercase' }}
                           onMouseEnter={e => e.currentTarget.style.borderColor = '#CCC'}
-                          onMouseLeave={e => e.currentTarget.style.borderColor = '#E5E5E5'}>
+                          onMouseLeave={e => e.currentTarget.style.borderColor = '#E5E5EA'}>
                           Гость
                         </div>
                       </div>
@@ -623,7 +623,7 @@ export function DesktopLayout({
           </div>
         </div>
         {/* Row 2 — Navigation */}
-        <div style={{ height: 44, padding: '0 48px', borderTop: '1px solid #F0F0F0',
+        <div style={{ height: 44, padding: '0 48px', borderTop: '1px solid #F2F2F7',
           display: 'flex', alignItems: 'center', gap: 36, position: 'relative' }}>
           {NAV_ITEMS.map(item => (
             <div
@@ -633,7 +633,7 @@ export function DesktopLayout({
                 document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
               }}
               style={{ fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', cursor: 'pointer',
-                color: desktopCategory === item.id ? '#111' : '#888',
+                color: desktopCategory === item.id ? '#111' : '#8E8E93',
                 paddingBottom: 2, position: 'relative',
                 borderBottom: desktopCategory === item.id ? '1.5px solid #111' : '1.5px solid transparent',
                 transition: 'color 0.2s, border-color 0.2s' }}
@@ -762,7 +762,7 @@ export function DesktopLayout({
               </div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#111', letterSpacing: -0.1, marginBottom: 2 }}>{b.title}</div>
-                <div style={{ fontSize: 10.5, color: '#999', letterSpacing: 0.1 }}>{b.sub}</div>
+                <div style={{ fontSize: 11, color: '#8E8E93', letterSpacing: 0.1 }}>{b.sub}</div>
               </div>
             </motion.div>
           ))}
@@ -840,7 +840,7 @@ export function DesktopLayout({
                       {itemCount > 1 && (
                         <div style={{
                           position: 'absolute', bottom: -2, right: -2,
-                          minWidth: 18, height: 18, borderRadius: 9,
+                          minWidth: 18, height: 18, borderRadius: 10,
                           background: '#0095F6', color: '#fff',
                           fontSize: 9, fontWeight: 700,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -970,7 +970,7 @@ export function DesktopLayout({
                             </div>
                           </div>
                           <div style={{ fontSize: 11, fontWeight: 700, color: '#111' }}>kemal.ussman</div>
-                          <div style={{ fontSize: 8, color: '#999', textAlign: 'center' }}>{lang === 'kg' ? 'Скриншотту жүктөңүз' : 'Загрузите скриншот'}</div>
+                          <div style={{ fontSize: 8, color: '#8E8E93', textAlign: 'center' }}>{lang === 'kg' ? 'Скриншотту жүктөңүз' : 'Загрузите скриншот'}</div>
                         </div>
                       )}
                     </div>
@@ -1067,7 +1067,7 @@ export function DesktopLayout({
                 <motion.div
                   whileHover={{ x: 4 }}
                   onClick={() => document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' })}
-                  style={{ fontSize: 11, color: '#999', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, letterSpacing: 0.5 }}
+                  style={{ fontSize: 11, color: '#8E8E93', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, letterSpacing: 0.5 }}
                 >
                   {lang === 'kg' ? 'Баарын көрүү' : 'Смотреть все'}
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
@@ -1128,13 +1128,13 @@ export function DesktopLayout({
                         )}
                       </div>
                       <div style={{ padding: '12px 14px 14px' }}>
-                        <div style={{ fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3, fontWeight: 500 }}>{product.brand || ''}</div>
+                        <div style={{ fontSize: 9, color: '#AEAEB2', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3, fontWeight: 500 }}>{product.brand || ''}</div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {_sp ? (
                             <>
                               <span style={{ fontSize: 14, fontWeight: 700, color: '#E53935' }}>{_sp.toLocaleString()} сом</span>
-                              <span style={{ fontSize: 11, color: '#bbb', textDecoration: 'line-through' }}>{_mp.toLocaleString()}</span>
+                              <span style={{ fontSize: 11, color: '#AEAEB2', textDecoration: 'line-through' }}>{_mp.toLocaleString()}</span>
                             </>
                           ) : (
                             <span style={{ fontSize: 14, fontWeight: 700, color: '#111' }}>{_mp ? `${_mp.toLocaleString()} сом` : ''}</span>
@@ -1267,10 +1267,10 @@ export function DesktopLayout({
                   <div key={r.id || i} style={{ background: '#f7f7f5', borderRadius: 14, padding: '24px 22px', border: '1px solid rgba(0,0,0,0.06)' }}>
                     <div style={{ display: 'flex', gap: 3, marginBottom: 12 }}>
                       {[1,2,3,4,5].map(s => (
-                        <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? '#111' : '#ddd'}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                        <svg key={s} width="14" height="14" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? '#111' : '#E0E0E0'}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                       ))}
                     </div>
-                    <div style={{ fontSize: 13, color: '#333', lineHeight: 1.65, marginBottom: 14 }}>"{r.text}"</div>
+                    <div style={{ fontSize: 13, color: '#3A3A3C', lineHeight: 1.65, marginBottom: 14 }}>"{r.text}"</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12, fontWeight: 600 }}>
                         {(r.name || '?').charAt(0)}
@@ -1330,11 +1330,11 @@ export function DesktopLayout({
                   )}
                 </div>
                 <div style={{ padding: '14px 16px 16px' }}>
-                  <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#aaa', marginBottom: 4, fontWeight: 500 }}>{p.brand}</div>
+                  <div style={{ fontSize: 9, letterSpacing: 2, textTransform: 'uppercase', color: '#AEAEB2', marginBottom: 4, fontWeight: 500 }}>{p.brand}</div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 4, lineHeight: 1.3,
                     overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{p.name}</div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>
-                    {lang === 'kg' ? '' : 'от '}{minPrice(p)} <span style={{ fontSize: 11, fontWeight: 500, color: '#999' }}>{lang === 'kg' ? 'сомдон' : 'сом'}</span>
+                    {lang === 'kg' ? '' : 'от '}{minPrice(p)} <span style={{ fontSize: 11, fontWeight: 500, color: '#8E8E93' }}>{lang === 'kg' ? 'сомдон' : 'сом'}</span>
                   </div>
                 </div>
               </motion.div>
@@ -1418,7 +1418,7 @@ export function DesktopLayout({
                 <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "-apple-system, sans-serif", letterSpacing: -2, lineHeight: 1 }}>
                   {settings?.referralBonus || 200}
                 </span>
-                <span style={{ fontSize: 16, fontWeight: 500, color: '#999', letterSpacing: -0.3 }}>
+                <span style={{ fontSize: 16, fontWeight: 500, color: '#8E8E93', letterSpacing: -0.3 }}>
                   {lang === 'kg' ? 'сом' : 'сом'}
                 </span>
               </div>
@@ -1470,7 +1470,7 @@ export function DesktopLayout({
                 <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "-apple-system, sans-serif", letterSpacing: -2, lineHeight: 1 }}>
                   {settings?.welcomeBonus || 150}
                 </span>
-                <span style={{ fontSize: 16, fontWeight: 500, color: '#999', letterSpacing: -0.3 }}>
+                <span style={{ fontSize: 16, fontWeight: 500, color: '#8E8E93', letterSpacing: -0.3 }}>
                   {lang === 'kg' ? 'сом' : 'сом'}
                 </span>
               </div>
@@ -2075,7 +2075,7 @@ export function DesktopLayout({
                   />
                 ) : (
                   <svg width="80" height="180" viewBox="0 0 60 140" fill="none">
-                    <rect x="20" y="0" width="20" height="16" rx="2" fill="#E5E5E5"/>
+                    <rect x="20" y="0" width="20" height="16" rx="2" fill="#E5E5EA"/>
                     <rect x="8" y="16" width="44" height="110" rx="4" fill="#EBEBEB"/>
                   </svg>
                 )}
@@ -2102,13 +2102,13 @@ export function DesktopLayout({
                   </svg>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: '#BBB', flex: 1 }}>
+                  <div style={{ fontSize: 10, letterSpacing: 2.5, textTransform: 'uppercase', color: '#AEAEB2', flex: 1 }}>
                     {selectedProduct.brand}
                   </div>
                   {selectedProduct?.isAuthor && (
                     <div style={{
                       display: "inline-flex", alignItems: "center", gap: 5,
-                      background: "#111", color: "#fff", borderRadius: 7,
+                      background: "#111", color: "#fff", borderRadius: 8,
                       padding: "4px 10px 4px 7px", fontSize: 10, fontWeight: 700,
                       letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
                       boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
@@ -2166,7 +2166,7 @@ export function DesktopLayout({
                         <span style={{ fontSize: 24, fontWeight: 800, color: '#FF3B30' }}>
                           {salePrice(selVariant.price, si.percent).toLocaleString()} сом
                         </span>
-                        <span style={{ fontSize: 16, fontWeight: 500, color: '#bbb', textDecoration: 'line-through' }}>
+                        <span style={{ fontSize: 16, fontWeight: 500, color: '#AEAEB2', textDecoration: 'line-through' }}>
                           {Number(selVariant.price).toLocaleString()} сом
                         </span>
                         <span style={{ fontSize: 11, fontWeight: 700, color: '#FF3B30', background: 'rgba(255,59,48,0.08)', padding: '3px 8px', borderRadius: 6 }}>
@@ -2187,14 +2187,14 @@ export function DesktopLayout({
                     const isSel = modalVariantId === v.id;
                     return (
                       <div key={v.id} onClick={() => setModalVariantId(v.id)}
-                        style={{ padding: '10px 16px', border: `1px solid ${isSel ? '#111' : '#E5E5E5'}`,
+                        style={{ padding: '10px 16px', border: `1px solid ${isSel ? '#111' : '#E5E5EA'}`,
                           background: isSel ? '#111' : '#fff',
                           color: isSel ? '#fff' : '#555',
                           fontSize: 12, cursor: 'pointer' }}>
                         {si ? (
                           <>
                             {v.label} — <span style={{ color: isSel ? '#fff' : '#FF3B30', fontWeight: 700 }}>{salePrice(v.price, si.percent).toLocaleString()}</span>
-                            <span style={{ textDecoration: 'line-through', color: isSel ? 'rgba(255,255,255,0.4)' : '#bbb', marginLeft: 4, fontSize: 11 }}>{v.price}</span> сом
+                            <span style={{ textDecoration: 'line-through', color: isSel ? 'rgba(255,255,255,0.4)' : '#AEAEB2', marginLeft: 4, fontSize: 11 }}>{v.price}</span> сом
                           </>
                         ) : (
                           <>{v.label} — {v.price} сом</>
@@ -2232,11 +2232,11 @@ export function DesktopLayout({
               initial={{ x: 420 }} animate={{ x: 0 }} exit={{ x: 420 }}
               transition={{ type: 'spring', stiffness: 380, damping: 32 }}
               style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
-                background: '#fff', borderLeft: '1px solid #E5E5E5',
+                background: '#fff', borderLeft: '1px solid #E5E5EA',
                 zIndex: 1500, display: 'flex', flexDirection: 'column' }}
             >
               {/* Header */}
-              <div style={{ padding: '24px 28px', borderBottom: '1px solid #F0F0F0',
+              <div style={{ padding: '24px 28px', borderBottom: '1px solid #F2F2F7',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 2.5, textTransform: 'uppercase', color: '#111' }}>
@@ -2261,10 +2261,10 @@ export function DesktopLayout({
               {cart.length === 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 16, padding: 40 }}>
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="#DDD" strokeWidth="1.3" strokeLinejoin="round"/>
-                    <line x1="3" y1="6" x2="21" y2="6" stroke="#DDD" strokeWidth="1.3"/>
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="#E0E0E0" strokeWidth="1.3" strokeLinejoin="round"/>
+                    <line x1="3" y1="6" x2="21" y2="6" stroke="#E0E0E0" strokeWidth="1.3"/>
                   </svg>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#BBB' }}>Корзина пуста</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#AEAEB2' }}>Корзина пуста</div>
                   <div onClick={() => setCartOpen(false)}
                     style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase', color: '#111',
                       borderBottom: '1px solid #111', cursor: 'pointer', paddingBottom: 2 }}>
@@ -2284,7 +2284,7 @@ export function DesktopLayout({
                         </div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>{prod?.name}</div>
-                          <div style={{ fontSize: 11, color: '#BBB', marginBottom: 8 }}>{variant?.label}</div>
+                          <div style={{ fontSize: 11, color: '#AEAEB2', marginBottom: 8 }}>{variant?.label}</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                             <button onClick={() => {
                               setCart(prev => {
@@ -2319,7 +2319,7 @@ export function DesktopLayout({
                             });
                           }} style={{ cursor: 'pointer' }}>
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#BBB" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#AEAEB2" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
                             </svg>
                           </div>
                         </div>
@@ -2331,14 +2331,14 @@ export function DesktopLayout({
 
               {/* Footer */}
               {cart.length > 0 && (
-                <div style={{ padding: '20px 28px', borderTop: '1px solid #F0F0F0' }}>
+                <div style={{ padding: '20px 28px', borderTop: '1px solid #F2F2F7' }}>
                   <div style={{ display: 'flex', gap: 0, marginBottom: 14 }}>
                     {['pickup', 'delivery'].map(type => (
                       <div key={type} onClick={() => setDeliveryType(type)}
                         style={{ flex: 1, padding: '10px', textAlign: 'center', fontSize: 11,
                           letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer',
                           background: deliveryType === type ? '#111' : '#F5F5F5',
-                          color: deliveryType === type ? '#fff' : '#888' }}>
+                          color: deliveryType === type ? '#fff' : '#8E8E93' }}>
                         {type === 'pickup' ? 'Самовывоз' : 'Доставка'}
                       </div>
                     ))}
@@ -2348,7 +2348,7 @@ export function DesktopLayout({
                       value={address}
                       onChange={e => setAddress(e.target.value)}
                       placeholder="Улица, дом, квартира..."
-                      style={{ width: '100%', border: '1px solid #E5E5E5', padding: '10px 12px',
+                      style={{ width: '100%', border: '1px solid #E5E5EA', padding: '10px 12px',
                         fontSize: 13, color: '#111', background: '#fff', outline: 'none',
                         marginBottom: 10, boxSizing: 'border-box' }}
                     />
@@ -2358,7 +2358,7 @@ export function DesktopLayout({
                     onChange={e => setComment(e.target.value)}
                     placeholder="Комментарий к заказу..."
                     rows={2}
-                    style={{ width: '100%', border: '1px solid #E5E5E5', padding: '10px 12px',
+                    style={{ width: '100%', border: '1px solid #E5E5EA', padding: '10px 12px',
                       fontSize: 13, color: '#111', background: '#fff', outline: 'none',
                       resize: 'none', marginBottom: 14, boxSizing: 'border-box',
                       fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}
@@ -2371,9 +2371,9 @@ export function DesktopLayout({
                       <div key={pm.id} onClick={() => setPayMethod(pm.id)}
                         style={{ flex: 1, padding: '10px 4px', textAlign: 'center', fontSize: 10,
                           letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
-                          border: `1px solid ${payMethod === pm.id ? '#111' : '#E5E5E5'}`,
+                          border: `1px solid ${payMethod === pm.id ? '#111' : '#E5E5EA'}`,
                           background: payMethod === pm.id ? '#111' : '#fff',
-                          color: payMethod === pm.id ? '#fff' : '#888',
+                          color: payMethod === pm.id ? '#fff' : '#8E8E93',
                           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
                         {pm.logo}
                         {pm.label}
@@ -2386,7 +2386,7 @@ export function DesktopLayout({
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
                           stroke="#C9A84C" strokeWidth="1.5" strokeLinejoin="round"/>
                       </svg>
-                      <span style={{ fontSize: 11, color: '#888' }}>У вас {bonusBalance} бонусов</span>
+                      <span style={{ fontSize: 11, color: '#8E8E93' }}>У вас {bonusBalance} бонусов</span>
                       <label style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#555', cursor: 'pointer' }}>
                         <input type="checkbox" checked={useBonus} onChange={e => setUseBonus(e.target.checked)} />
                         Применить
@@ -2400,11 +2400,11 @@ export function DesktopLayout({
                     const finalTotal = cartTotal + dlvCost - bnsDisc;
                     return (
                       <>
-                        <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#888' }}>
+                        <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#8E8E93' }}>
                           <span>Подытог</span><span>{cartTotal} сом</span>
                         </div>
                         {deliveryType === 'delivery' && (
-                          <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#888' }}>
+                          <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#8E8E93' }}>
                             <span>Доставка</span>
                             <span style={{ color: dlvCost === 0 ? '#22a86e' : '#111' }}>
                               {dlvCost === 0 ? 'Бесплатно' : `${dlvCost} сом`}
@@ -2412,7 +2412,7 @@ export function DesktopLayout({
                           </div>
                         )}
                         {deliveryType === 'pickup' && (
-                          <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#888' }}>
+                          <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#8E8E93' }}>
                             <span>Доставка</span>
                             <span style={{ color: '#22a86e' }}>Самовывоз</span>
                           </div>
@@ -2467,14 +2467,14 @@ export function DesktopLayout({
             <motion.div
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
               style={{ position: 'fixed', top: 38 + 68 + 44, left: 0, right: 0, zIndex: 1050,
-                background: '#fff', borderBottom: desktopSearch.length < 3 ? '1px solid #E5E5E5' : 'none',
+                background: '#fff', borderBottom: desktopSearch.length < 3 ? '1px solid #E5E5EA' : 'none',
                 padding: '20px 48px',
                 display: 'flex', flexDirection: 'column', gap: 0 }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <circle cx="11" cy="11" r="7" stroke="#BBB" strokeWidth="1.5"/>
-                  <path d="M16.5 16.5L21 21" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round"/>
+                  <circle cx="11" cy="11" r="7" stroke="#AEAEB2" strokeWidth="1.5"/>
+                  <path d="M16.5 16.5L21 21" stroke="#AEAEB2" strokeWidth="1.5" strokeLinecap="round"/>
                 </svg>
                 <input
                   autoFocus
@@ -2486,13 +2486,13 @@ export function DesktopLayout({
                 {desktopSearch && (
                   <div onClick={() => setDesktopSearch('')} style={{ cursor: 'pointer', marginRight: 12 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                      <path d="M18 6L6 18M6 6l12 12" stroke="#BBB" strokeWidth="1.5" strokeLinecap="round"/>
+                      <path d="M18 6L6 18M6 6l12 12" stroke="#AEAEB2" strokeWidth="1.5" strokeLinecap="round"/>
                     </svg>
                   </div>
                 )}
                 <div onClick={() => { setSearchOpen(false); setDesktopSearch(''); }} style={{ cursor: 'pointer' }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <path d="M18 6L6 18M6 6l12 12" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/>
+                    <path d="M18 6L6 18M6 6l12 12" stroke="#8E8E93" strokeWidth="1.5" strokeLinecap="round"/>
                   </svg>
                 </div>
               </div>
@@ -2506,7 +2506,7 @@ export function DesktopLayout({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      style={{ padding: '24px 0', textAlign: 'center', color: '#999', fontSize: 15 }}
+                      style={{ padding: '24px 0', textAlign: 'center', color: '#8E8E93', fontSize: 15 }}
                     >
                       {lang === 'kg' ? 'Эч нерсе табылган жок' : 'Ничего не найдено'}
                     </motion.div>
@@ -2517,7 +2517,7 @@ export function DesktopLayout({
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      style={{ marginTop: 12, borderTop: '1px solid #F0F0F0' }}
+                      style={{ marginTop: 12, borderTop: '1px solid #F2F2F7' }}
                     >
                       {deskResults.map((p, idx) => {
                         const imgSrc = p.img || p.images?.[0];
@@ -2540,7 +2540,7 @@ export function DesktopLayout({
                           >
                             <div style={{
                               width: 64, height: 64, borderRadius: 12,
-                              background: '#FFF', border: '1px solid #F0F0F0',
+                              background: '#FFF', border: '1px solid #F2F2F7',
                               overflow: 'hidden', flexShrink: 0,
                               display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 6,
                             }}>
@@ -2557,7 +2557,7 @@ export function DesktopLayout({
                               <div style={{ fontSize: 16, fontWeight: 600, color: '#111', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {name}
                               </div>
-                              <div style={{ fontSize: 13, color: '#999', marginTop: 3 }}>
+                              <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 3 }}>
                                 {p.brand || p.category || ''}
                               </div>
                             </div>
@@ -2565,7 +2565,7 @@ export function DesktopLayout({
                               {price > 0 && (
                                 si ? (
                                   <>
-                                    <div style={{ fontSize: 12, color: '#bbb', textDecoration: 'line-through' }}>{price.toLocaleString()} сом</div>
+                                    <div style={{ fontSize: 12, color: '#AEAEB2', textDecoration: 'line-through' }}>{price.toLocaleString()} сом</div>
                                     <div style={{ fontSize: 16, fontWeight: 700, color: '#E53935' }}>{salePrice(price, si.percent).toLocaleString()} сом</div>
                                   </>
                                 ) : (

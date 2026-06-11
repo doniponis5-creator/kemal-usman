@@ -96,7 +96,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
                 right: 'calc(50% + 12px)',
                 top: 11,
                 height: 2,
-                background: '#E5E5E5',
+                background: '#E5E5EA',
                 zIndex: 1,
                 overflow: 'hidden',
               }}>
@@ -114,7 +114,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
               initial={false}
               animate={{
                 background: (isCompleted || isCurrent) ? '#111' : 'transparent',
-                borderColor: isPending ? '#E5E5E5' : '#111',
+                borderColor: isPending ? '#E5E5EA' : '#111',
                 scale: isCurrent ? 1.12 : 1,
               }}
               transition={{ type: 'spring', stiffness: 360, damping: 24 }}
@@ -163,9 +163,9 @@ export function OrderTimeline({ status, lang = 'ru' }) {
 
             {/* Label */}
             <div style={{
-              fontSize: 9.5,
+              fontSize: 10,
               marginTop: 6,
-              color: isPending ? '#bbb' : isCurrent ? '#111' : '#666',
+              color: isPending ? '#AEAEB2' : isCurrent ? '#111' : '#666',
               fontWeight: isCurrent ? 700 : 500,
               textAlign: 'center',
               maxWidth: 60,

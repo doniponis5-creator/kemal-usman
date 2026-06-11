@@ -143,7 +143,7 @@ export function BonusCelebration({ amount, title, subtitle, ctaLabel, onClose, l
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.32, duration: 0.3 }}
             style={{
-              fontSize: 11, color: '#999',
+              fontSize: 11, color: '#8E8E93',
               textTransform: 'uppercase', letterSpacing: 1.4,
               marginBottom: 8, fontWeight: 700,
             }}

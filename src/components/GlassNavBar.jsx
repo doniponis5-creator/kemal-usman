@@ -200,7 +200,7 @@ const S = {
   },
 
   label: {
-    fontSize: 10.5,
+    fontSize: 11,
     letterSpacing: -0.1,
     lineHeight: 1.1,
     whiteSpace: 'nowrap',

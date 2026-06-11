@@ -139,7 +139,7 @@ export default function AudioPlayerOverlay({ product }) {
           style={{
             flex: 1,
             height: 3,
-            borderRadius: 1.5,
+            borderRadius: 2,
             background: "rgba(255,255,255,0.30)",
             cursor: "pointer",
             overflow: "hidden",
@@ -151,7 +151,7 @@ export default function AudioPlayerOverlay({ product }) {
               height: "100%",
               width: `${progress * 100}%`,
               background: "#FFFFFF",
-              borderRadius: 1.5,
+              borderRadius: 2,
               transition: "width 0.12s linear",
             }}
           />

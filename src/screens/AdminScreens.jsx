@@ -281,7 +281,7 @@ export function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, on
                   {(order.paymentMethod === 'mbank' || order.paymentMethod === 'odengi') && (
                     <span style={{
                       fontSize: 10, fontWeight: 700, borderRadius: 6, padding: "2px 6px",
-                      background: (order.paymentStatus === 'mbank_pending' || order.paymentStatus === 'odengi_pending') ? '#FEF3C7' : '#D1FAE5',
+                      background: (order.paymentStatus === 'mbank_pending' || order.paymentStatus === 'odengi_pending') ? '#FFF8E1' : '#D1FAE5',
                       color: (order.paymentStatus === 'mbank_pending' || order.paymentStatus === 'odengi_pending') ? '#D97706' : '#059669',
                     }}>Онлайн</span>
                   )}
@@ -1388,7 +1388,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: "#8E8E93", textTransform: "uppercase", letterSpacing: 0.5 }}>Язык</div>
-              <div style={{ display: "inline-flex", background: "rgba(120,120,128,0.14)", borderRadius: 9, padding: 2, position: "relative" }}>
+              <div style={{ display: "inline-flex", background: "rgba(120,120,128,0.14)", borderRadius: 10, padding: 2, position: "relative" }}>
                 {['ru','kg'].map(l => {
                   const active = editLang === l;
                   return (
@@ -1397,7 +1397,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
                       {l.toUpperCase()}
                       {active && (
                         <motion.div layoutId="edit-lang-pill" transition={{ type: "spring", stiffness: 500, damping: 32 }}
-                          style={{ position: "absolute", inset: 0, background: "#fff", borderRadius: 7, boxShadow: "0 1px 2px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.04)", zIndex: -1 }} />
+                          style={{ position: "absolute", inset: 0, background: "#fff", borderRadius: 8, boxShadow: "0 1px 2px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.04)", zIndex: -1 }} />
                       )}
                     </button>
                   );
@@ -1512,7 +1512,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
                   <span style={{ position: "absolute", right: 10, fontSize: 12, color: "#8E8E93", fontWeight: 500, pointerEvents: "none" }}>сом</span>
                 </div>
                 <button type="button" onClick={() => { haptic('light'); updVar(editProd.id, v.id, "inStock", !v.inStock); }} aria-label="in stock"
-                  style={{ position: "relative", width: 42, height: 26, borderRadius: 13, background: v.inStock ? "#34C759" : "rgba(120,120,128,0.32)", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, transition: "background 0.22s" }}>
+                  style={{ position: "relative", width: 42, height: 26, borderRadius: 14, background: v.inStock ? "#34C759" : "rgba(120,120,128,0.32)", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, transition: "background 0.22s" }}>
                   <motion.div animate={{ x: v.inStock ? 18 : 2 }} transition={{ type: "spring", stiffness: 540, damping: 32 }}
                     style={{ position: "absolute", top: 2, width: 22, height: 22, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.20), 0 1px 2px rgba(0,0,0,0.06)" }} />
                 </button>
@@ -1592,11 +1592,11 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
         <EditSection title={t.badges_title}>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {[
-              { key: "isAuthor", label: t.badge_author, sub: t.badge_author_sub, color: "#111", iconFn: () => IC.crown(18, editProd.isAuthor ? "#FFD700" : "#999") },
-              { key: "isPopular", label: t.badge_popular, sub: t.badge_popular_sub, color: "#FF3B30", iconFn: () => IC.flame(18, editProd.isPopular ? "#FF3B30" : "#999") },
-              { key: "isHit", label: t.badge_hit, sub: t.badge_hit_sub, color: "#FF9500", iconFn: () => IC.bolt(18, editProd.isHit ? "#FF9500" : "#999") },
-              { key: "isNew", label: t.badge_new, sub: t.badge_new_sub, color: "#34C759", iconFn: () => IC.sparkle(18, editProd.isNew ? "#34C759" : "#999") },
-              { key: "featured", label: t.badge_featured, sub: t.badge_featured_sub, color: "#007AFF", iconFn: () => IC.pin(18, editProd.featured ? "#007AFF" : "#999") },
+              { key: "isAuthor", label: t.badge_author, sub: t.badge_author_sub, color: "#111", iconFn: () => IC.crown(18, editProd.isAuthor ? "#FFD700" : "#8E8E93") },
+              { key: "isPopular", label: t.badge_popular, sub: t.badge_popular_sub, color: "#FF3B30", iconFn: () => IC.flame(18, editProd.isPopular ? "#FF3B30" : "#8E8E93") },
+              { key: "isHit", label: t.badge_hit, sub: t.badge_hit_sub, color: "#FF9500", iconFn: () => IC.bolt(18, editProd.isHit ? "#FF9500" : "#8E8E93") },
+              { key: "isNew", label: t.badge_new, sub: t.badge_new_sub, color: "#34C759", iconFn: () => IC.sparkle(18, editProd.isNew ? "#34C759" : "#8E8E93") },
+              { key: "featured", label: t.badge_featured, sub: t.badge_featured_sub, color: "#007AFF", iconFn: () => IC.pin(18, editProd.featured ? "#007AFF" : "#8E8E93") },
             ].map(item => (
               <div key={item.key} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -2044,7 +2044,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
                     { icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>, l: "Фото", v: `${(editProd.images||[]).filter(Boolean).length} из 3`, c: (editProd.images||[]).filter(Boolean).length > 0 ? "#34C759" : "#FF9500" },
                   ].map((s, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 10px", background: "#FAFAFA", borderRadius: 10 }}>
-                      <div style={{ width: 24, height: 24, borderRadius: 7, background: "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.icon}</div>
+                      <div style={{ width: 24, height: 24, borderRadius: 8, background: "#F2F2F7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.icon}</div>
                       <span style={{ fontSize: 12, color: "#8E8E93", fontWeight: 500, flex: 1 }}>{s.l}</span>
                       <span style={{ fontSize: 12, color: s.c, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{s.v}</span>
                     </div>
@@ -2178,7 +2178,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
                   {cfg.icon}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#111", textAlign: "center", letterSpacing: -0.2, marginBottom: cfg.subtitle ? 2 : 6 }}>{cfg.title}</div>
-                {cfg.subtitle && <div style={{ fontSize: 13, fontWeight: 600, color: "#333", textAlign: "center", marginBottom: 6 }}>{cfg.subtitle}</div>}
+                {cfg.subtitle && <div style={{ fontSize: 13, fontWeight: 600, color: "#3A3A3C", textAlign: "center", marginBottom: 6 }}>{cfg.subtitle}</div>}
                 <div style={{ fontSize: 13, color: "#8E8E93", textAlign: "center", lineHeight: 1.45, marginBottom: 16 }}>{cfg.desc}</div>
                 {/* Step indicator */}
                 <div style={{ display: "flex", justifyContent: "center", gap: 6, marginBottom: 16 }}>
@@ -2684,7 +2684,7 @@ export function AdminStatsScreen({ orders = [], products = [], registeredUsers =
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: 8,
-                    background: i === 0 ? T.accent : i === 1 ? '#666' : i === 2 ? '#999' : T.accentLight,
+                    background: i === 0 ? T.accent : i === 1 ? '#666' : i === 2 ? '#8E8E93' : T.accentLight,
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: i < 3 ? "#fff" : T.accent, fontSize: 11, fontWeight: 900, flexShrink: 0,
                   }}>{i + 1}</div>
@@ -3129,9 +3129,9 @@ export function AdminBannersScreen({ banners = [], setBanners, products = [] }) 
               >
                 {/* Drag handle */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0, cursor: "grab" }}>
-                  <div style={{ width: 12, height: 2, borderRadius: 1, background: T.textMuted }} />
-                  <div style={{ width: 12, height: 2, borderRadius: 1, background: T.textMuted }} />
-                  <div style={{ width: 12, height: 2, borderRadius: 1, background: T.textMuted }} />
+                  <div style={{ width: 12, height: 2, borderRadius: 2, background: T.textMuted }} />
+                  <div style={{ width: 12, height: 2, borderRadius: 2, background: T.textMuted }} />
+                  <div style={{ width: 12, height: 2, borderRadius: 2, background: T.textMuted }} />
                 </div>
                 {/* Thumbnail */}
                 <div style={{ width: 64, height: 36, borderRadius: 8, background: b.img ? "transparent" : b.bg || "#111", overflow: "hidden", flexShrink: 0, border: `1px solid ${T.border}` }}>
@@ -3430,7 +3430,7 @@ const SET_ICON = {
 function SettingsIcon({ children, color }) {
   return (
     <div style={{
-      width: 29, height: 29, borderRadius: 7,
+      width: 29, height: 29, borderRadius: 8,
       background: color, display: 'flex',
       alignItems: 'center', justifyContent: 'center',
       flexShrink: 0,
@@ -3865,12 +3865,12 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
           }}
         >
           <div style={{
-            width: 44, height: 26, borderRadius: 13, padding: 2,
+            width: 44, height: 26, borderRadius: 14, padding: 2,
             background: sendWhatsApp ? '#25D366' : '#E0E0E0',
             transition: 'background 0.2s', display: 'flex', alignItems: 'center',
           }}>
             <div style={{
-              width: 22, height: 22, borderRadius: 11, background: '#fff',
+              width: 22, height: 22, borderRadius: 12, background: '#fff',
               boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
               transform: sendWhatsApp ? 'translateX(18px)' : 'translateX(0)',
               transition: 'transform 0.2s',
@@ -4478,7 +4478,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
                   <img src={settings.instagramScreen} alt="Instagram" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
                 ) : (
                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fafafa' }}>
-                    <div style={{ textAlign: 'center', color: '#999', fontSize: 11 }}>Нет фото</div>
+                    <div style={{ textAlign: 'center', color: '#8E8E93', fontSize: 11 }}>Нет фото</div>
                   </div>
                 )}
               </div>
@@ -4590,7 +4590,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
       >
         {icon && (
           <div style={{
-            width: 32, height: 32, borderRadius: 9,
+            width: 32, height: 32, borderRadius: 10,
             background: iconBg || '#8E8E93',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
@@ -4811,7 +4811,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
       <Card title={lang === 'kg' ? 'Тил' : 'Язык'}>
         <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, background: SETTINGS_CARD_BG, borderRadius: 16 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 9,
+            width: 32, height: 32, borderRadius: 10,
             background: '#5856D6',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0, fontSize: 16,
@@ -4819,7 +4819,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
           </div>
           <div style={{ flex: 1, fontSize: 15, fontWeight: 500, color: '#000', letterSpacing: -0.2, fontFamily: SETTINGS_FONT }}>{lang === 'kg' ? 'Тил' : 'Язык'}</div>
-          <div style={{ display: 'inline-flex', background: 'rgba(120,120,128,0.14)', borderRadius: 9, padding: 2, position: 'relative' }}>
+          <div style={{ display: 'inline-flex', background: 'rgba(120,120,128,0.14)', borderRadius: 10, padding: 2, position: 'relative' }}>
             {[{ id: 'ru', label: 'Рус' }, { id: 'kg', label: 'Кырг' }].map(opt => {
               const active = lang === opt.id;
               return (
@@ -4849,7 +4849,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
                       style={{
                         position: 'absolute', inset: 0,
                         background: '#fff',
-                        borderRadius: 7,
+                        borderRadius: 8,
                         boxShadow: '0 1px 2px rgba(0,0,0,0.10), 0 1px 1px rgba(0,0,0,0.04)',
                         zIndex: -1,
                       }}
