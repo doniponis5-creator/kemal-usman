@@ -33,6 +33,23 @@ export const audioUrl = (record) => {
   return `${PB_URL}/api/files/products/${record.id}/${record.audio}`;
 };
 
+// Ishonchli admin-token aniqlash. MUAMMO: jonli server eski PocketBase (<0.23),
+// admin login legacy /api/admins endpointidan o'tadi va saqlangan modelda
+// collectionName YO'Q — yangi SDK'ning authStore.isAdmin esa buni tanimaydi.
+// Natija: sahifa yangilanganda admin mijoz tomoniga uloqtirilardi.
+// YECHIM: JWT token ichidagi `type` claim'ini tekshiramiz — legacy admin
+// tokenlarda type === "admin", mijoz tokenlarida type === "authRecord".
+export function isAdminAuth() {
+  if (!pb.authStore.isValid) return false;
+  if (pb.authStore.isAdmin) return true;
+  const m = pb.authStore.model;
+  if (m?.collectionName === '_superusers') return true;
+  try {
+    const payload = JSON.parse(atob(pb.authStore.token.split('.')[1]));
+    return payload?.type === 'admin';
+  } catch { return false; }
+}
+
 // Fetch wrapper that auto-injects the current PB auth token (for hook calls).
 export async function authedFetch(path, init = {}) {
   const headers = new Headers(init.headers || {});

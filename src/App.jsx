@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 // FIX (CRITICAL): PB URL no longer hardcoded. Driven by VITE_PB_URL in .env so
 // production builds can point at HTTPS. The fallback is local-dev only.
 // See src/api/pb.js — it warns in console if PB_URL is not HTTPS in release.
-import { pb, PB_URL, fileUrl, audioUrl, authedFetch } from "./api/pb";
+import { pb, PB_URL, fileUrl, audioUrl, authedFetch, isAdminAuth } from "./api/pb";
 // Real auth: OTP-based client login + PB admin login. Replaces the previous
 // client-side password compare against `settings.adminPassword` (insecure —
 // the password lived in the React bundle and any user could read it).
@@ -6075,7 +6075,13 @@ export default function App() {
     try { localStorage.setItem('parfum_lang', lang); } catch { /* ignore */ }
   }, [lang]);
   const [screen, setScreen] = useState("catalog");
-  const [adminScreen, setAdminScreen] = useState("orders");
+  const [adminScreen, setAdminScreen] = useState(() => {
+    // Reload'dan keyin admin o'z tabiga qaytadi (sessionStorage — tab-lokal)
+    try { return sessionStorage.getItem('parfum_admin_screen') || "orders"; } catch { return "orders"; }
+  });
+  useEffect(() => {
+    try { sessionStorage.setItem('parfum_admin_screen', adminScreen); } catch { /* ignore */ }
+  }, [adminScreen]);
   const [products, setProducts] = useState([]);
   const [clientNotifications, setClientNotifications] = useState([]);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
@@ -6103,9 +6109,7 @@ export default function App() {
       // If URL has #admin and the token is a REAL ADMIN token → admin.
       // SECURITY: a regular client token must never unlock the admin UI.
       if (window.location.hash === '#admin') {
-        const isAdminToken = pb.authStore.isValid &&
-          (pb.authStore.isAdmin || pb.authStore.model?.collectionName === '_superusers');
-        if (isAdminToken) return true;
+        if (isAdminAuth()) return true;
         // Not an admin token — clean hash
         window.location.hash = '';
       }
@@ -6143,7 +6147,16 @@ export default function App() {
   const [registeredUsers, setRegisteredUsers] = useState([]);
   const [visitCount, setVisitCount] = useState(() => { const v = parseInt(localStorage.getItem('parfum_visits') || '0'); return v; });
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(false);
-  const [guestMode, setGuestMode] = useState(false);
+  const [guestMode, setGuestMode] = useState(() => {
+    // Mehmon reload qilsa qayta login ekraniga tushmasin
+    try { return localStorage.getItem('parfum_guest_mode') === '1' && !pb.authStore.isValid; } catch { return false; }
+  });
+  useEffect(() => {
+    try {
+      if (guestMode) localStorage.setItem('parfum_guest_mode', '1');
+      else localStorage.removeItem('parfum_guest_mode');
+    } catch { /* ignore */ }
+  }, [guestMode]);
   const [showRegModal, setShowRegModal] = useState(false);
   const [pendingOrderForReg, setPendingOrderForReg] = useState(null);
   
@@ -6281,10 +6294,19 @@ export default function App() {
     // SECURITY: only a verified admin token re-activates admin mode.
     // (The old localStorage 'parfum_is_admin' fallback let any logged-in
     // client open the admin UI by setting one flag — removed.)
-    if (hashAdmin && (pb.authStore.isAdmin || pb.authStore.model?.collectionName === '_superusers')) {
+    if (hashAdmin && isAdminAuth()) {
       setIsAdmin(true);
       localStorage.setItem('parfum_is_admin', 'true');
-      setAdminScreen("orders");
+      setAdminScreen(sessionStorage.getItem('parfum_admin_screen') || "orders");
+      return;
+    }
+    // FIX: admin token bilan #admin'siz reload — admin modelda phone yo'q,
+    // uni mijoz sifatida tiklash "singan profil"ga olib kelardi. Admin token
+    // bo'lsa avtomatik admin rejimga qaytaramiz.
+    if (isAdminAuth()) {
+      setIsAdmin(true);
+      window.location.hash = 'admin';
+      setAdminScreen(sessionStorage.getItem('parfum_admin_screen') || "orders");
       return;
     }
     const m = pb.authStore.model;
@@ -6431,7 +6453,7 @@ export default function App() {
 
       // Bonus balansni serverdan yangilash — "delivered" bo'lganda berilgan
       // cashback ilova ochilishi bilan ko'rinsin (ilgari faqat qayta login'da).
-      if (pb.authStore.isValid && !pb.authStore.isAdmin) {
+      if (pb.authStore.isValid && !isAdminAuth()) {
         authedFetch('/api/custom/me').then(me => {
           if (me && me.bonusBalance !== undefined) {
             setBonusBalance(Number(me.bonusBalance) || 0);
