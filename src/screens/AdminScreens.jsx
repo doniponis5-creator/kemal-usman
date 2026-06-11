@@ -4215,6 +4215,9 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
         <SettingsTextField label="Адрес"    value={settings?.shopAddress || ''} onChange={v => setSettings(p => ({ ...p, shopAddress: v }))} placeholder="ул. Ленина, 45" />
         <SettingsTextField label="Часы"     value={settings?.workingHours || ''} onChange={v => setSettings(p => ({ ...p, workingHours: v }))} placeholder="Пн–Вс: 10:00–21:00" />
       </SettingsSection>
+      <SettingsSection header="Мобильное приложение" footer="Когда приложение появится в App Store, вставьте сюда ссылку — на мобильном сайте автоматически появится баннер «Скачайте наше приложение».">
+        <SettingsTextField label="Ссылка App Store" value={settings?.appStoreUrl || ''} onChange={v => setSettings(p => ({ ...p, appStoreUrl: v }))} placeholder="https://apps.apple.com/app/..." />
+      </SettingsSection>
       <SettingsSection header="Карта" footer="Координаты используются для отображения магазина на карте.">
         <SettingsTextField label="Широта"  value={settings?.shopLat || ''} onChange={v => setSettings(p => ({ ...p, shopLat: v }))} placeholder="42.8746" />
         <SettingsTextField label="Долгота" value={settings?.shopLng || ''} onChange={v => setSettings(p => ({ ...p, shopLng: v }))} placeholder="74.5698" />

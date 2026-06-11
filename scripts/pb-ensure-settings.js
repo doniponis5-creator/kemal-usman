@@ -35,6 +35,7 @@ const FIELDS = [
   text('loginBrandName'), text('loginBrandTagline'),
   text('instagramUrl'), text('tiktokUrl'), text('youtubeUrl'), text('contactPhone'), text('supportPhone'),
   text('footerCompanyLinks'), text('footerHelpLinks'), text('copyrightText'),
+  text('appStoreUrl'),
 ];
 
 async function adminAuth() {

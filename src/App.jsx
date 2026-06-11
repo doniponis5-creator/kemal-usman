@@ -2431,6 +2431,49 @@ function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
 // Admin preview passes `preview` to disable click + add-to-cart visuals so the
 // admin sees the EXACT same card the client sees, edited live as form state
 // changes. Image rendering is delegated to <ProductImage size="card" />.
+// ─── APP DOWNLOAD BANNER (faqat mobil brauzerda, native ilovada EMAS) ───────
+// settings.appStoreUrl to'ldirilganda avtomatik paydo bo'ladi (App Store
+// approval'dan keyin admin "О магазине"da linkni kiritadi). Yopish 14 kunga
+// eslab qolinadi.
+function AppDownloadBanner({ settings }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      const ts = Number(localStorage.getItem('parfum_app_banner_dismissed') || 0);
+      return ts > 0 && (Date.now() - ts) < 14 * 86400000;
+    } catch { return false; }
+  });
+  const isNativeApp = typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.();
+  const isMobileWeb = typeof navigator !== 'undefined' && /iPhone|iPad|Android/i.test(navigator.userAgent) && !isNativeApp;
+  const url = settings?.appStoreUrl;
+  if (!url || dismissed || !isMobileWeb) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+      style={{
+        margin: "0 16px 12px", padding: "10px 12px", borderRadius: 14,
+        background: "#111111", display: "flex", alignItems: "center", gap: 10,
+        boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+      }}
+    >
+      <div style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📱</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: "#fff", fontSize: 13, fontWeight: 700, letterSpacing: -0.1 }}>Скачайте наше приложение</div>
+        <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11 }}>Удобнее, быстрее и с уведомлениями о заказе</div>
+      </div>
+      <a href={url} target="_blank" rel="noopener noreferrer"
+        style={{ background: "#fff", color: "#111", borderRadius: 999, padding: "7px 14px", fontSize: 12, fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>
+        Скачать
+      </a>
+      <button
+        onClick={() => { try { localStorage.setItem('parfum_app_banner_dismissed', String(Date.now())); } catch { /* ignore */ } setDismissed(true); }}
+        aria-label="Закрыть"
+        style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 16, cursor: "pointer", padding: "4px 2px", flexShrink: 0 }}>✕</button>
+    </motion.div>
+  );
+}
+
 function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, onAudioHintDismiss }) {
   const { lang, t } = useLang();
   const stk = productHasStock(p);
@@ -3188,7 +3231,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
         </AnimatePresence>
       </motion.div>
       {/* Banner */}
-      {banners.length > 0 && <div style={{ marginTop: 14, marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
+      <div style={{ marginTop: 12 }}><AppDownloadBanner settings={settings} /></div>
+      {banners.length > 0 && <div style={{ marginTop: 2, marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
       {/* Categories + sort button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' }}>
         <div className="no-scrollbar" style={{ flex: 1, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
@@ -6887,7 +6931,8 @@ export default function App() {
     const shopName = settings?.shopName || 'Kemal Usman';
     const clientMsg = `Здравствуйте, ${cName}! 🌸\n\nВаш заказ №${newOrder.id} успешно оформлен ✅\n\n${itemsList}\n\n💳 Способ оплаты: наличные\n📦 Доставка: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом\n\nМы свяжемся с вами для подтверждения 🤝\nСпасибо за покупку! 🙏\n\n— ${shopName}`;
     const adminPhone = settings?.whatsappPhone || '';
-    const adminMsg = `🆕 Новый заказ №${newOrder.id}\n\n👤 Клиент: ${cName}\n📞 Телефон: ${cPhone}\n\n${itemsList}\n\n💵 Оплата: наличные\n📍 Адрес: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом`;
+    const commentLine = orderData.comment ? `\n💬 Комментарий: ${orderData.comment}` : '';
+    const adminMsg = `🆕 Новый заказ №${newOrder.id}\n\n👤 Клиент: ${cName}\n📞 Телефон: ${cPhone}\n\n${itemsList}\n\n💵 Оплата: наличные\n📍 Адрес: ${deliveryLine}${commentLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом`;
     // Server-side WhatsApp dispatch — `sendWhatsApp` now lives in
     // src/api/whatsapp.js and only forwards { chatId, message, orderId }
     // to /api/custom/whatsapp/send. Tokens stay on the PB host.
@@ -7217,7 +7262,8 @@ export default function App() {
             const odPhone = pendingOrder.clientPhone || user?.phone || '';
             const odShop = settings?.shopName || 'Kemal Usman';
             const clientMsg4 = `Здравствуйте, ${odName}! 🌸\n\nВаш заказ №${finalOrder.id} оплачен через O!Деньги ✅\n\n${itemsList4}\n\n💳 Оплата: O!Деньги (подтверждена)\n📍 Адрес: ${deliveryLine4}${bonusLine4}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом\n\nСпасибо за покупку! 🤍\n\n— ${odShop}`;
-            const adminMsg4 = `🆕 Заказ №${finalOrder.id} ОПЛАЧЕН (O!Деньги)\n\n👤 ${odName}\n📞 ${odPhone}\n\n${itemsList4}\n\n💳 O!Деньги — оплачен ✅\n📍 ${deliveryLine4}${bonusLine4}\n💰 ${pendingOrder.total.toLocaleString()} сом`;
+            const commentLine4 = pendingOrder.comment ? `\n💬 Комментарий: ${pendingOrder.comment}` : '';
+            const adminMsg4 = `🆕 Заказ №${finalOrder.id} ОПЛАЧЕН (O!Деньги)\n\n👤 ${odName}\n📞 ${odPhone}\n\n${itemsList4}\n\n💳 O!Деньги — оплачен ✅\n📍 ${deliveryLine4}${commentLine4}${bonusLine4}\n💰 ${pendingOrder.total.toLocaleString()} сом`;
             if (pendingOrder.clientPhone) sendWhatsApp({ phone: pendingOrder.clientPhone, message: clientMsg4, orderId: finalOrder.id }).catch(() => {});
             if (adm4) sendWhatsApp({ phone: adm4, message: adminMsg4, orderId: finalOrder.id }).catch(() => {});
           }}
