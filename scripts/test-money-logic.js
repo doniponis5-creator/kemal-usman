@@ -110,9 +110,11 @@ async function run() {
     items: JSON.stringify([{ productId: product.id, variantId: variant.id, qty, name: product.name, price: 1 }]), // soxta narx: 1 som!
     total: 2, subtotal: 2, bonusDiscount: 0, paymentMethod: 'cash', deliveryType: 'pickup',
   });
-  Number(o1.subtotal) === realPrice * qty
-    ? pass(`T1: server narxni qayta hisobladi (${o1.subtotal} = ${realPrice}×${qty}, mijozning "1 som"i rad)`)
-    : fail(`T1: subtotal ${o1.subtotal}, kutilgan ${realPrice * qty}`);
+  // Eslatma: orders sxemasida `subtotal` maydoni yo'q — `total` bo'yicha tekshiramiz
+  // (bonusDiscount=0 bo'lgani uchun total === haqiqiy narx × qty bo'lishi shart)
+  Number(o1.total) === realPrice * qty
+    ? pass(`T1: server narxni qayta hisobladi (total=${o1.total} = ${realPrice}×${qty}, mijozning "1 som"i rad)`)
+    : fail(`T1: total ${o1.total}, kutilgan ${realPrice * qty}`);
 
   // ── T2+T5: bonus overflow + debit ──
   const o2 = await pb.collection('orders').create({
@@ -127,6 +129,7 @@ async function run() {
     ? pass(`T2: bonus 999999 → ${o2.bonusDiscount} ga qisqartirildi (balans=500, 30% limit=${maxByPct})`)
     : fail(`T2: bonusDiscount ${o2.bonusDiscount}, kutilgan ${expectedBonus}`);
 
+  info('STEP:afterDebit-getOne');
   const afterDebit = await pb.collection('clients').getOne(client.id);
   Number(afterDebit.bonus_balance) === 500 - expectedBonus
     ? pass(`T5: bonus darhol yechildi (500 → ${afterDebit.bonus_balance})`)
@@ -144,7 +147,9 @@ async function run() {
   }
 
   // ── T6: delivered → foiz bonus + welcome (birinchi yetkazma) ──
+  info('STEP:balBefore');
   const balBefore = Number((await pb.collection('clients').getOne(client.id)).bonus_balance);
+  info('STEP:o1-delivered');
   await pb.collection('orders').update(o1.id, { status: 'delivered' });
   const afterDeliver = await pb.collection('clients').getOne(client.id);
   const histAfter = typeof afterDeliver.bonus_history === 'string' ? JSON.parse(afterDeliver.bonus_history || '[]') : (afterDeliver.bonus_history || []);
@@ -156,6 +161,7 @@ async function run() {
              : info('T6b: welcome bonus berilmadi (settings.welcomeBonus=0 bo\'lishi mumkin — tekshiring)');
 
   // ── T7: welcome ikkinchi marta berilmaydi ──
+  info('STEP:o2-delivered');
   await pb.collection('orders').update(o2.id, { status: 'delivered' });
   const after2 = await pb.collection('clients').getOne(client.id);
   const hist2 = typeof after2.bonus_history === 'string' ? JSON.parse(after2.bonus_history || '[]') : (after2.bonus_history || []);
@@ -173,6 +179,8 @@ async function run() {
 
 run().catch(async (e) => {
   console.error('❌ Test crash:', e?.response?.message || e.message || e);
+  if (e?.response?.data) console.error('   Tafsilot:', JSON.stringify(e.response.data));
+  if (e?.url) console.error('   URL:', e.url);
   await cleanup();
   process.exit(1);
 });
