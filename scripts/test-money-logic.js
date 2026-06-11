@@ -77,7 +77,7 @@ async function run() {
   if (!products.items.length) { console.error('❌ Mahsulot yo\'q'); process.exit(1); }
   const product = products.items[0];
   const variants = typeof product.variants === 'string' ? JSON.parse(product.variants) : (product.variants || []);
-  const variant = variants.find(v => v.inStock !== false);
+  const variant = variants.find(v => v.inStock !== false) || variants[0];
   if (!variant) { console.error('❌ In-stock variant yo\'q'); process.exit(1); }
   const realPrice = Number(variant.price);
   info(`Test mahsulot: ${product.name} / ${variant.label} = ${realPrice} som`);

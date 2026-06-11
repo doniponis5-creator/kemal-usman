@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 // FIX (CRITICAL): PB URL no longer hardcoded. Driven by VITE_PB_URL in .env so
 // production builds can point at HTTPS. The fallback is local-dev only.
 // See src/api/pb.js — it warns in console if PB_URL is not HTTPS in release.
-import { pb, PB_URL, fileUrl, audioUrl } from "./api/pb";
+import { pb, PB_URL, fileUrl, audioUrl, authedFetch } from "./api/pb";
 // Real auth: OTP-based client login + PB admin login. Replaces the previous
 // client-side password compare against `settings.adminPassword` (insecure —
 // the password lived in the React bundle and any user could read it).
@@ -2527,8 +2527,10 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
                   <span style={{ color: '#FF3B30', fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(saleMinP)}</span>
                   <span style={{ color: '#BBB', fontSize: 12, textDecoration: 'line-through' }}>{formatSum(minP)}</span>
                 </div>
-              ) : (
+              ) : minP > 0 ? (
                 <span style={{ color: "#111111", fontWeight: 600, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(minP)}</span>
+              ) : (
+                <span style={{ color: "#8E8E93", fontWeight: 600, fontSize: 13, letterSpacing: -0.2 }}>{lang === 'kg' ? 'Баасы такталууда' : 'Цена уточняется'}</span>
               )
             ) : <span style={{ color: T.danger, fontSize: 11, fontWeight: 500 }}>{t.outOfStock}</span>}
           </div>
@@ -6362,6 +6364,17 @@ export default function App() {
         setSettings(prev => ({ ...prev, ...paymentData }));
       }
 
+      // Bonus balansni serverdan yangilash — "delivered" bo'lganda berilgan
+      // cashback ilova ochilishi bilan ko'rinsin (ilgari faqat qayta login'da).
+      if (pb.authStore.isValid && !pb.authStore.isAdmin) {
+        authedFetch('/api/custom/me').then(me => {
+          if (me && me.bonusBalance !== undefined) {
+            setBonusBalance(Number(me.bonusBalance) || 0);
+            if (me.referralCode) setReferralCode(me.referralCode);
+          }
+        }).catch(() => { /* offline */ });
+      }
+
       // Global settings PB'dan — admin boshqa qurilmada o'zgartirgan bo'lsa
       // ham hamma joyda bir xil bo'lsin. localStorage faqat tezkor kesh.
       const pbSettings = await api.getSettings().catch(() => null);
@@ -6660,7 +6673,14 @@ export default function App() {
     showToast(t.addedToCart);
   };
 
+  const orderInFlight = useRef(false);
   const handleOrder = async (orderData) => {
+    // CRITICAL FIX: double-tap himoyasi — tez ikki bosishda ikkita buyurtma
+    // yaratilib qolardi. Endi birinchisi tugamaguncha ikkinchisi bloklanadi.
+    if (orderInFlight.current) {
+      showToast(lang === 'kg' ? 'Заказ жөнөтүлүүдө...' : 'Заказ оформляется...');
+      return;
+    }
     if (!user) {
       // Guest trying to order → show registration modal, save order data for after registration
       setPendingOrderForReg(orderData);
@@ -6713,6 +6733,7 @@ export default function App() {
       return;
     }
     // Save to PocketBase
+    orderInFlight.current = true;
     try {
       const pbData = {
         clientName: newOrder.clientName,
@@ -6731,18 +6752,34 @@ export default function App() {
       // Use PB-assigned ID everywhere so WhatsApp hook can verify the order.
       newOrder.id = created.id;
       newOrder.collectionId = created.collectionId;
+      // Server narx/bonusni qayta hisoblagan bo'lishi mumkin — uning qiymatlari asosiy.
+      if (created.total !== undefined) newOrder.total = created.total;
+      if (created.bonusDiscount !== undefined) newOrder.bonusDiscount = created.bonusDiscount;
       setOrders(p => [...p, { ...newOrder }]);
     } catch (e) {
+      // CRITICAL FIX: ilgari server xatosida buyurtma FAQAT lokal qo'shilardi —
+      // mijoz "qabul qilindi" deb o'ylar, admin esa buyurtmani umuman ko'rmasdi,
+      // savat ham tozalanib ketardi. Endi: aniq xato + savat saqlanadi.
+      orderInFlight.current = false;
       console.warn("PocketBase order error:", e);
-      setOrders(p => [...p, newOrder]);
+      captureError(e, { where: 'createOrder' });
+      showToast(lang === 'kg'
+        ? 'Заказ жөнөтүлгөн жок — интернетти текшерип, кайра аракет кылыңыз'
+        : 'Заказ не отправлен — проверьте интернет и попробуйте ещё раз', 'error');
+      return;
     }
-    // Bonus SPENT is deducted immediately at order placement.
-    // Bonus EARNED (cashback) is only credited when order reaches "delivered" status
-    // — see handleStatusChange below. This prevents gaming via order→cancel.
-    if (orderData.bonusDiscount > 0) {
-      setBonusBalance(p => p - orderData.bonusDiscount);
-      setBonusHistory(p => [...p, { type: "spent", amount: -orderData.bonusDiscount, label: "Бонус потрачен", date: now }]);
+    orderInFlight.current = false;
+    // Bonus SPENT is deducted immediately at order placement (server — asosiy manba).
+    // Bonus EARNED (cashback) is only credited when order reaches "delivered" status.
+    const actualBonusUsed = Number(newOrder.bonusDiscount || 0);
+    if (actualBonusUsed > 0) {
+      setBonusBalance(p => Math.max(0, p - actualBonusUsed));
+      setBonusHistory(p => [...p, { type: "spent", amount: -actualBonusUsed, label: "Бонус потрачен", date: now }]);
     }
+    // Serverdagi haqiqiy balansni olib UI'ni sinxronlash (server clamp qilgan bo'lishi mumkin)
+    authedFetch('/api/custom/me').then(me => {
+      if (me && me.bonusBalance !== undefined) setBonusBalance(Number(me.bonusBalance) || 0);
+    }).catch(() => { /* offline — lokal hisob qoladi */ });
     setCart([]); localStorage.removeItem('parfum_cart');
     haptic('success'); // PRO: success haptic on order placement
     setCompletedOrder(newOrder);
