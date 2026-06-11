@@ -72,6 +72,15 @@ onRecordBeforeCreateRequest((e) => {
       String(typeof rawItems === 'string' ? rawItems : JSON.stringify(rawItems)).slice(0, 500));
     throw new BadRequestError('Items list is empty or malformed.');
   }
+  // DoS himoyasi: bitta buyurtmada 100 dan ortiq pozitsiya bo'lishi mumkin emas.
+  if (items.length > 100) {
+    throw new BadRequestError('Too many items in one order.');
+  }
+  // Erkin matn maydonlarini cheklash (ulkan payload'lar bilan DB to'ldirishga qarshi).
+  ['address', 'comment', 'clientName', 'clientPhone'].forEach(function(f) {
+    var v = e.record.get(f);
+    if (typeof v === 'string' && v.length > 1000) e.record.set(f, v.slice(0, 1000));
+  });
   // Recompute the total from authoritative product prices.
   let serverTotal = 0;
   for (let i = 0; i < items.length; i++) {

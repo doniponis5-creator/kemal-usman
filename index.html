@@ -12,6 +12,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#000000" />
+    <!-- ── Content Security Policy — XSS va resurs-injeksiyaga qarshi himoya ──
+         style-src 'unsafe-inline': ilova inline-style obyektlaridan foydalanadi.
+         connect-src: faqat o'z API + O!Dengi + green-api. img: PB + data + https. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https://api.kemalusman.kg https://api.dengi.o.kg https://api.green-api.com; media-src 'self' https: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
     <title>Kemal Usman — Парфюмерия в Бишкеке</title>
     <meta name="description" content="Kemal Usman — оригинальная парфюмерия на разлив и в упаковке в Бишкеке. Доставка, бонусы, онлайн-оплата." />
     <meta property="og:title" content="Kemal Usman — Парфюмерия в Бишкеке" />

@@ -38,7 +38,9 @@ routerAdd('POST', '/api/custom/whatsapp/send', (c) => {
 
   const data = info.data || {};
   const chatId = String(data.chatId || '').trim();
-  const message = String(data.message || '');
+  // Xabar uzunligini cheklash — ulkan payload bilan green-api'ni suiiste'mol
+  // qilishning oldini oladi (WhatsApp limiti ~4096, biz 4000 da kesamiz).
+  const message = String(data.message || '').slice(0, 4000);
   const orderId = data.orderId ? String(data.orderId) : '';
 
   // If not authenticated, require a valid orderId as proof the call is legit.
