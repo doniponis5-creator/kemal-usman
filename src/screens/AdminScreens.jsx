@@ -3994,19 +3994,32 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
 
   const saveWhatsapp = () => {
     localStorage.setItem('whatsapp_admin', whatsappAdmin);
+    // FIX: ilgari settings'ga yozilmasdi — buyurtma xabarlari eski raqamga
+    // ketaverardi. Endi settings.whatsappPhone yangilanadi (PB'ga avto-sync).
+    setSettings(p => ({ ...p, whatsappPhone: whatsappAdmin }));
     // green_instance / green_token deliberately NOT saved here — they are
     // managed by the PB host (env vars), never by the client.
   };
 
-  const handleLoginBgUpload = (e) => {
+  const handleLoginBgUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    // 1) PB'ga yuklash — barcha qurilmalar ko'radi (instagramScreen kabi)
+    const rec = await api.uploadSiteMedia('loginBg', file).catch(() => null);
+    if (rec && rec.id && rec.file) {
+      const url = `${PB_URL}/api/files/site_media/${rec.id}/${rec.file}`;
+      setSettings(p => ({ ...p, loginBg: url }));
+      localStorage.setItem('parfum_login_bg', url);
+      showToast?.('Фон сохранён');
+      return;
+    }
+    // 2) Fallback: lokal base64 (PB vaqtincha ishlamasa)
     const reader = new FileReader();
     reader.onload = (ev) => {
       const dataUrl = ev.target.result;
       setSettings(p => ({ ...p, loginBg: dataUrl }));
       localStorage.setItem('parfum_login_bg', dataUrl);
-      showToast?.('Фон сохранён');
+      showToast?.('Сохранено локально (PB недоступен)');
     };
     reader.readAsDataURL(file);
   };
@@ -4035,6 +4048,81 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
   };
 
   // Sub-screen renderers ────────────────────────────────────────────────────────
+
+  // ═══ TIZIM DIAGNOSTIKASI — bir tugma bilan hammasini tekshirish ═══
+  const [diagResults, setDiagResults] = useState(null);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const runDiagnostics = async () => {
+    setDiagRunning(true);
+    const res = [];
+    const authHdr = pb.authStore.token ? { Authorization: pb.authStore.token } : {};
+    // 1. PocketBase server
+    try {
+      const r = await fetch(`${PB_URL}/api/health`, { method: 'GET' });
+      res.push({ name: 'PocketBase server', ok: r.ok, detail: r.ok ? 'Работает' : `HTTP ${r.status}` });
+    } catch { res.push({ name: 'PocketBase server', ok: false, detail: 'Нет связи' }); }
+    // 2. Mahsulotlar
+    res.push({ name: lang === 'kg' ? 'Товарлар' : 'Товары', ok: products.length > 0, detail: `${products.length} шт` });
+    // 3. Sozlamalar PB sync
+    try {
+      const st = await api.getSettings();
+      res.push({ name: lang === 'kg' ? 'Жөндөөлөр (сервер)' : 'Настройки (сервер)', ok: !!st, detail: st ? 'Синхронизированы' : 'Записи нет — измените любую настройку' });
+    } catch { res.push({ name: 'Настройки (сервер)', ok: false, detail: 'Ошибка' }); }
+    // 4. O!Dengi konfiguratsiyasi (400 = sozlangan, 503 = parol yo'q)
+    try {
+      const r = await fetch(`${PB_URL}/api/custom/odengi/create-invoice`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHdr }, body: '{}',
+      });
+      const ok = r.status === 400;
+      res.push({ name: 'O!Деньги', ok, detail: ok ? 'Настроена' : r.status === 503 ? 'Нет ODENGI_PASSWORD на сервере!' : r.status === 401 ? 'Нужен admin-токен' : `HTTP ${r.status}` });
+    } catch { res.push({ name: 'O!Деньги', ok: false, detail: 'Нет связи' }); }
+    // 5. WhatsApp (400 = sozlangan, 500 = token yo'q)
+    try {
+      const r = await fetch(`${PB_URL}/api/custom/whatsapp/send`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...authHdr }, body: '{}',
+      });
+      const ok = r.status === 400;
+      res.push({ name: 'WhatsApp (Green API)', ok, detail: ok ? 'Настроен' : r.status === 500 ? 'Нет GREEN_API_TOKEN на сервере' : `HTTP ${r.status}` });
+    } catch { res.push({ name: 'WhatsApp (Green API)', ok: false, detail: 'Нет связи' }); }
+    setDiagResults(res);
+    setDiagRunning(false);
+    haptic(res.every(x => x.ok) ? 'medium' : 'heavy');
+  };
+
+  const renderDiagnostics = () => (
+    <SettingsSubScreen title={lang === 'kg' ? 'Система текшерүү' : 'Проверка системы'} onBack={() => setSub(null)}>
+      <SettingsSection
+        header={lang === 'kg' ? 'Диагностика' : 'Диагностика'}
+        footer={lang === 'kg'
+          ? 'Сервер, төлөм жана билдирүүлөр иштеп жатканын текшерет.'
+          : 'Проверяет сервер, оплату и уведомления за пару секунд. Запускайте после каждого деплоя.'}
+      >
+        <div style={{ padding: '12px 16px', background: SETTINGS_CARD_BG, borderRadius: 12 }}>
+          {!diagResults && !diagRunning && (
+            <div style={{ fontSize: 13, color: '#8E8E93', fontFamily: SETTINGS_FONT, textAlign: 'center', padding: '8px 0' }}>
+              {lang === 'kg' ? 'Текшерүүнү баштаңыз' : 'Нажмите кнопку для проверки'}
+            </div>
+          )}
+          {diagRunning && (
+            <div style={{ fontSize: 13, color: '#8E8E93', fontFamily: SETTINGS_FONT, textAlign: 'center', padding: '8px 0' }}>
+              ⏳ {lang === 'kg' ? 'Текшерилүүдө...' : 'Проверяем...'}
+            </div>
+          )}
+          {diagResults && diagResults.map((r, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < diagResults.length - 1 ? `1px solid ${SETTINGS_SEPARATOR}` : 'none' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: SETTINGS_LABEL_COLOR, fontFamily: SETTINGS_FONT }}>{r.ok ? '✅' : '❌'} {r.name}</span>
+              <span style={{ fontSize: 12, color: r.ok ? '#34C759' : '#FF3B30', fontFamily: SETTINGS_FONT, textAlign: 'right', maxWidth: '55%' }}>{r.detail}</span>
+            </div>
+          ))}
+        </div>
+      </SettingsSection>
+      <div style={{ padding: '0 16px' }}>
+        <button onClick={runDiagnostics} disabled={diagRunning} style={{ ...primarySaveBtn, opacity: diagRunning ? 0.6 : 1 }}>
+          {diagRunning ? '...' : (lang === 'kg' ? 'Текшерүүнү баштоо' : 'Запустить проверку')}
+        </button>
+      </div>
+    </SettingsSubScreen>
+  );
 
   const renderBanners = () => (
     <SettingsSubScreen title="Баннеры" onBack={() => setSub(null)}>
@@ -4629,6 +4717,41 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
 
       {/* ══════ 2. ОПЛАТА (Payments) ══════ */}
       <Card title={lang === 'kg' ? 'Төлөм' : 'Оплата'}>
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M2 10h20"/></svg>}
+          iconBg={settings?.onlinePaymentEnabled !== false ? '#34C759' : '#8E8E93'}
+          label={lang === 'kg' ? 'Онлайн төлөм (O!Деньги)' : 'Онлайн оплата (O!Деньги)'}
+          hint={settings?.onlinePaymentEnabled !== false
+            ? (lang === 'kg' ? 'Күйүк — кардарларга көрүнөт' : 'Включена — видна клиентам')
+            : (lang === 'kg' ? 'Өчүк — жашырылган' : 'Выключена — скрыта из оформления')}
+          onClick={() => {
+            const next = !(settings?.onlinePaymentEnabled !== false);
+            setSettings(p => ({ ...p, onlinePaymentEnabled: next }));
+            haptic('light');
+            showToast?.(next
+              ? (lang === 'kg' ? 'Онлайн төлөм күйгүзүлдү' : 'Онлайн оплата включена')
+              : (lang === 'kg' ? 'Онлайн төлөм өчүрүлдү' : 'Онлайн оплата выключена'));
+          }} isFirst
+        />
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>}
+          iconBg="#34C759"
+          label={lang === 'kg' ? 'Накталай' : 'Наличные при получении'}
+          hint={lang === 'kg' ? 'Дайыма иштейт' : 'Всегда доступны'}
+          isLast
+        />
+      </Card>
+
+      {/* ══════ ПРОВЕРКА СИСТЕМЫ ══════ */}
+      <Card title={lang === 'kg' ? 'Система' : 'Система'}>
+        <PremiumRow
+          icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>}
+          iconBg="#FF9500"
+          label={lang === 'kg' ? 'Система текшерүү' : 'Проверка системы'}
+          hint={lang === 'kg' ? 'Сервер, төлөм, WhatsApp' : 'Сервер, оплата, WhatsApp — за 5 секунд'}
+          onClick={() => { setDiagResults(null); setSub('diagnostics'); }}
+          isFirst isLast
+        />
       </Card>
 
       {/* ══════ 3. КОНТЕНТ (Content) ══════ */}
@@ -4824,6 +4947,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
             {sub === 'footerSettings' && renderFooterSettings()}
             {sub === 'loginBg'  && renderLoginBg()}
             {sub === 'instaScreen' && renderInstaScreen()}
+            {sub === 'diagnostics' && renderDiagnostics()}
           </motion.div>
         )}
       </AnimatePresence>

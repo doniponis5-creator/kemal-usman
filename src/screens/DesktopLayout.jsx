@@ -2367,7 +2367,7 @@ export function DesktopLayout({
                     {[
                       { id: 'odengi', label: 'Онлайн', logo: <svg style={{width:22,height:22}} viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="#FF6B00" strokeWidth="2" fill="none"/><path d="M2 10h20" stroke="#FF6B00" strokeWidth="2"/></svg> },
                       { id: 'cash',  label: 'Наличные', logo: <CashLogo size={22} /> },
-                    ].map(pm => (
+                    ].filter(opt => opt.id !== 'odengi' || settings?.onlinePaymentEnabled !== false).map(pm => (
                       <div key={pm.id} onClick={() => setPayMethod(pm.id)}
                         style={{ flex: 1, padding: '10px 4px', textAlign: 'center', fontSize: 10,
                           letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
