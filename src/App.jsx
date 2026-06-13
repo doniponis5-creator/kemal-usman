@@ -3325,7 +3325,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
         lang={lang}
       />
       {/* Products grid */}
-      <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
         {filteredProducts.length === 0 && (
           <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: T.textMuted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
