@@ -374,12 +374,13 @@ function CropModal({ src, onDone, onCancel }) {
 }
 
 // ─── BANNER CROP MODAL — 1200×480 output for crisp desktop hero ───────────────
-// Display: 320×128 (fits phone screen). Export: 1200×480 @ JPEG 0.93.
-// Scale 3.75× on export so 1400px-wide hero stays sharp.
+// Display: 320×128 (fits phone screen). Export: 2880×1152 @ JPEG 0.88.
+// 2880px = Retina-sharp on a full-width hero up to 1440 CSS px @2x DPR
+// (старый экспорт 1200px растягивался браузером ~2.5× и мылился).
 export function BannerCropModal({ src, onDone, onCancel }) {
-  const DISP_W = 320, DISP_H = 128; // display canvas (fits modal)
-  const OUT_W  = 1200, OUT_H = 480; // export canvas (desktop-crisp)
-  const SCALE  = OUT_W / DISP_W;    // 3.75
+  const DISP_W = 320, DISP_H = 128;   // display canvas (fits modal)
+  const OUT_W  = 2880, OUT_H = 1152;  // export canvas (Retina desktop-crisp)
+  const SCALE  = OUT_W / DISP_W;      // 9
 
   const [pos, setPos]       = React.useState({ x: 0, y: 0 });
   const [zoom, setZoom]     = React.useState(1);
@@ -435,14 +436,18 @@ export function BannerCropModal({ src, onDone, onCancel }) {
   const onUp = () => setDrag(false);
 
   const handleDone = () => {
-    // Render at full 1200×480 resolution
+    // Render at full 2880×1152 resolution, sampling from the ORIGINAL image
     const out = document.createElement('canvas');
     out.width = OUT_W; out.height = OUT_H;
     const ctx = out.getContext('2d');
+    // High-quality interpolation — без этого одношаговый ресайз 4000px→2880px даёт алиасинг
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, OUT_W, OUT_H);
     ctx.drawImage(imgRef.current, pos.x * SCALE, pos.y * SCALE, imgRef.current.width * zoom * SCALE, imgRef.current.height * zoom * SCALE);
-    onDone(out.toDataURL('image/jpeg', 0.93));
+    // 0.88 @ 2880px визуально неотличимо от 0.93, но файл ~на 30% меньше (LCP!)
+    onDone(out.toDataURL('image/jpeg', 0.88));
   };
 
   // createPortal → renders directly into document.body, escaping any
@@ -455,7 +460,7 @@ export function BannerCropModal({ src, onDone, onCancel }) {
           Баннер (Десктоп)
         </div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 14 }}>
-          Перетащите · 1200×480px · Высокое качество
+          Перетащите · 2880×1152px · Retina качество
         </div>
         <div style={{ position: 'relative', margin: '0 auto 12px', width: DISP_W, height: DISP_H,
           borderRadius: 10, overflow: 'hidden', cursor: dragging ? 'grabbing' : 'grab',
@@ -6306,6 +6311,29 @@ export default function App() {
   // Detect native iOS (Capacitor) — hides web tab bar, uses native glass bar instead
   const isNative = typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.();
 
+  // iOS<26 fallback: the SwiftUI Liquid Glass bar (and its window.__nativeBridge
+  // marker) only exists on iOS 26+. On older iOS the app falls back to a plain
+  // Capacitor WebView with NO native bar — so detect its absence and render the
+  // React GlassNavBar instead. Defaults to "native bar present" so the bar never
+  // flashes on iOS 26; flips to web-nav only once the bridge is confirmed absent.
+  const [hasNativeBar, setHasNativeBar] = useState(() => isNative);
+  useEffect(() => {
+    if (!isNative) { setHasNativeBar(false); return; }
+    let elapsed = 0, id;
+    const tick = () => {
+      // Bridge present → native bar confirmed; lock it on and stop polling.
+      if (window.__nativeBridge) { setHasNativeBar(true); return; }
+      elapsed += 250;
+      // No bridge after 1.5s → treat as iOS<26 (no native bar) and show web nav.
+      // Keep polling (until 12s) so a late bridge install on iOS 26 flips us
+      // back, preventing a stuck double navbar.
+      setHasNativeBar(elapsed < 1500);
+      if (elapsed < 12000) id = setTimeout(tick, 250);
+    };
+    id = setTimeout(tick, 250);
+    return () => clearTimeout(id);
+  }, [isNative]);
+
   // Native tab bar → React: listen for tab changes dispatched from Swift
   useEffect(() => {
     const userHandler = (e) => {
@@ -7506,14 +7534,14 @@ export default function App() {
                     aria-hidden={screen !== 'catalog'}
                     inert={screen !== 'catalog' ? '' : undefined}
                   >
-                    <CatalogScreen products={products} settings={settings} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} setIsDetailOpen={setIsDetailOpen} reviews={reviews} />
+                    <ErrorBoundary><CatalogScreen products={products} settings={settings} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} setIsDetailOpen={setIsDetailOpen} reviews={reviews} /></ErrorBoundary>
                   </div>
                   <div
                     style={{ display: screen === 'cart' ? 'block' : 'none' }}
                     aria-hidden={screen !== 'cart'}
                     inert={screen !== 'cart' ? '' : undefined}
                   >
-                    <CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} goToCatalog={() => setScreen("catalog")} />
+                    <ErrorBoundary><CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} goToCatalog={() => setScreen("catalog")} /></ErrorBoundary>
                   </div>
                   <div
                     style={{ display: screen === 'myorders' ? 'block' : 'none' }}
@@ -7521,14 +7549,14 @@ export default function App() {
                     inert={screen !== 'myorders' ? '' : undefined}
                   >
                     {/* FIX: normalize both sides so '+996 700 123 456' matches '996700123456' */}
-                    <MyOrdersScreen orders={orders.filter(o => normalizePhone(o.clientPhone) === normalizePhone(user?.phone))} goToCatalog={() => setScreen("catalog")} reviews={reviews} user={user} showToast={showToast} />
+                    <ErrorBoundary><MyOrdersScreen orders={orders.filter(o => normalizePhone(o.clientPhone) === normalizePhone(user?.phone))} goToCatalog={() => setScreen("catalog")} reviews={reviews} user={user} showToast={showToast} /></ErrorBoundary>
                   </div>
                   <div
                     style={{ display: screen === 'profile' ? 'block' : 'none' }}
                     aria-hidden={screen !== 'profile'}
                     inert={screen !== 'profile' ? '' : undefined}
                   >
-                    <ProfileScreen user={user} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); window.location.hash = 'admin'; setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} onOpenNotifications={() => setShowNotifSheet(true)} unreadNotifCount={clientNotifications.filter(n => { const phone = user?.phone; if (!phone) return false; if (n.targetPhone && n.targetPhone !== phone) return false; const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : []; return !readBy.includes(phone); }).length} />
+                    <ErrorBoundary><ProfileScreen user={user} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); window.location.hash = 'admin'; setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} onOpenNotifications={() => setShowNotifSheet(true)} unreadNotifCount={clientNotifications.filter(n => { const phone = user?.phone; if (!phone) return false; if (n.targetPhone && n.targetPhone !== phone) return false; const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : []; return !readBy.includes(phone); }).length} /></ErrorBoundary>
                   </div>
                 </>
               )}
@@ -7560,7 +7588,7 @@ export default function App() {
             render GlassNavBar. */}
         {isAdmin
           ? (<GlassNavBar items={ADMIN_NAV} active={adminScreen} onSelect={setAdminScreen} />)
-          : (!isNative && <GlassNavBar items={USER_NAV} active={screen} onSelect={setScreen} />)}
+          : (!hasNativeBar && <GlassNavBar items={USER_NAV} active={screen} onSelect={setScreen} />)}
         {showAdminLogin && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowAdminLogin(false)}>
             <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>

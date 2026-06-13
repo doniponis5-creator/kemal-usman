@@ -137,26 +137,26 @@ struct LiquidGlassTabView: View {
             Tab(AppTab.catalog.label,
                 systemImage: AppTab.catalog.symbol,
                 value: AppTab.catalog) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: AppTab.catalog.rawValue).ignoresSafeArea()
             }
 
             Tab(AppTab.cart.label,
                 systemImage: AppTab.cart.symbol,
                 value: AppTab.cart) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: AppTab.cart.rawValue).ignoresSafeArea()
             }
             .badge(state.cartBadge)
 
             Tab(AppTab.orders.label,
                 systemImage: AppTab.orders.symbol,
                 value: AppTab.orders) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: AppTab.orders.rawValue).ignoresSafeArea()
             }
 
             Tab(AppTab.profile.label,
                 systemImage: AppTab.profile.symbol,
                 value: AppTab.profile) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: AppTab.profile.rawValue).ignoresSafeArea()
             }
         }
         .tabViewStyle(.automatic)
@@ -171,25 +171,25 @@ struct LiquidGlassTabView: View {
             Tab(AdminTab.orders.label,
                 systemImage: AdminTab.orders.symbol,
                 value: AdminTab.orders) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: "admin-" + AdminTab.orders.rawValue).ignoresSafeArea()
             }
 
             Tab(AdminTab.products.label,
                 systemImage: AdminTab.products.symbol,
                 value: AdminTab.products) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: "admin-" + AdminTab.products.rawValue).ignoresSafeArea()
             }
 
             Tab(AdminTab.stats.label,
                 systemImage: AdminTab.stats.symbol,
                 value: AdminTab.stats) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: "admin-" + AdminTab.stats.rawValue).ignoresSafeArea()
             }
 
             Tab(AdminTab.settings.label,
                 systemImage: AdminTab.settings.symbol,
                 value: AdminTab.settings) {
-                WebHost(state: state).ignoresSafeArea()
+                WebHost(state: state, tabKey: "admin-" + AdminTab.settings.rawValue).ignoresSafeArea()
             }
         }
         .tabViewStyle(.automatic)
@@ -229,17 +229,40 @@ struct LiquidGlassTabView: View {
 @available(iOS 26.0, *)
 struct WebHost: UIViewControllerRepresentable {
     @ObservedObject var state: TabState
+    /// Which tab this host represents. nil = the bar-less login host.
+    var tabKey: String? = nil
+
+    /// The tab whose host is allowed to own the shared WebView right now.
+    /// "" while in .hidden (login) mode — matches the nil-key host only.
+    private var selectedKey: String {
+        switch state.mode {
+        case .hidden: return ""
+        case .user:   return state.selectedUser.rawValue
+        case .admin:  return "admin-" + state.selectedAdmin.rawValue
+        }
+    }
 
     func makeUIViewController(context: Context) -> WebHostVC {
         let host = WebHostVC()
+        host.tabKey = tabKey
+        WebHostVC.selectedKey = selectedKey
         // First time we mount any host: wire shared bridge callbacks once.
         SharedBridge.shared.bind(state: state)
         return host
     }
 
     func updateUIViewController(_ vc: WebHostVC, context: Context) {
-        // Each time SwiftUI updates this Tab content, re-adopt the shared
-        // CAPBridgeViewController into this host (no-op if already here).
+        // SwiftUI calls this on EVERY TabView render (including cart-badge
+        // updates) for ALL tab hosts. On iPad the system TabView keeps the
+        // invisible tabs' content alive and window-attached, so an
+        // unconditional adoptShared() here let an INVISIBLE host steal the
+        // shared WKWebView the moment the badge changed — the visible tab
+        // was left showing its plain black background ("app becomes black
+        // upon adding items to the cart", App Review, iPad Air 11" M3).
+        // adoptShared() is now a no-op for every host except the selected
+        // tab's one.
+        vc.tabKey = tabKey
+        WebHostVC.selectedKey = selectedKey
         vc.adoptShared()
     }
 }
@@ -247,6 +270,19 @@ struct WebHost: UIViewControllerRepresentable {
 // MARK: - Per-tab UIKit host that owns the shared bridge while visible
 
 final class WebHostVC: UIViewController {
+
+    /// Which tab this host renders. nil = the bar-less login host.
+    var tabKey: String? = nil
+
+    /// The app-wide selected tab. ONLY its host may own the shared WebView.
+    /// Prevents invisible tab hosts from stealing it on iPad, where the
+    /// system TabView keeps every tab's content alive simultaneously.
+    static var selectedKey: String = ""
+
+    private var isAllowedToAdopt: Bool {
+        if let key = tabKey { return key == WebHostVC.selectedKey }
+        return WebHostVC.selectedKey.isEmpty // login host: only in .hidden mode
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -259,9 +295,18 @@ final class WebHostVC: UIViewController {
         adoptShared()
     }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Window is guaranteed here — covers iPad tab transitions where
+        // viewWillAppear ran before the host entered the window.
+        adoptShared()
+    }
+
     /// Move the singleton CAPBridgeViewController into this host.
-    /// Safe to call repeatedly — no-ops if already attached.
+    /// Safe to call repeatedly — no-ops if already attached, and no-ops
+    /// entirely unless this host belongs to the currently selected tab.
     func adoptShared() {
+        guard isAllowedToAdopt else { return }
         let bridge = SharedBridge.shared.vc
         if bridge.parent === self {
             // Already attached; just make sure frame is current.
@@ -271,6 +316,9 @@ final class WebHostVC: UIViewController {
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            // Re-check at execution time — the selection may have changed
+            // while this block sat in the main queue (badge-update races).
+            guard self.isAllowedToAdopt else { return }
             guard self.isViewLoaded && (self.parent != nil || self.presentingViewController != nil || self.view.window != nil) else {
                 return
             }

@@ -61,6 +61,7 @@ export function DesktopLayout({
   const [searchOpen, setSearchOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [heroBannerIndex, setHeroBannerIndex] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
   const [deliveryType, setDeliveryType] = useState('pickup');
   const [address, setAddress] = useState('');
   const [comment, setComment] = useState('');
@@ -127,15 +128,17 @@ export function DesktopLayout({
     return () => clearInterval(timer);
   }, [announcements.length]);
 
-  // Hero banner auto-slide
+  // Hero banner auto-slide (pauses on hover; timer resets after manual navigation)
   const activeHeroBanners = banners.filter(b => b.active);
   useEffect(() => {
-    if (activeHeroBanners.length <= 1) return;
+    if (activeHeroBanners.length <= 1 || heroPaused) return;
     const timer = setInterval(() => {
       setHeroBannerIndex(i => (i + 1) % activeHeroBanners.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [activeHeroBanners.length]);
+  }, [activeHeroBanners.length, heroPaused, heroBannerIndex]);
+  const goHeroBanner = (dir) =>
+    setHeroBannerIndex(i => (i + dir + activeHeroBanners.length) % activeHeroBanners.length);
 
   // Escape closes overlays
   useEffect(() => {
@@ -647,7 +650,10 @@ export function DesktopLayout({
       {/* ── MAIN CONTENT ── */}
       <div style={{ marginTop: 38 + 68 + 44, background: '#FAF6EE', minHeight: '100vh' }}>
         {/* HERO BANNER */}
-        <div style={{ position: 'relative', height: 540, background: currentBanner?.bg || '#0d0d0d', overflow: 'hidden' }}>
+        <div
+          onMouseEnter={() => setHeroPaused(true)}
+          onMouseLeave={() => setHeroPaused(false)}
+          style={{ position: 'relative', height: 'clamp(500px, 64vh, 620px)', background: currentBanner?.bg || '#0d0d0d', overflow: 'hidden' }}>
           {(currentBanner?.image || currentBanner?.img) && (
             <motion.img
               key={heroBannerIndex + '-img'}
@@ -674,6 +680,10 @@ export function DesktopLayout({
               ? { position: 'absolute', left: `${tx}%`, top: `${ty}%`, transform: 'translate(-50%,-50%)', textAlign: ta }
               : { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' };
             return (
+              <>
+                {/* Soft radial scrim behind the text block — keeps copy readable on any photo */}
+                <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none',
+                  background: `radial-gradient(ellipse 62% 58% at ${tx}% ${ty}%, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0) 72%)` }} />
               <div style={posStyle}>
                 <motion.div
                   key={heroBannerIndex}
@@ -682,22 +692,25 @@ export function DesktopLayout({
                   transition={{ duration: 0.6 }}
                   style={hasPos ? { display: 'inline-block' } : {}}
                 >
-                  <div style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', color: '#C9A84C', marginBottom: 16, fontWeight: 500 }}>
+                  <div style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', color: '#C9A84C', marginBottom: 16, fontWeight: 500,
+                    textShadow: '0 1px 14px rgba(0,0,0,0.6)' }}>
                     {currentBanner?.subtitle || settings?.heroSubtitle || 'Bishkek · Parfum na razliv'}
                   </div>
-                  <div style={{ fontSize: 56, fontWeight: 200, letterSpacing: 10, textTransform: 'uppercase', color: '#fff', lineHeight: 1.12, marginBottom: 8 }}>
+                  <div style={{ fontSize: 'clamp(40px, 4.2vw, 60px)', fontWeight: 200, letterSpacing: 10, textTransform: 'uppercase', color: '#fff', lineHeight: 1.12, marginBottom: 8,
+                    textShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
                     {currentBanner?.title ? (
                       currentBanner.title
                     ) : settings?.shopName ? (
                       <>{settings.shopName.split(' ')[0]}<br /><strong style={{ fontWeight: 800 }}>{settings.shopName.split(' ').slice(1).join(' ')}</strong></>
                     ) : null}
                   </div>
-                  <div style={{ fontSize: 11, letterSpacing: 3, color: 'rgba(255,255,255,0.5)', marginBottom: 36, textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: 11, letterSpacing: 3, color: 'rgba(255,255,255,0.72)', marginBottom: 36, textTransform: 'uppercase',
+                    textShadow: '0 1px 10px rgba(0,0,0,0.55)' }}>
                     {settings?.heroTagline || 'Оригинальные ароматы · Лучшие бренды'}
                   </div>
                   <motion.div
-                    whileHover={{ scale: 1.03, boxShadow: '0 12px 32px rgba(0,0,0,0.3)' }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={{ scale: 1.04, backgroundColor: '#FFFFFF', color: '#111111', boxShadow: '0 16px 40px rgba(0,0,0,0.35)' }}
+                    whileTap={{ scale: 0.96 }}
                     onClick={() => {
                       const linkedId = currentBanner?.linkedProductId;
                       if (linkedId) {
@@ -706,29 +719,55 @@ export function DesktopLayout({
                       }
                       document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
                     }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6,
-                      background: 'transparent', color: '#fff',
-                      fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', fontWeight: 500,
-                      padding: '6px 2px', cursor: 'pointer', borderRadius: 0,
-                      boxShadow: 'none', transition: 'all 0.35s ease',
-                      border: 'none', borderBottom: '1.5px solid rgba(255,255,255,0.8)',
-                      backdropFilter: 'none' }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 10,
+                      backgroundColor: 'rgba(255,255,255,0)', color: '#fff',
+                      fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', fontWeight: 600,
+                      padding: '15px 34px', cursor: 'pointer', borderRadius: 0,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                      border: '1px solid rgba(255,255,255,0.85)' }}
                   >
                     {currentBanner?.btnText || heroButtonText}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{marginLeft: 2}}><path d="M7 17L17 7M17 7H7M17 7v10" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M14 6l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </motion.div>
                 </motion.div>
               </div>
+              </>
             );
           })()}
+          {/* Prev / next arrows — inside the hero, vertically centered */}
+          {activeHeroBanners.length > 1 && [
+            { dir: -1, side: 'left', label: 'Предыдущий баннер', path: 'M15 18l-6-6 6-6' },
+            { dir: 1, side: 'right', label: 'Следующий баннер', path: 'M9 18l6-6-6-6' },
+          ].map(a => (
+            <div key={a.side} style={{ position: 'absolute', top: 0, bottom: 0, [a.side]: 24,
+              display: 'flex', alignItems: 'center', zIndex: 5 }}>
+              <motion.button
+                aria-label={a.label}
+                onClick={() => goHeroBanner(a.dir)}
+                whileHover={{ scale: 1.08, backgroundColor: 'rgba(0,0,0,0.55)' }}
+                whileTap={{ scale: 0.9 }}
+                style={{ width: 46, height: 46, borderRadius: '50%', padding: 0,
+                  backgroundColor: 'rgba(0,0,0,0.28)',
+                  backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+                  border: '1px solid rgba(255,255,255,0.22)', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d={a.path} stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </motion.button>
+            </div>
+          ))}
           {activeHeroBanners.length > 1 && (
-            <div style={{ position: 'absolute', bottom: 24, left: 0, right: 0,
-              display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <div style={{ position: 'absolute', bottom: 20, left: 0, right: 0,
+              display: 'flex', gap: 6, justifyContent: 'center' }}>
               {activeHeroBanners.map((_, i) => (
                 <div key={i} onClick={() => setHeroBannerIndex(i)}
-                  style={{ width: i === heroBannerIndex ? 24 : 8, height: 3,
+                  style={{ padding: '8px 2px', cursor: 'pointer' }}>
+                  <div style={{ width: i === heroBannerIndex ? 28 : 10, height: 3, borderRadius: 2,
                     background: i === heroBannerIndex ? '#fff' : 'rgba(255,255,255,0.35)',
-                    cursor: 'pointer', transition: 'all 0.3s' }} />
+                    boxShadow: i === heroBannerIndex ? '0 0 8px rgba(0,0,0,0.4)' : 'none',
+                    transition: 'all 0.35s ease' }} />
+                </div>
               ))}
             </div>
           )}

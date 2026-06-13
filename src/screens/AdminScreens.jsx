@@ -13,7 +13,7 @@ import { OrderTimeline } from "../components/OrderTimeline";
 import { useLang } from "../i18n/lang.jsx";
 import { IC } from "../icons.jsx";
 import { T, btnGreen, card, inputStyle } from "../theme.js";
-import { formatSum } from "../utils/format.js";
+import { formatSum, parseOrderDate } from "../utils/format.js";
 import { haptic } from "../utils/haptics";
 import logger from "../utils/logger";
 import { captureError } from "../utils/sentry";
@@ -63,7 +63,7 @@ export function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, on
   archiveCutoff.setDate(archiveCutoff.getDate() - ARCHIVE_DAYS);
   const isArchived = (o) => {
     if (o.status !== 'delivered' && o.status !== 'cancelled') return false;
-    try { return new Date(o.date) < archiveCutoff; } catch { return false; }
+    const d = parseOrderDate(o.date); return d ? d < archiveCutoff : false;
   };
   const activeOrders = orders.filter(o => !isArchived(o));
   const archivedOrders = orders.filter(o => isArchived(o));
@@ -87,8 +87,8 @@ export function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, on
 
   // Summary counts for header
   const newCount = activeOrders.filter(o => o.status === 'new').length;
-  const todayCount = activeOrders.filter(o => { try { return new Date(o.date).toDateString() === new Date().toDateString(); } catch { return false; } }).length;
-  const todayRevenue = activeOrders.filter(o => { try { return new Date(o.date).toDateString() === new Date().toDateString() && o.status === 'delivered'; } catch { return false; } }).reduce((s, o) => s + (o.total || 0), 0);
+  const todayCount = activeOrders.filter(o => { try { return parseOrderDate(o.date)?.toDateString() === new Date().toDateString(); } catch { return false; } }).length;
+  const todayRevenue = activeOrders.filter(o => { try { return parseOrderDate(o.date)?.toDateString() === new Date().toDateString() && o.status === 'delivered'; } catch { return false; } }).reduce((s, o) => s + (o.total || 0), 0);
 
   const nextStatusMap = { new: 'confirmed', confirmed: 'preparing', preparing: 'delivering', delivering: 'delivered' };
   const nextStatusLabel = { confirmed: lang === 'kg' ? 'Тастыктоо' : 'Подтвердить', preparing: lang === 'kg' ? 'Даярдоо' : 'Готовить', delivering: lang === 'kg' ? 'Жеткирүү' : 'Доставка', delivered: lang === 'kg' ? 'Жеткирилди' : 'Доставлен' };
@@ -292,7 +292,7 @@ export function AdminOrdersScreen({ allOrders = [], onStatusChange, onDelete, on
                   {order.clientPhone && <span>{order.clientPhone}</span>}
                   {order.date && <>
                     <span style={{ color: T.border }}>|</span>
-                    <span style={{ fontSize: 11 }}>{(() => { try { const d = new Date(order.date); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } })()}</span>
+                    <span style={{ fontSize: 11 }}>{(() => { const d = parseOrderDate(order.date); if (!d) return String(order.date || ''); return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); })()}</span>
                   </>}
                 </div>
               </div>
@@ -2405,11 +2405,11 @@ export function AdminStatsScreen({ orders = [], products = [], registeredUsers =
 
   // Today stats
   const todayStr = new Date().toDateString();
-  const todayOrders = orders.filter(o => { try { return new Date(o.date).toDateString() === todayStr; } catch { return false; } });
+  const todayOrders = orders.filter(o => { try { return parseOrderDate(o.date)?.toDateString() === todayStr; } catch { return false; } });
   const todayOrdersCount = todayOrders.length;
   const todayRevenue = todayOrders.filter(o => o.status === 'delivered').reduce((s, o) => s + (o.total || 0), 0);
   const yesterdayStr = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toDateString(); })();
-  const yesterdayCount = orders.filter(o => { try { return new Date(o.date).toDateString() === yesterdayStr; } catch { return false; } }).length;
+  const yesterdayCount = orders.filter(o => { try { return parseOrderDate(o.date)?.toDateString() === yesterdayStr; } catch { return false; } }).length;
   const dayChange = yesterdayCount > 0 ? Math.round((todayOrdersCount - yesterdayCount) / yesterdayCount * 100) : todayOrdersCount > 0 ? 100 : 0;
 
   // Status counts
@@ -2428,7 +2428,7 @@ export function AdminStatsScreen({ orders = [], products = [], registeredUsers =
   const topMaxQty = topList.length > 0 ? topList[0][1] : 1;
 
   // Chart data — dynamic by period
-  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : Math.min(90, Math.max(7, Math.ceil((Date.now() - Math.min(...orders.map(o => { try { return new Date(o.date).getTime(); } catch { return Date.now(); } }))) / 86400000)));
+  const periodDays = period === '7d' ? 7 : period === '30d' ? 30 : Math.min(90, Math.max(7, Math.ceil((Date.now() - Math.min(...orders.map(o => { const d = parseOrderDate(o.date); return d ? d.getTime() : Date.now(); }))) / 86400000)));
   const days = Array.from({ length: periodDays }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (periodDays - 1 - i));
@@ -2436,7 +2436,7 @@ export function AdminStatsScreen({ orders = [], products = [], registeredUsers =
   });
   const dayData = days.map(d => {
     const ds = d.toDateString();
-    const dayOrds = orders.filter(o => { try { return new Date(o.date).toDateString() === ds; } catch { return false; } });
+    const dayOrds = orders.filter(o => { try { return parseOrderDate(o.date)?.toDateString() === ds; } catch { return false; } });
     const dayDel = dayOrds.filter(o => o.status === 'delivered');
     return {
       label: d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }),
