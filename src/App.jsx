@@ -6168,10 +6168,17 @@ export default function App() {
   useEffect(() => {
     try { sessionStorage.setItem('parfum_admin_screen', adminScreen); } catch { /* ignore */ }
   }, [adminScreen]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState(() => {
+    // Keshdan darrov ko'rsatamiz — keyingi kirishlarda katalog yuklanishsiz chiqadi.
+    try { const c = JSON.parse(localStorage.getItem('parfum_products_cache') || 'null'); if (Array.isArray(c) && c.length > 0) return c; } catch { /* ignore */ }
+    return [];
+  });
   const [clientNotifications, setClientNotifications] = useState([]);
   const [showNotifSheet, setShowNotifSheet] = useState(false);
-  const [pbLoading, setPbLoading] = useState(true);
+  const [pbLoading, setPbLoading] = useState(() => {
+    // Kesh bo'lsa skeleton/yuklash ko'rsatmaymiz — katalog darrov ko'rinadi.
+    try { const c = JSON.parse(localStorage.getItem('parfum_products_cache') || 'null'); return !(Array.isArray(c) && c.length > 0); } catch { return true; }
+  });
   const [banners, setBanners] = useState(() => {
     try {
       const stored = localStorage.getItem('parfum_banners');
