@@ -6459,26 +6459,25 @@ export default function App() {
 
   // Load data from PocketBase. Extracted so PullToRefresh can call it.
   const loadAll = React.useCallback(async () => {
-    // Bitta so'rov osilib qolsa, butun yuklashni cheksiz bloklamasin.
-    const withTimeout = (p, ms = 12000) =>
-      Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
-
-    // ── 1) KATALOG faqat PRODUCTS'ga bog'liq — uni ALOHIDA va BIRINCHI yuklaymiz.
-    //    Kelishi bilan skeleton yopiladi (finally). Ilgari Promise.all orders+
-    //    clients+reviews+settings'ni ham kutardi — shuning uchun birinchi kirish
-    //    sekin/bo'sh ko'rinardi.
     try {
-      const pbProducts = await withTimeout(api.getProducts());
+      const [pbProducts, pbOrders, pbClients, pbReviews] = await Promise.all([
+        api.getProducts(),
+        api.getOrders(),
+        api.getClients(),
+        api.getReviews().catch(() => []),
+      ]);
       if (pbProducts.length > 0) {
         // Coerce to a real boolean per spec — `?? false` so missing/null/
         // undefined collapses to false, but real true/false pass through.
         const mapped = pbProducts.map(p => {
           // Build URLs only for truthy filenames AND when the record id exists.
+          // Empty / null entries are filtered out so the UI never renders broken `<img src="">`.
           const safeImages = (Array.isArray(p?.images) ? p.images : []).filter(Boolean);
           const galleryUrls = (p?.id && safeImages.length > 0)
             ? safeImages.map(img => api.getImageUrl(p, img)).filter(Boolean)
             : [];
           // PocketBase images only — Fragrantica CDN blocks hotlinking
+          // All images hosted on PB via pb-download-images.js
           const coverUrl = galleryUrls[0] || null;
           return {
             ...p,
@@ -6514,34 +6513,6 @@ export default function App() {
           localStorage.setItem('parfum_products_cache', JSON.stringify(slim));
         } catch { /* localStorage to'lgan — kesh shart emas */ }
       }
-    } catch (e) {
-      console.warn("PocketBase load error:", e);
-      // APP STORE 2.1a/2.2 fix: server vaqtincha ishlamasa, katalog HECH QACHON
-      // bo'sh ko'rinmasin. Tartib: oxirgi muvaffaqiyatli kesh → bo'lmasa demo.
-      setProducts(prev => {
-        if (prev && prev.length > 0) return prev;
-        try {
-          const cached = JSON.parse(localStorage.getItem('parfum_products_cache') || 'null');
-          if (Array.isArray(cached) && cached.length > 0) return cached;
-        } catch { /* ignore */ }
-        return INITIAL_PRODUCTS;
-      });
-    } finally {
-      setPbLoading(false); // ← KATALOG DARHOL OCHILADI (qolganini kutmaydi)
-    }
-
-    // ── 2) Qolgan HAMMA narsa — FON rejimida. Katalogga ta'sir qilmaydi.
-    //    allSettled: orders/clients mehmonga 403 bersa ham qolganlari ishlaydi.
-    try {
-      const [ordR, cliR, revR] = await Promise.allSettled([
-        api.getOrders(),
-        api.getClients(),
-        api.getReviews(),
-      ]);
-      const pbOrders  = ordR.status === 'fulfilled' ? ordR.value : [];
-      const pbClients = cliR.status === 'fulfilled' ? cliR.value : [];
-      const pbReviews = revR.status === 'fulfilled' ? revR.value : [];
-
       if (pbOrders.length > 0) setOrders(pbOrders.map(o => ({
         ...o,
         items: Array.isArray(o.items) ? o.items : (o.items ? (() => { try { return JSON.parse(o.items); } catch { return []; } })() : []),
@@ -6571,11 +6542,13 @@ export default function App() {
       // Load payment settings from PocketBase
       const paymentData = await api.loadPaymentSettings().catch(() => null);
       if (paymentData) {
+        // FIX: ilgari bu spread bo'sh edi — yuklangan to'lov sozlamalari
+        // tashlab yuborilardi. Endi to'g'ri qo'llanadi.
         setSettings(prev => ({ ...prev, ...paymentData }));
       }
 
       // Bonus balansni serverdan yangilash — "delivered" bo'lganda berilgan
-      // cashback ilova ochilishi bilan ko'rinsin.
+      // cashback ilova ochilishi bilan ko'rinsin (ilgari faqat qayta login'da).
       if (pb.authStore.isValid && !isAdminAuth()) {
         authedFetch('/api/custom/me').then(me => {
           if (me && me.bonusBalance !== undefined) {
@@ -6585,7 +6558,8 @@ export default function App() {
         }).catch(() => { /* offline */ });
       }
 
-      // Global settings PB'dan — hamma qurilmada bir xil bo'lsin.
+      // Global settings PB'dan — admin boshqa qurilmada o'zgartirgan bo'lsa
+      // ham hamma joyda bir xil bo'lsin. localStorage faqat tezkor kesh.
       const pbSettings = await api.getSettings().catch(() => null);
       if (pbSettings) {
         const { id, created, updated, collectionId, collectionName, ...rest } = pbSettings;
@@ -6600,7 +6574,20 @@ export default function App() {
         localStorage.setItem('parfum_banners', JSON.stringify(pbBanners));
       }
     } catch (e) {
-      console.warn("PocketBase background load error:", e);
+      console.warn("PocketBase load error:", e);
+      // APP STORE 2.1a/2.2 fix: agar server vaqtincha ishlamasa, katalog
+      // HECH QACHON bo'sh ko'rinmasin. Tartib: oxirgi muvaffaqiyatli yuklangan
+      // katalog keshi → bo'lmasa lokal demo-katalog.
+      setProducts(prev => {
+        if (prev && prev.length > 0) return prev;
+        try {
+          const cached = JSON.parse(localStorage.getItem('parfum_products_cache') || 'null');
+          if (Array.isArray(cached) && cached.length > 0) return cached;
+        } catch { /* ignore */ }
+        return INITIAL_PRODUCTS;
+      });
+    } finally {
+      setPbLoading(false);
     }
   }, []);
   useEffect(() => { loadAll(); }, [loadAll]);
