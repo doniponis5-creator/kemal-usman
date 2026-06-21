@@ -37,7 +37,7 @@ async function initNativeShell() {
   } catch { /* not on native or plugin not installed */ }
   try {
     const splashMod = await import(/* @vite-ignore */ '@capacitor/' + 'splash-screen')
-    splashMod?.SplashScreen?.hide?.({ fadeOutDuration: 300 }).catch(() => {})
+    // Splashni shu yerda yopmaymiz — katalog chizilgandan keyin (fayl oxirida) yopamiz.
   } catch { /* not on native */ }
   try {
     const kbMod = await import(/* @vite-ignore */ '@capacitor/' + 'keyboard')
@@ -90,3 +90,13 @@ createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </StrictMode>,
 )
+
+// Splashni katalog BIRINCHI marta chizilgandan keyin yopamiz. Cache-seed bilan
+// katalog darrov chiqadi, shuning uchun splash -> katalog silliq (oq ekransiz).
+// launchAutoHide:true xavfsizlik to'ri sifatida qoladi (agar bu ishlamasa ham yopiladi).
+requestAnimationFrame(() => requestAnimationFrame(async () => {
+  try {
+    const m = await import(/* @vite-ignore */ '@capacitor/' + 'splash-screen')
+    await m?.SplashScreen?.hide?.({ fadeOutDuration: 200 })
+  } catch { /* web yoki plagin yo'q */ }
+}))
