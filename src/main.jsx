@@ -90,16 +90,3 @@ createRoot(document.getElementById('root')).render(
     </ErrorBoundary>
   </StrictMode>,
 )
-
-// ─── Capgo Live Updates ──────────────────────────────────────────────────────
-// notifyAppReady(): app muvaffaqiyatli yuklandi deb belgilaydi. Buni
-// chaqirmaslik xavfli — Capgo yangi bundle'ni "yaroqsiz" deb hisoblab,
-// avvalgi ISHLAYDIGAN versiyaga avtomatik qaytaradi (xavfsizlik mexanizmi).
-// Dynamic import + '@capgo/'+'...': webda yoki plagin o'rnatilmagan bo'lsa
-// build/runtime jimgina no-op qiladi (mavjud Capacitor plaginlar uslubidek).
-;(async () => {
-  try {
-    const mod = await import(/* @vite-ignore */ '@capgo/' + 'capacitor-updater')
-    await mod?.CapacitorUpdater?.notifyAppReady?.()
-  } catch { /* web yoki plagin yo'q — e'tiborsiz qoldiramiz */ }
-})()
