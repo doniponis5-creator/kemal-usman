@@ -13,7 +13,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const STORAGE_KEY = "audio_hint_count";
-const MAX_SHOWS = 5;
+const MAX_SHOWS = 3;
 
 // Gate evaluated ONCE per mount of the catalog. Increments + saves the counter
 // inline so this can also be called from outside (e.g. CatalogScreen on mount).

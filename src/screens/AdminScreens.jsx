@@ -559,6 +559,16 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
   useEffect(() => { setEditLang('ru'); }, [editing]);
   // filtered is now replaced by processedProducts (useMemo with search + filters + sort)
   const editProd = products.find(p => p.id === editing);
+  // Ruchka (edit) bosilganda tahrir oynasiga AVTOMATIK ko'tarilamiz — ilgari
+  // foydalanuvchi pastdan bosib, qo'lda eng tepaga scroll qilishi kerak edi.
+  const editorRef = useRef(null);
+  useEffect(() => {
+    if (!editing) return;
+    const r = requestAnimationFrame(() => {
+      try { editorRef.current?.scrollIntoView({ block: 'start' }); } catch { /* eski WebView */ }
+    });
+    return () => cancelAnimationFrame(r);
+  }, [editing]);
   const upd = (id, f, v) => setProducts(prev => prev.map(p => p.id === id ? { ...p, [f]: v } : p));
   const updVar = (pId, vId, f, v) => setProducts(prev => prev.map(p => p.id === pId ? { ...p, variants: p.variants.map(vr => vr.id === vId ? { ...vr, [f]: v } : vr) } : p));
   const addProd = () => { const np = { id: Date.now(), name: "", brand: "", category: "Женские", img: null, images: [], desc: "", isPopular: false, isHit: false, isNew: false, isAuthor: false, featured: false, priority: 0, shortDesc: "", tags: "", scheduled: false, showFrom: "", showUntil: "", relatedIds: [], variants: [{ id: Date.now(), label: "5 мл", price: 0, type: "ml", inStock: true }] }; setProducts(p => [...p, np]); setEditing(np.id); };
@@ -1877,7 +1887,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
 
       {/* ═══ EDITOR (2-panel on desktop) ═══ */}
       {editProd && (
-        <div style={{ margin: isDesk ? "16px 20px" : "12px 16px 16px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)", border: "0.5px solid rgba(0,0,0,0.05)" }}>
+        <div ref={editorRef} style={{ margin: isDesk ? "16px 20px" : "12px 16px 16px", background: "#FFFFFF", borderRadius: 20, boxShadow: "0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06)", border: "0.5px solid rgba(0,0,0,0.05)" }}>
           {/* ── Sticky header — back · title · save ── */}
           <div style={{
             position: "sticky", top: isDesk ? 0 : 0, zIndex: 5,

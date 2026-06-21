@@ -334,8 +334,21 @@ function CropModal({ src, onDone, onCancel }) {
   const onMouseUp = () => setDragging(false);
 
   const handleDone = () => {
-    const canvas = canvasRef.current;
-    onDone(canvas.toDataURL('image/jpeg', 0.95));
+    // Eksportni TO'LIQ rezolyutsiyada chiqaramiz — asl (full-res) rasmdan
+    // namuna olib. Ilgari faqat 300px display canvas eksport bo'lardi, shuning
+    // uchun mahsulot rasmlari xira/pikselli chiqardi. (BannerCropModal'dek.)
+    const img = imgRef.current;
+    const OUT = 1800;          // kvadrat eksport — iPhone/iPad retinaga sharp
+    const F = OUT / SIZE;      // display->output masshtabi
+    const out = document.createElement('canvas');
+    out.width = OUT; out.height = OUT;
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, OUT, OUT);
+    ctx.drawImage(img, pos.x * F, pos.y * F, img.width * scale * F, img.height * scale * F);
+    onDone(out.toDataURL('image/jpeg', 0.95));
   };
 
   return (

@@ -121,7 +121,11 @@ struct LiquidGlassTabView: View {
             case .user:
                 userTabView
             case .admin:
-                adminTabView
+                // Admin: faqat in-web React GlassNavBar (7 bo'lim) boshqaradi.
+                // Native tab bar KO'RSATILMAYDI — iPhone va iPad'da ham ikkita
+                // navbar muammosi yo'qoladi. (.hidden kabi to'liq ekran WebView.)
+                WebHost(state: state)
+                    .ignoresSafeArea()
             }
         }
         .background(Color.black)
@@ -238,7 +242,7 @@ struct WebHost: UIViewControllerRepresentable {
         switch state.mode {
         case .hidden: return ""
         case .user:   return state.selectedUser.rawValue
-        case .admin:  return "admin-" + state.selectedAdmin.rawValue
+        case .admin:  return ""  // bar-less admin host (native tab bar yo'q)
         }
     }
 
