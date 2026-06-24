@@ -133,8 +133,8 @@ export const api = {
     try {
       const records = await pb.collection("site_media").getFullList({ filter: `key="banners_meta"`, requestKey: null });
       if (records.length > 0 && records[0].file) {
-        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}`;
-        const res = await fetch(url);
+        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}?t=${Date.now()}`;
+        const res = await fetch(url, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) return data;
@@ -197,8 +197,8 @@ export const api = {
     try {
       const records = await pb.collection("site_media").getFullList({ filter: `key="payment_settings"`, requestKey: null });
       if (records.length > 0 && records[0].file) {
-        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}`;
-        const res = await fetch(url);
+        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}?t=${Date.now()}`;
+        const res = await fetch(url, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data && typeof data === 'object') return data;

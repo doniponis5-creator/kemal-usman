@@ -6625,6 +6625,33 @@ export default function App() {
   }, []);
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // ── Foreground auto-refresh ──────────────────────────────────────────────
+  // Data was only fetched on cold start, so banners/products edited in admin
+  // stayed stale on iOS until a full app restart. Re-pull whenever the app
+  // returns to the foreground (native appStateChange) or the tab becomes
+  // visible (web). Throttled so rapid toggles don't spam the server.
+  useEffect(() => {
+    let last = 0;
+    const refresh = () => {
+      const now = Date.now();
+      if (now - last < 2000) return;
+      last = now;
+      loadAll();
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    let cancelled = false, removeNative = null;
+    import('@capacitor/app')
+      .then(({ App }) => App.addListener('appStateChange', ({ isActive }) => { if (isActive) refresh(); }))
+      .then(handle => { if (cancelled) handle.remove(); else removeNative = () => handle.remove(); })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      if (removeNative) removeNative();
+    };
+  }, [loadAll]);
+
   // ─── Instagram Graph API — load posts when token is available ──
   useEffect(() => {
     const token = settings?.instagramToken;

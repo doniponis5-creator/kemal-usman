@@ -1,0 +1,2 @@
+npm error npx canceled due to missing packages and no YES option: ["esbuild@0.28.1"]
+npm error A complete log of this run can be found in: /sessions/wonderful-determined-brahmagupta/.npm/_logs/2026-06-24T16_13_07_657Z-debug-0.log
