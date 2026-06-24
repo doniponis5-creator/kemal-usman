@@ -92,7 +92,6 @@ export function DesktopLayout({
     'Новые ароматы каждую неделю',
   ];
 
-  const heroButtonText = settings?.heroButtonText || 'ВЫБРАТЬ АРОМАТ';
 
   const gridColumns = windowWidth >= 1600 ? 'repeat(5, 1fr)' : windowWidth >= 1200 ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)';
 
@@ -163,7 +162,11 @@ export function DesktopLayout({
     { id: 'Премиум', label: 'Премиум' },
   ];
 
-  const currentBanner = activeHeroBanners[heroBannerIndex];
+  // Clamp on read so a shrunk/reloaded banner list never yields a blank hero.
+  const safeHeroIndex = activeHeroBanners.length
+    ? ((heroBannerIndex % activeHeroBanners.length) + activeHeroBanners.length) % activeHeroBanners.length
+    : 0;
+  const currentBanner = activeHeroBanners[safeHeroIndex];
 
   // ── Story groups — auto-generated from visible (in-stock) products ──
   const storyGroups = React.useMemo(() => {
@@ -654,23 +657,26 @@ export function DesktopLayout({
           onMouseEnter={() => setHeroPaused(true)}
           onMouseLeave={() => setHeroPaused(false)}
           style={{ position: 'relative', height: 'clamp(500px, 64vh, 620px)', background: currentBanner?.bg || '#0d0d0d', overflow: 'hidden' }}>
-          {(currentBanner?.image || currentBanner?.img) && (
-            <motion.img
-              key={heroBannerIndex + '-img'}
-              initial={{ scale: 1.08, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 1.2, ease: [0.25, 0.46, 0.45, 0.94] }}
-              src={currentBanner?.collectionId && currentBanner?.image
-                ? fileUrl('banners', currentBanner, currentBanner.image)
-                : (currentBanner?.image || currentBanner?.img)}
-              alt=""
-              onError={e => { e.target.style.display = 'none'; }}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          )}
+          <AnimatePresence initial={false}>
+            {(currentBanner?.image || currentBanner?.img) && (
+              <motion.img
+                key={safeHeroIndex + '-img'}
+                initial={{ scale: 1.08, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ opacity: { duration: 0.8, ease: 'easeInOut' }, scale: { duration: 6, ease: 'linear' } }}
+                src={currentBanner?.collectionId && currentBanner?.image
+                  ? fileUrl('banners', currentBanner, currentBanner.image)
+                  : (currentBanner?.image || currentBanner?.img)}
+                alt=""
+                onError={e => { e.target.style.display = 'none'; }}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            )}
+          </AnimatePresence>
           <div style={{ position: 'absolute', inset: 0,
             background: `linear-gradient(to bottom, rgba(0,0,0,${currentBanner?.overlayTop ?? 0.08}) 0%, rgba(0,0,0,${currentBanner?.overlayBottom ?? 0.45}) 100%)` }} />
-          {/* Text block — absolute positioned via textX/textY if set, else center */}
+          {/* Text block — only what admin typed (WYSIWYG with editor); empty = nothing shown */}
           {(() => {
             const tx = currentBanner?.textX ?? 50;
             const ty = currentBanner?.textY ?? 50;
@@ -679,6 +685,12 @@ export function DesktopLayout({
             const posStyle = hasPos
               ? { position: 'absolute', left: `${tx}%`, top: `${ty}%`, transform: 'translate(-50%,-50%)', textAlign: ta }
               : { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' };
+            // Per-banner text only — no settings/shop fallbacks. Empty field => hidden.
+            const bSub = (currentBanner?.subtitle || '').trim();
+            const bTitle = (currentBanner?.title || '').trim();
+            const bBtn = (currentBanner?.btnText || '').trim();
+            if (!bSub && !bTitle && !bBtn) return null;
+            const titleParts = bTitle ? bTitle.split(' ') : [];
             return (
               <>
                 {/* Soft radial scrim behind the text block — keeps copy readable on any photo */}
@@ -686,29 +698,29 @@ export function DesktopLayout({
                   background: `radial-gradient(ellipse 62% 58% at ${tx}% ${ty}%, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0) 72%)` }} />
               <div style={posStyle}>
                 <motion.div
-                  key={heroBannerIndex}
+                  key={safeHeroIndex}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6 }}
                   style={hasPos ? { display: 'inline-block' } : {}}
                 >
-                  <div style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', color: '#C9A84C', marginBottom: 16, fontWeight: 500,
-                    textShadow: '0 1px 14px rgba(0,0,0,0.6)' }}>
-                    {currentBanner?.subtitle || settings?.heroSubtitle || 'Bishkek · Parfum na razliv'}
-                  </div>
-                  <div style={{ fontSize: 'clamp(40px, 4.2vw, 60px)', fontWeight: 200, letterSpacing: 10, textTransform: 'uppercase', color: '#fff', lineHeight: 1.12, marginBottom: 8,
-                    textShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
-                    {currentBanner?.title ? (
-                      currentBanner.title
-                    ) : settings?.shopName ? (
-                      <>{settings.shopName.split(' ')[0]}<br /><strong style={{ fontWeight: 800 }}>{settings.shopName.split(' ').slice(1).join(' ')}</strong></>
-                    ) : null}
-                  </div>
-                  <div style={{ fontSize: 11, letterSpacing: 3, color: 'rgba(255,255,255,0.72)', marginBottom: 36, textTransform: 'uppercase',
-                    textShadow: '0 1px 10px rgba(0,0,0,0.55)' }}>
-                    {settings?.heroTagline || 'Оригинальные ароматы · Лучшие бренды'}
-                  </div>
-                  <motion.div
+                  {bSub && (
+                    <div style={{ fontSize: 11, letterSpacing: 4, textTransform: 'uppercase', color: '#C9A84C', marginBottom: 16, fontWeight: 500,
+                      textShadow: '0 1px 14px rgba(0,0,0,0.6)' }}>
+                      {bSub}
+                    </div>
+                  )}
+                  {bTitle && (
+                    <div style={{ fontSize: 'clamp(40px, 4.2vw, 60px)', fontWeight: 200, letterSpacing: 10, textTransform: 'uppercase', color: '#fff', lineHeight: 1.12, marginBottom: 0,
+                      textShadow: '0 2px 24px rgba(0,0,0,0.45)' }}>
+                      {titleParts[0]}
+                      {titleParts.length > 1 && <><br /><strong style={{ fontWeight: 800 }}>{titleParts.slice(1).join(' ')}</strong></>}
+                    </div>
+                  )}
+                  {bBtn && (
+                  <motion.button
+                    type="button"
+                    aria-label={bBtn}
                     whileHover={{ scale: 1.04, backgroundColor: '#FFFFFF', color: '#111111', boxShadow: '0 16px 40px rgba(0,0,0,0.35)' }}
                     whileTap={{ scale: 0.96 }}
                     onClick={() => {
@@ -720,15 +732,17 @@ export function DesktopLayout({
                       document.getElementById('catalog')?.scrollIntoView({ behavior: 'smooth' });
                     }}
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 10,
-                      backgroundColor: 'rgba(255,255,255,0)', color: '#fff',
+                      marginTop: (bSub || bTitle) ? 36 : 0,
+                      backgroundColor: 'rgba(255,255,255,0)', color: '#fff', fontFamily: 'inherit',
                       fontSize: 12, letterSpacing: 3, textTransform: 'uppercase', fontWeight: 600,
                       padding: '15px 34px', cursor: 'pointer', borderRadius: 0,
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.18)', appearance: 'none',
                       border: '1px solid rgba(255,255,255,0.85)' }}
                   >
-                    {currentBanner?.btnText || heroButtonText}
+                    {bBtn}
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M14 6l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  </motion.div>
+                  </motion.button>
+                  )}
                 </motion.div>
               </div>
               </>
@@ -761,13 +775,14 @@ export function DesktopLayout({
             <div style={{ position: 'absolute', bottom: 20, left: 0, right: 0,
               display: 'flex', gap: 6, justifyContent: 'center' }}>
               {activeHeroBanners.map((_, i) => (
-                <div key={i} onClick={() => setHeroBannerIndex(i)}
-                  style={{ padding: '8px 2px', cursor: 'pointer' }}>
-                  <div style={{ width: i === heroBannerIndex ? 28 : 10, height: 3, borderRadius: 2,
-                    background: i === heroBannerIndex ? '#fff' : 'rgba(255,255,255,0.35)',
-                    boxShadow: i === heroBannerIndex ? '0 0 8px rgba(0,0,0,0.4)' : 'none',
+                <button key={i} type="button" onClick={() => setHeroBannerIndex(i)}
+                  aria-label={`Баннер ${i + 1}`} aria-current={i === safeHeroIndex}
+                  style={{ padding: '8px 2px', cursor: 'pointer', background: 'none', border: 'none', appearance: 'none' }}>
+                  <div style={{ width: i === safeHeroIndex ? 28 : 10, height: 3, borderRadius: 2,
+                    background: i === safeHeroIndex ? '#fff' : 'rgba(255,255,255,0.35)',
+                    boxShadow: i === safeHeroIndex ? '0 0 8px rgba(0,0,0,0.4)' : 'none',
                     transition: 'all 0.35s ease' }} />
-                </div>
+                </button>
               ))}
             </div>
           )}
