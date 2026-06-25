@@ -3548,7 +3548,7 @@ function SettingsTextField({ label, value, onChange, placeholder, type = 'text' 
 // ADMIN NOTIFICATIONS SCREEN
 // ═══════════════════════════════════════════════════════════════════════════════
 export function AdminNotificationsScreen({ products = [], clients = [], showToast, lang }) {
-  const t = useLang();
+  const { t } = useLang();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);

@@ -2269,32 +2269,53 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
   );
 }
 
-// Live countdown hook — ticks every 50ms for millisecond display
+// Live countdown hook — ticks once per second for the H:M:S display.
+// PERF: was setInterval(47ms) -> setState ~21x/sec on EVERY on-sale card,
+// re-rendering cards mid-scroll (the "jumpy/refreshing" feel). The fast
+// millisecond flicker now lives in <SaleMs> (rAF, no React state), so this
+// hook only needs a calm 1s tick.
 function useSaleCountdown(product) {
   const [info, setInfo] = React.useState(() => getSaleInfo(product));
-  const [ms, setMs] = React.useState(0);
   React.useEffect(() => {
     if (!product?.salePercent || !product?.saleEnd) { setInfo(null); return; }
-    const tick = () => {
-      const si = getSaleInfo(product);
-      setInfo(si);
-      if (si) {
-        const now = Date.now();
-        const end = new Date(product.saleEnd).getTime();
-        const remaining = Math.max(0, end - now);
-        setMs(Math.floor((remaining % 1000) / 10));
-      }
-    };
+    const tick = () => setInfo(getSaleInfo(product));
     tick();
-    const id = setInterval(tick, 47);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [product?.salePercent, product?.saleEnd, product?.saleStart]);
-  return info ? { ...info, ms } : null;
+  return info;
+}
+
+// Millisecond flicker for sale badges — driven by requestAnimationFrame
+// writing textContent directly, so it NEVER triggers a React re-render.
+// (Previously this was setState ~21x/sec per card -> scroll jank.)
+function SaleMs({ saleEnd, style }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!saleEnd) return;
+    const end = new Date(saleEnd).getTime();
+    let raf, last = -1;
+    const loop = () => {
+      const el = ref.current;
+      if (el) {
+        const remaining = Math.max(0, end - Date.now());
+        const cs = Math.floor((remaining % 1000) / 10);
+        if (cs !== last) { el.textContent = String(cs).padStart(2, '0'); last = cs; }
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [saleEnd]);
+  return <span ref={ref} style={style}>00</span>;
 }
 
 // Compact countdown badge for product cards — Variant C: progress bar + milliseconds
-export function SaleCountdownBadge({ product }) {
-  const sale = useSaleCountdown(product);
+export function SaleCountdownBadge({ product, sale: saleProp = null }) {
+  // PERF: reuse the parent card's countdown when provided (avoids a 2nd
+  // subscription per card — the hook used to run twice on every sale card).
+  const saleSelf = useSaleCountdown(saleProp ? null : product);
+  const sale = saleProp || saleSelf;
   if (!sale) return null;
   const pad = n => String(n).padStart(2, '0');
   return (
@@ -2323,9 +2344,7 @@ export function SaleCountdownBadge({ product }) {
             {pad(sale.remaining.h)}:{pad(sale.remaining.m)}:{pad(sale.remaining.s)}
           </span>
           <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 11 }}>.</span>
-          <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: 500, width: 16, display: 'inline-block' }}>
-            {pad(sale.ms)}
-          </span>
+          <SaleMs saleEnd={product?.saleEnd} style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: 500, width: 16, display: 'inline-block' }} />
         </div>
       </div>
       {/* Progress bar */}
@@ -2519,7 +2538,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
             background: "linear-gradient(to bottom, rgba(0,0,0,0) 60%, rgba(0,0,0,0.35))",
           }} />
         )}
-        {!preview && <SaleCountdownBadge product={p} />}
+        {!preview && <SaleCountdownBadge product={p} sale={saleInfo} />}
         {saleInfo && (
           <div style={{ position: 'absolute', bottom: 8, left: 8, background: '#FF3B30', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 8, zIndex: 4 }}>
             −{saleInfo.percent}%
@@ -2713,41 +2732,46 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   // PRO: sort state + bottom-sheet
   const [sort, setSort] = useState('default');
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
-  let filteredProducts = products.filter(p => {
-    // Hide products where ALL variants are out of stock (admin X toggle controls visibility)
-    const vars = p.variants || [];
-    const hasInStock = vars.some(v => v.inStock);
-    if (!hasInStock) return false;
-    const matchCat = cat === "all" || (p.category || "").trim() === (cat || "").trim();
-    const q = search.toLowerCase();
-    const matchSearch = !q ||
-      (p.name || "").toLowerCase().includes(q) ||
-      (p.name_kg || "").toLowerCase().includes(q) ||
-      (p.brand || "").toLowerCase().includes(q) ||
-      (p.shortDesc || "").toLowerCase().includes(q) ||
-      (p.tags || "").toLowerCase().includes(q) ||
-      (p.desc || "").toLowerCase().includes(q);
-    return matchCat && matchSearch;
-  });
-  // Apply sort
-  const minPriceFor = (p) => {
-    const inStock = (p.variants || []).filter(v => v.inStock).map(v => v.price);
-    return inStock.length ? Math.min(...inStock) : Infinity;
-  };
-  if (sort === 'price_asc')  filteredProducts = [...filteredProducts].sort((a, b) => minPriceFor(a) - minPriceFor(b));
-  if (sort === 'price_desc') filteredProducts = [...filteredProducts].sort((a, b) => minPriceFor(b) - minPriceFor(a));
-  if (sort === 'name_asc')   filteredProducts = [...filteredProducts].sort((a, b) => (pickName(a, lang) || '').localeCompare(pickName(b, lang) || ''));
-  if (sort === 'default') {
-    // Default: featured first, then priority desc, then original order
-    filteredProducts = [...filteredProducts].sort((a, b) => {
-      const fa = a.featured ? 1 : 0;
-      const fb = b.featured ? 1 : 0;
-      if (fa !== fb) return fb - fa;
-      const pa = Number(a.priority) || 0;
-      const pb = Number(b.priority) || 0;
-      return pb - pa;
+  // PERF: memoized so a re-render (search typing, sale ticks, language, etc.)
+  // doesn't re-filter + re-sort + re-clone the whole catalog every time.
+  const filteredProducts = useMemo(() => {
+    let list = products.filter(p => {
+      // Hide products where ALL variants are out of stock (admin X toggle controls visibility)
+      const vars = p.variants || [];
+      const hasInStock = vars.some(v => v.inStock);
+      if (!hasInStock) return false;
+      const matchCat = cat === "all" || (p.category || "").trim() === (cat || "").trim();
+      const q = search.toLowerCase();
+      const matchSearch = !q ||
+        (p.name || "").toLowerCase().includes(q) ||
+        (p.name_kg || "").toLowerCase().includes(q) ||
+        (p.brand || "").toLowerCase().includes(q) ||
+        (p.shortDesc || "").toLowerCase().includes(q) ||
+        (p.tags || "").toLowerCase().includes(q) ||
+        (p.desc || "").toLowerCase().includes(q);
+      return matchCat && matchSearch;
     });
-  }
+    // Apply sort
+    const minPriceFor = (p) => {
+      const inStock = (p.variants || []).filter(v => v.inStock).map(v => v.price);
+      return inStock.length ? Math.min(...inStock) : Infinity;
+    };
+    if (sort === 'price_asc')  list = [...list].sort((a, b) => minPriceFor(a) - minPriceFor(b));
+    if (sort === 'price_desc') list = [...list].sort((a, b) => minPriceFor(b) - minPriceFor(a));
+    if (sort === 'name_asc')   list = [...list].sort((a, b) => (pickName(a, lang) || '').localeCompare(pickName(b, lang) || ''));
+    if (sort === 'default') {
+      // Default: featured first, then priority desc, then original order
+      list = [...list].sort((a, b) => {
+        const fa = a.featured ? 1 : 0;
+        const fb = b.featured ? 1 : 0;
+        if (fa !== fb) return fb - fa;
+        const pa = Number(a.priority) || 0;
+        const pb = Number(b.priority) || 0;
+        return pb - pa;
+      });
+    }
+    return list;
+  }, [products, cat, search, sort, lang]);
 
   const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setImgIsLandscape(false); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
 
@@ -3453,7 +3477,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
     navigator.geolocation.getCurrentPosition(async pos => {
       const { latitude: lat, longitude: lon } = pos.coords;
       try {
-        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+        const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`, { headers: { 'User-Agent': 'KemalUsmanParfum/1.0 (+https://kemalusman.kg)' } });
         const d = await r.json();
         setAddress(d.display_name || `${lat.toFixed(5)}, ${lon.toFixed(5)}`);
       } catch {

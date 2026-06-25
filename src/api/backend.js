@@ -211,6 +211,7 @@ export const api = {
   // ─── Instagram Graph API ───────────────────────────────────────
   // Fetches recent media from Instagram Graph API using long-lived token.
   // Token must be set in settings.instagramToken by admin.
+  // TODO: move IG token server-side (audit 3.3/5.4) — token is currently fetched to the client.
   // Endpoint: GET /me/media?fields=...&access_token=TOKEN
   // Also fetches profile info from /me?fields=...
   getInstagramProfile: async (token) => {

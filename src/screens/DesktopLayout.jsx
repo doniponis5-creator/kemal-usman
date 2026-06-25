@@ -15,6 +15,110 @@ import {
   StoryViewer, getSaleInfo, salePrice, smartSearch,
 } from "../App.jsx";
 
+function InstagramPhoneMockup({ settings, lang }) {
+            const [phoneHover, setPhoneHover] = React.useState(false);
+            const igUrl = settings?.instagramUrl || 'https://www.instagram.com/kemal.ussman?igsh=djFyZGhtd2t3dzd5';
+            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(igUrl)}&color=111111&bgcolor=ffffff&margin=10`;
+            return (
+              <div
+                style={{ flexShrink: 0, position: 'relative', width: 280, height: 570, cursor: 'pointer' }}
+                onMouseEnter={() => setPhoneHover(true)}
+                onMouseLeave={() => setPhoneHover(false)}
+                onClick={() => window.open(igUrl, '_blank')}
+              >
+                {/* Phone body — Space Black titanium */}
+                <motion.div
+                  animate={{ y: phoneHover ? -8 : 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  style={{
+                    position: 'absolute', inset: 0,
+                    borderRadius: 46,
+                    background: 'linear-gradient(145deg, #3A3A3C 0%, #2C2C2E 30%, #1C1C1E 60%, #161618 100%)',
+                    boxShadow: phoneHover
+                      ? '0 40px 80px rgba(0,0,0,0.35), 0 12px 28px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)'
+                      : '0 30px 60px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+                    transition: 'box-shadow 0.4s ease',
+                  }}
+                >
+                  <div style={{ position: 'absolute', right: -2.5, top: 140, width: 3, height: 60, borderRadius: '0 2px 2px 0', background: 'linear-gradient(to bottom, #3A3A3C, #2A2A2C)', boxShadow: '1px 0 3px rgba(0,0,0,0.2)' }}/>
+                  <div style={{ position: 'absolute', left: -2.5, top: 120, width: 3, height: 32, borderRadius: '2px 0 0 2px', background: 'linear-gradient(to bottom, #3A3A3C, #2A2A2C)', boxShadow: '-1px 0 3px rgba(0,0,0,0.2)' }}/>
+                  <div style={{ position: 'absolute', left: -2.5, top: 162, width: 3, height: 32, borderRadius: '2px 0 0 2px', background: 'linear-gradient(to bottom, #3A3A3C, #2A2A2C)', boxShadow: '-1px 0 3px rgba(0,0,0,0.2)' }}/>
+
+                  <div style={{ position: 'absolute', top: 8, left: 8, right: 8, bottom: 8, borderRadius: 38, background: '#000', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 100, height: 28, borderRadius: 20, background: '#000', zIndex: 20 }}/>
+                    <div style={{ position: 'absolute', inset: 0, background: '#fafafa', overflow: 'hidden' }}>
+                      {settings?.instagramScreen ? (
+                        <img src={settings.instagramScreen} alt="Instagram profile" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 }}>
+                          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #833AB4, #F56040, #FFDC80)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#111', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>KU</div>
+                            </div>
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#111' }}>kemal.ussman</div>
+                          <div style={{ fontSize: 8, color: '#8E8E93', textAlign: 'center' }}>{lang === 'kg' ? 'Скриншотту жүктөңүз' : 'Загрузите скриншот'}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* HOVER QR OVERLAY */}
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        opacity: phoneHover ? 1 : 0,
+                        backdropFilter: phoneHover ? 'blur(20px)' : 'blur(0px)',
+                        WebkitBackdropFilter: phoneHover ? 'blur(20px)' : 'blur(0px)',
+                      }}
+                      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+                      style={{
+                        position: 'absolute', inset: 0,
+                        background: 'rgba(0,0,0,0.78)',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 16, zIndex: 25, borderRadius: 38,
+                        pointerEvents: phoneHover ? 'auto' : 'none',
+                      }}
+                    >
+                      <motion.div
+                        animate={{ scale: phoneHover ? 1 : 0.6, opacity: phoneHover ? 1 : 0, rotateY: phoneHover ? 0 : 15 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 22, delay: phoneHover ? 0.08 : 0 }}
+                        style={{ width: 140, height: 140, background: '#fff', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}
+                      >
+                        <img src={qrSrc} alt="QR" width="120" height="120" style={{ borderRadius: 8, display: 'block' }} />
+                      </motion.div>
+                      <motion.div
+                        animate={{ opacity: phoneHover ? 1 : 0, y: phoneHover ? 0 : 12 }}
+                        transition={{ duration: 0.3, delay: phoneHover ? 0.15 : 0 }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                          <rect x="2" y="2" width="20" height="20" rx="6" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8"/>
+                          <circle cx="12" cy="12" r="4.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8"/>
+                          <circle cx="17.5" cy="6.5" r="1.2" fill="rgba(255,255,255,0.7)"/>
+                        </svg>
+                        <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, letterSpacing: 0.5 }}>
+                          {lang === 'kg' ? 'Instagram ачуу' : 'Перейти в Instagram'}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10 }}>@kemal.ussman</div>
+                      </motion.div>
+                      <motion.div animate={{ opacity: phoneHover ? 1 : 0, y: phoneHover ? 0 : 6 }} transition={{ duration: 0.25, delay: phoneHover ? 0.22 : 0 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
+                      </motion.div>
+                    </motion.div>
+
+                    <div style={{ position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)', width: 100, height: 4, borderRadius: 2, background: phoneHover ? 'rgba(255,255,255,0.4)' : '#000', transition: 'background 0.3s', zIndex: 30 }}/>
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  animate={{ width: phoneHover ? 220 : 200, opacity: phoneHover ? 1 : 0.7, y: phoneHover ? 4 : 0 }}
+                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                  style={{ position: 'absolute', bottom: -30, left: '50%', transform: 'translateX(-50%)', height: 60, background: 'radial-gradient(ellipse, rgba(0,0,0,0.1) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }}
+                />
+              </div>
+            );
+}
+
 export function DesktopLayout({
   products, cart, setCart, addToCart,
   banners, settings, showToast,
@@ -196,15 +300,15 @@ export function DesktopLayout({
     if (saleItems.length > 0) groups.push({ label: lang === 'kg' ? 'Акциялар' : 'Акции', icon: '🎁', items: saleItems.slice(0, 8) });
 
     // 4. Premium
-    const premiumItems = visProducts.filter(p => p.category === 'premium');
+    const premiumItems = visProducts.filter(p => p.category === 'Премиум');
     if (premiumItems.length > 0) groups.push({ label: 'Premium', icon: '💎', items: premiumItems.slice(0, 8) });
 
     // 5. Женские
-    const femaleItems = visProducts.filter(p => p.category === 'female');
+    const femaleItems = visProducts.filter(p => p.category === 'Женские');
     if (femaleItems.length >= 3) groups.push({ label: lang === 'kg' ? 'Аялдар' : 'Женские', icon: '🌸', items: femaleItems.slice(0, 8) });
 
     // 6. Мужские
-    const maleItems = visProducts.filter(p => p.category === 'male');
+    const maleItems = visProducts.filter(p => p.category === 'Мужские');
     if (maleItems.length >= 3) groups.push({ label: lang === 'kg' ? 'Эркектер' : 'Мужские', icon: '🖤', items: maleItems.slice(0, 8) });
 
     // If no groups, show random products
@@ -277,7 +381,7 @@ export function DesktopLayout({
           {/* ── Stacked SVG badges (top-left) ── */}
           {!allOutOfStock && !_saleInfo && (() => {
             const badges = [];
-            if (product.category === 'premium') badges.push({ icon: IC.crown(10, "#fff"), text: "Premium", bg: "rgba(17,17,17,0.85)" });
+            if (product.category === 'Премиум') badges.push({ icon: IC.crown(10, "#fff"), text: "Premium", bg: "rgba(17,17,17,0.85)" });
             if (product?.isPopular) badges.push({ icon: IC.flame(10, "#fff"), text: t.badge_popular, bg: "linear-gradient(135deg, #FF6A00, #FF3B30)" });
             if (product?.isHit) badges.push({ icon: IC.bolt(10, "#fff"), text: t.badge_hit, bg: "linear-gradient(135deg, #FF9500, #FF6B00)" });
             if (product?.isNew || _isNew) badges.push({ icon: IC.sparkle(10, "#fff"), text: t.badge_new, bg: "linear-gradient(135deg, #34C759, #30D158)" });
@@ -982,109 +1086,7 @@ export function DesktopLayout({
           </div>
 
           {/* Right — iPhone 17 Pro Max mockup (Space Black) with hover QR */}
-          {(() => {
-            const [phoneHover, setPhoneHover] = React.useState(false);
-            const igUrl = settings?.instagramUrl || 'https://www.instagram.com/kemal.ussman?igsh=djFyZGhtd2t3dzd5';
-            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(igUrl)}&color=111111&bgcolor=ffffff&margin=10`;
-            return (
-              <div
-                style={{ flexShrink: 0, position: 'relative', width: 280, height: 570, cursor: 'pointer' }}
-                onMouseEnter={() => setPhoneHover(true)}
-                onMouseLeave={() => setPhoneHover(false)}
-                onClick={() => window.open(igUrl, '_blank')}
-              >
-                {/* Phone body — Space Black titanium */}
-                <motion.div
-                  animate={{ y: phoneHover ? -8 : 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  style={{
-                    position: 'absolute', inset: 0,
-                    borderRadius: 46,
-                    background: 'linear-gradient(145deg, #3A3A3C 0%, #2C2C2E 30%, #1C1C1E 60%, #161618 100%)',
-                    boxShadow: phoneHover
-                      ? '0 40px 80px rgba(0,0,0,0.35), 0 12px 28px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.08)'
-                      : '0 30px 60px rgba(0,0,0,0.28), 0 8px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
-                    transition: 'box-shadow 0.4s ease',
-                  }}
-                >
-                  <div style={{ position: 'absolute', right: -2.5, top: 140, width: 3, height: 60, borderRadius: '0 2px 2px 0', background: 'linear-gradient(to bottom, #3A3A3C, #2A2A2C)', boxShadow: '1px 0 3px rgba(0,0,0,0.2)' }}/>
-                  <div style={{ position: 'absolute', left: -2.5, top: 120, width: 3, height: 32, borderRadius: '2px 0 0 2px', background: 'linear-gradient(to bottom, #3A3A3C, #2A2A2C)', boxShadow: '-1px 0 3px rgba(0,0,0,0.2)' }}/>
-                  <div style={{ position: 'absolute', left: -2.5, top: 162, width: 3, height: 32, borderRadius: '2px 0 0 2px', background: 'linear-gradient(to bottom, #3A3A3C, #2A2A2C)', boxShadow: '-1px 0 3px rgba(0,0,0,0.2)' }}/>
-
-                  <div style={{ position: 'absolute', top: 8, left: 8, right: 8, bottom: 8, borderRadius: 38, background: '#000', overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)', width: 100, height: 28, borderRadius: 20, background: '#000', zIndex: 20 }}/>
-                    <div style={{ position: 'absolute', inset: 0, background: '#fafafa', overflow: 'hidden' }}>
-                      {settings?.instagramScreen ? (
-                        <img src={settings.instagramScreen} alt="Instagram profile" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', background: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20 }}>
-                          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'linear-gradient(135deg, #833AB4, #F56040, #FFDC80)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{ width: 42, height: 42, borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#111', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>KU</div>
-                            </div>
-                          </div>
-                          <div style={{ fontSize: 11, fontWeight: 700, color: '#111' }}>kemal.ussman</div>
-                          <div style={{ fontSize: 8, color: '#8E8E93', textAlign: 'center' }}>{lang === 'kg' ? 'Скриншотту жүктөңүз' : 'Загрузите скриншот'}</div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* HOVER QR OVERLAY */}
-                    <motion.div
-                      initial={false}
-                      animate={{
-                        opacity: phoneHover ? 1 : 0,
-                        backdropFilter: phoneHover ? 'blur(20px)' : 'blur(0px)',
-                        WebkitBackdropFilter: phoneHover ? 'blur(20px)' : 'blur(0px)',
-                      }}
-                      transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-                      style={{
-                        position: 'absolute', inset: 0,
-                        background: 'rgba(0,0,0,0.78)',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        gap: 16, zIndex: 25, borderRadius: 38,
-                        pointerEvents: phoneHover ? 'auto' : 'none',
-                      }}
-                    >
-                      <motion.div
-                        animate={{ scale: phoneHover ? 1 : 0.6, opacity: phoneHover ? 1 : 0, rotateY: phoneHover ? 0 : 15 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 22, delay: phoneHover ? 0.08 : 0 }}
-                        style={{ width: 140, height: 140, background: '#fff', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}
-                      >
-                        <img src={qrSrc} alt="QR" width="120" height="120" style={{ borderRadius: 8, display: 'block' }} />
-                      </motion.div>
-                      <motion.div
-                        animate={{ opacity: phoneHover ? 1 : 0, y: phoneHover ? 0 : 12 }}
-                        transition={{ duration: 0.3, delay: phoneHover ? 0.15 : 0 }}
-                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                          <rect x="2" y="2" width="20" height="20" rx="6" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8"/>
-                          <circle cx="12" cy="12" r="4.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.8"/>
-                          <circle cx="17.5" cy="6.5" r="1.2" fill="rgba(255,255,255,0.7)"/>
-                        </svg>
-                        <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, letterSpacing: 0.5 }}>
-                          {lang === 'kg' ? 'Instagram ачуу' : 'Перейти в Instagram'}
-                        </div>
-                        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10 }}>@kemal.ussman</div>
-                      </motion.div>
-                      <motion.div animate={{ opacity: phoneHover ? 1 : 0, y: phoneHover ? 0 : 6 }} transition={{ duration: 0.25, delay: phoneHover ? 0.22 : 0 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17L17 7M17 7H7M17 7v10"/></svg>
-                      </motion.div>
-                    </motion.div>
-
-                    <div style={{ position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)', width: 100, height: 4, borderRadius: 2, background: phoneHover ? 'rgba(255,255,255,0.4)' : '#000', transition: 'background 0.3s', zIndex: 30 }}/>
-                  </div>
-                </motion.div>
-
-                <motion.div
-                  animate={{ width: phoneHover ? 220 : 200, opacity: phoneHover ? 1 : 0.7, y: phoneHover ? 4 : 0 }}
-                  transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                  style={{ position: 'absolute', bottom: -30, left: '50%', transform: 'translateX(-50%)', height: 60, background: 'radial-gradient(ellipse, rgba(0,0,0,0.1) 0%, transparent 70%)', borderRadius: '50%', pointerEvents: 'none' }}
-                />
-              </div>
-            );
-          })()}
+          <InstagramPhoneMockup settings={settings} lang={lang} />
         </div>
 
         {/* ── BESTSELLERS / ХИТЫ ПРОДАЖ ────────────────────────── */}

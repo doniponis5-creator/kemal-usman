@@ -121,7 +121,8 @@ button {
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   transition: transform 0.12s cubic-bezier(0.32, 0.72, 0, 1);
-  will-change: transform;
+  /* PERF: no persistent will-change — it permanently promoted EVERY button to
+     its own GPU layer. The transform transition still composites on press. */
 }
 button:active:not(:disabled) {
   transform: scale(0.965);
@@ -215,9 +216,15 @@ code {
 /* Product card tap feedback — pure CSS, no JS overhead on 500+ cards */
 .product-card-wrap {
   transition: transform 0.14s cubic-bezier(0.32, 0.72, 0, 1);
-  will-change: transform;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  /* PERF #3: off-screen catalog cards skip layout/paint until near the
+     viewport (progressive-enhancement: a no-op on iOS < 18, identical render
+     elsewhere). The fixed value is the iOS<18 / fallback; `auto 300px` lets
+     newer engines remember each card's real size so the scrollbar never jumps.
+     PERF #4: removed the always-on will-change + translateZ(0) that pinned
+     500+ permanent GPU layers and thrashed the iOS compositor on scroll. */
+  content-visibility: auto;
+  contain-intrinsic-size: 300px;
+  contain-intrinsic-size: auto 300px;
 }
 .product-card-wrap:active {
   transform: scale(0.97);
