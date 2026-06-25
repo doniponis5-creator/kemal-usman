@@ -6946,6 +6946,10 @@ export default function App() {
   };
 
   const orderInFlight = useRef(false);
+  // A5: release the in-flight guard whenever the O!Dengi modal is dismissed
+  // (onConfirm + onCancel both set showOdengi=false), so a guarded online-pay
+  // attempt can never permanently block re-ordering.
+  useEffect(() => { if (!showOdengi) orderInFlight.current = false; }, [showOdengi]);
   const handleOrder = async (orderData) => {
     // CRITICAL FIX: double-tap himoyasi — tez ikki bosishda ikkita buyurtma
     // yaratilib qolardi. Endi birinchisi tugamaguncha ikkinchisi bloklanadi.
@@ -6999,13 +7003,16 @@ export default function App() {
     });
     const localId = (Date.now().toString(36) + Math.random().toString(36).slice(2, 5)).toUpperCase().slice(0, 8);
     const newOrder = { id: localId, clientName: user?.name || "", clientPhone: user?.phone || "", items, date: now, status: "new", ...orderData };
+    // A5: arm the double-submit guard BEFORE branching so both cash AND odengi
+    // are deduped. Cash clears it in the catch/after-success below; odengi clears
+    // it when the modal closes (showOdengi effect above).
+    orderInFlight.current = true;
     if (orderData.payMethod === 'odengi') {
       setPendingOrder(newOrder);
       setShowOdengi(true);
       return;
     }
     // Save to PocketBase
-    orderInFlight.current = true;
     try {
       const pbData = {
         clientName: newOrder.clientName,
