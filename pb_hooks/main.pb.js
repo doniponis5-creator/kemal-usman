@@ -347,6 +347,42 @@ onRecordAfterCreateRequest((e) => {
   }
 }, 'clients');
 
+// Client self-update guard.
+//
+// Collection rules allow a logged-in client to update their own record so
+// harmless profile fields can keep working, but money/identity fields must stay
+// server-owned. PB 0.22 has no per-field update rules, so preserve these fields
+// on non-admin update requests. Server-side DAO writes from OTP/account-delete
+// hooks are not request updates, and admin updates are left untouched.
+onRecordBeforeUpdateRequest((e) => {
+  if (e.collection.name !== 'clients') return;
+
+  let info = {};
+  try { info = $apis.requestInfo(e.httpContext); } catch (_) { info = {}; }
+  const isAdmin = !!info.admin || (typeof info.hasSuperuserAuth === 'function' && info.hasSuperuserAuth());
+  if (isAdmin) return;
+
+  const auth = info.authRecord;
+  if (!auth || String(auth.id) !== String(e.record.id)) return;
+
+  const original = e.record.originalCopy();
+  [
+    'phone',
+    'username',
+    'email',
+    'bonus_balance',
+    'bonus_history',
+    'referral_code',
+    'referred_by',
+    'bonusBalance',
+    'bonusHistory',
+    'referralCode',
+    'referredBy',
+  ].forEach((field) => {
+    try { e.record.set(field, original.get(field)); } catch (_) {}
+  });
+}, 'clients');
+
 // Public custom endpoint: GET /api/custom/me — returns the authenticated client.
 routerAdd('GET', '/api/custom/me', (c) => {
   const auth = c.get('authRecord');
