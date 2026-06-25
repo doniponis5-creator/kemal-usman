@@ -30,7 +30,6 @@ import {
   notifyAdminNewOrder,
   notifyPaymentPending,
   notifyPaymentConfirmed,
-  notifyBonusEarned,
   notifyWelcomeBonus,
   notifyReferralBonus,
   notifyNewReview,
@@ -7137,73 +7136,6 @@ export default function App() {
         .then(r => { if (!r.ok) console.warn('[status] whatsapp notify failed:', r.error); });
     }
 
-    // ── Cashback: credit bonus ONLY when order is delivered ──
-    if (newStatus === 'delivered' && order) {
-      const orderTotal = order.total || 0;
-      const earned = Math.floor(orderTotal * (settings.bonusPercent || 0) / 100);
-      if (earned > 0) {
-        notifyBonusEarned(earned);
-        const now = new Date().toLocaleDateString("ru-RU");
-        setBonusBalance(p => {
-          const newBal = p + earned;
-          localStorage.setItem('parfum_bonus_balance', String(newBal));
-          // Also update PocketBase for the client
-          if (order.clientPhone) {
-            const normalizedPhone = normalizePhone(order.clientPhone);
-            api.getClientByPhone(normalizedPhone).then(client => {
-              if (client?.id) {
-                const serverBal = (client.bonusBalance || 0) + earned;
-                const serverHist = [...(Array.isArray(client.bonusHistory) ? client.bonusHistory : []), { type: "earned", amount: earned, label: "Кэшбэк за заказ №" + oid, date: now }];
-                api.updateClient(client.id, { bonusBalance: serverBal, bonusHistory: serverHist }).catch(() => {});
-              }
-            }).catch(() => {});
-          }
-          return newBal;
-        });
-        setBonusHistory(p => {
-          const newHist = [...p, { type: "earned", amount: earned, label: "Кэшбэк за заказ №" + oid, date: new Date().toLocaleDateString("ru-RU") }];
-          localStorage.setItem('parfum_bonus_history', JSON.stringify(newHist));
-          return newHist;
-        });
-      }
-    }
-
-    // ── Cancelled: refund spent bonus + claw back cashback if was delivered ──
-    if (newStatus === 'cancelled' && order) {
-      const now = new Date().toLocaleDateString("ru-RU");
-      const refund = order.bonusDiscount || 0;
-      // Claw back cashback if order was previously delivered
-      const wasDelivered = order.status === 'delivered';
-      const clawback = wasDelivered ? Math.floor((order.total || 0) * (settings.bonusPercent || 0) / 100) : 0;
-      const totalChange = refund - clawback; // refund adds, clawback removes
-
-      if (refund > 0 || clawback > 0) {
-        const histEntries = [];
-        if (refund > 0) histEntries.push({ type: "refund", amount: refund, label: "Возврат бонуса (заказ №" + oid + ")", date: now });
-        if (clawback > 0) histEntries.push({ type: "clawback", amount: -clawback, label: "Возврат кэшбэка (заказ №" + oid + ")", date: now });
-
-        setBonusBalance(p => {
-          const newBal = Math.max(0, p + totalChange);
-          localStorage.setItem('parfum_bonus_balance', String(newBal));
-          if (order.clientPhone) {
-            const normalizedPhone = normalizePhone(order.clientPhone);
-            api.getClientByPhone(normalizedPhone).then(client => {
-              if (client?.id) {
-                const serverBal = Math.max(0, (client.bonusBalance || 0) + totalChange);
-                const serverHist = [...(Array.isArray(client.bonusHistory) ? client.bonusHistory : []), ...histEntries];
-                api.updateClient(client.id, { bonusBalance: serverBal, bonusHistory: serverHist }).catch(() => {});
-              }
-            }).catch(() => {});
-          }
-          return newBal;
-        });
-        setBonusHistory(p => {
-          const newHist = [...p, ...histEntries];
-          localStorage.setItem('parfum_bonus_history', JSON.stringify(newHist));
-          return newHist;
-        });
-      }
-    }
   };
 
   const handleSendWhatsApp = (order) => {
