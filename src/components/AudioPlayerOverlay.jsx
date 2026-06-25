@@ -12,6 +12,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { audioUrl } from "../api/pb";
 import { useAudioPlayer } from "../api/audioPlayer";
+import { haptic } from "../utils/haptics";
 
 const fmt = (s) => {
   if (!Number.isFinite(s) || s < 0) s = 0;
@@ -41,7 +42,7 @@ export default function AudioPlayerOverlay({ product }) {
 
   const handleToggle = (e) => {
     e.stopPropagation();
-    try { if (typeof window !== "undefined" && window.haptic) window.haptic("light"); } catch { /* noop */ }
+    try { haptic("light"); } catch { /* noop */ }
     player.toggle(src);
   };
 
