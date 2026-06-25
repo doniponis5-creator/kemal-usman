@@ -1,4 +1,5 @@
 import React from 'react';
+import { captureError } from '../utils/sentry';
 
 // Catches rendering errors anywhere in the React tree below it. Without this,
 // one stray exception (like the original `setOrderLoading is not defined`)
@@ -17,7 +18,7 @@ export class ErrorBoundary extends React.Component {
   componentDidCatch(error, info) {
     // eslint-disable-next-line no-console
     console.error('[ErrorBoundary]', error, info?.componentStack);
-    if (window.__sentry__) window.__sentry__.captureException(error, { extra: info });
+    captureError(error, { componentStack: info?.componentStack });
   }
 
   reset = () => this.setState({ hasError: false, error: null });
