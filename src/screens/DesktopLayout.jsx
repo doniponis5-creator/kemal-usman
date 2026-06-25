@@ -1472,7 +1472,7 @@ export function DesktopLayout({
               {/* Amount */}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
                 <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "-apple-system, sans-serif", letterSpacing: -2, lineHeight: 1 }}>
-                  {settings?.referralBonus || 200}
+                  {settings?.referralBonus || 100}
                 </span>
                 <span style={{ fontSize: 16, fontWeight: 500, color: '#8E8E93', letterSpacing: -0.3 }}>
                   {lang === 'kg' ? 'сом' : 'сом'}
@@ -1483,8 +1483,8 @@ export function DesktopLayout({
               </div>
               <div style={{ fontSize: 13, color: 'rgba(0,0,0,0.4)', lineHeight: 1.6, marginBottom: 24 }}>
                 {lang === 'kg'
-                  ? `Кодуңузду досуңузга жөнөтүңүз. Сиз ${settings?.referralBonus || 200} сом, досуңуз ${settings?.referralFriendBonus || 100} сом бонус алат.`
-                  : `Поделитесь кодом с другом. Вы получите ${settings?.referralBonus || 200} сом, друг — ${settings?.referralFriendBonus || 100} сом бонусов.`}
+                  ? `Кодуңузду досуңузга жөнөтүңүз. Сиз ${settings?.referralBonus || 100} сом, досуңуз ${settings?.referralFriendBonus || 50} сом бонус алат.`
+                  : `Поделитесь кодом с другом. Вы получите ${settings?.referralBonus || 100} сом, друг — ${settings?.referralFriendBonus || 50} сом бонусов.`}
               </div>
               {/* Visual: two user circles */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
