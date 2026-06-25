@@ -24,7 +24,7 @@ function InstagramPhoneMockup({ settings, lang }) {
                 style={{ flexShrink: 0, position: 'relative', width: 280, height: 570, cursor: 'pointer' }}
                 onMouseEnter={() => setPhoneHover(true)}
                 onMouseLeave={() => setPhoneHover(false)}
-                onClick={() => window.open(igUrl, '_blank')}
+                onClick={() => window.open(igUrl, '_blank', 'noopener,noreferrer')}
               >
                 {/* Phone body — Space Black titanium */}
                 <motion.div
@@ -1054,7 +1054,7 @@ export function DesktopLayout({
             <motion.button
               whileHover={{ scale: 1.04, boxShadow: '0 12px 32px rgba(193,53,132,0.4)' }}
               whileTap={{ scale: 0.96 }}
-              onClick={() => window.open(settings?.instagramUrl || 'https://www.instagram.com/kemal.ussman', '_blank')}
+              onClick={() => window.open(settings?.instagramUrl || 'https://www.instagram.com/kemal.ussman', '_blank', 'noopener,noreferrer')}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 10,
                 padding: '14px 36px', borderRadius: 50,
@@ -1594,7 +1594,7 @@ export function DesktopLayout({
                   { url: 'https://wa.me/' + (settings?.whatsappPhone || '').replace(/\D/g,''), icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="rgba(255,255,255,0.45)" strokeWidth="1.5"/><path d="M8 12c0 2.2 1.8 4 4 4 .8 0 1.5-.2 2.1-.6l2 .6-.6-2C15.8 13.5 16 12.8 16 12c0-2.2-1.8-4-4-4S8 9.8 8 12z" stroke="rgba(255,255,255,0.45)" strokeWidth="1.3"/></svg> },
                 ].map((s, i) => (
                   <div key={i}
-                    onClick={() => s.url && window.open(s.url, '_blank')}
+                    onClick={() => s.url && window.open(s.url, '_blank', 'noopener,noreferrer')}
                     style={{ width: 32, height: 32, borderRadius: '50%', border: '0.5px solid rgba(255,255,255,0.12)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       cursor: s.url ? 'pointer' : 'default', opacity: s.url ? 1 : 0.35,
@@ -1649,7 +1649,7 @@ export function DesktopLayout({
                   {link}
                 </div>
               ))}
-              <div onClick={() => window.open('https://wa.me/' + (settings?.whatsappPhone || '').replace(/\D/g,''), '_blank')}
+              <div onClick={() => window.open('https://wa.me/' + (settings?.whatsappPhone || '').replace(/\D/g,''), '_blank', 'noopener,noreferrer')}
                 style={{ fontSize: 12, color: '#25D366', cursor: 'pointer', transition: 'opacity 0.2s' }}
                 onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
                 onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
@@ -1664,7 +1664,7 @@ export function DesktopLayout({
               </div>
               {[settings?.contactPhone1 || '+996 551 120 009', settings?.contactPhone2 || '+996 557 100 505'].map(ph => (
                 <div key={ph}
-                  onClick={() => window.open('tel:' + ph.replace(/\s/g, ''), '_blank')}
+                  onClick={() => window.open('tel:' + ph.replace(/\s/g, ''), '_blank', 'noopener')}
                   style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6, cursor: 'pointer', letterSpacing: 0.3, transition: 'color 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.color = '#fff'}
                   onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}>
