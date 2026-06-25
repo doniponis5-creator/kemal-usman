@@ -512,31 +512,6 @@ export function BannerCropModal({ src, onDone, onCancel }) {
   );
 }
 
-function ImageUpload({ value, onChange }) {
-  const [cropSrc, setCropSrc] = useState(null);
-  const fileRef = useRef(null);
-  const handleFile = (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    const r = new FileReader();
-    r.onload = ev => setCropSrc(ev.target.result);
-    r.readAsDataURL(f);
-  };
-  return (
-    <div>
-      {cropSrc && <CropModal src={cropSrc} onDone={v => { onChange(v); setCropSrc(null); }} onCancel={() => setCropSrc(null)} />}
-      <div onClick={() => fileRef.current?.click()} style={{ width: "100%", height: 120, borderRadius: 16, border: `2px dashed ${value ? T.accent : T.border}`, background: value ? "transparent" : T.bg, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", overflow: "hidden", position: "relative" }}>
-        {value
-          ? <img src={value} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          : <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, color: T.textMuted }}>
-            {React.cloneElement(IC.camera, { style: { width: 28, height: 28 } })}
-            <span style={{ fontSize: 13 }}>Загрузить фото</span>
-          </div>}
-      </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
-    </div>
-  );
-}
-
 export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCoverChange }) {
   const { t } = useLang();
   const fileRef0 = useRef(null);
@@ -5891,83 +5866,6 @@ export function ProductAudioRecorder({ productId, onAudioUploaded }) {
       </motion.button>
       {errorBanner}
     </div>
-  );
-}
-
-function AudioRecordBtn({ productId }) {
-  const [status, setStatus] = React.useState(
-    localStorage.getItem('parfum_audio_' + productId) ? 'done' : 'idle'
-  );
-  const [countdown, setCountdown] = React.useState(10);
-
-  const handleRecord = () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setStatus('idle'); return; }
-    if (!window.MediaRecorder) { setStatus('idle'); return; }
-    setStatus('recording');
-    setCountdown(10);
-    let currentCount = 10;
-    const interval = setInterval(() => {
-      currentCount -= 1;
-      if (currentCount <= 0) {
-        clearInterval(interval);
-        setCountdown(0);
-      } else {
-        setCountdown(currentCount);
-      }
-    }, 1000);
-
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      const recorder = new MediaRecorder(stream);
-      const chunks = [];
-      recorder.ondataavailable = e => chunks.push(e.data);
-      recorder.onstop = () => {
-        clearInterval(interval);
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          localStorage.setItem('parfum_audio_' + productId, reader.result);
-          stream.getTracks().forEach(t => t.stop());
-          setStatus('done');
-          setCountdown(10);
-        };
-        reader.readAsDataURL(blob);
-      };
-      recorder.start();
-      setTimeout(() => recorder.stop(), 10000);
-    });
-  };
-
-  const handleDelete = () => {
-    localStorage.removeItem('parfum_audio_' + productId);
-    setStatus('idle');
-  };
-
-  if (status === 'recording') return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'rgba(229,57,53,0.10)', borderRadius: 20, fontSize: 12, color: '#E53935' }}>
-      Запись... {countdown}с
-    </div>
-  );
-  if (status === 'done') return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      <button onClick={() => { const a = new Audio(localStorage.getItem('parfum_audio_' + productId)); a.play(); }}
-        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #111111', background: 'none', fontSize: 12, color: '#111111', cursor: 'pointer' }}>
-        Слушать
-      </button>
-      <button onClick={handleRecord}
-        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #F59E0B', background: 'none', fontSize: 12, color: '#F59E0B', cursor: 'pointer' }}>
-        Перезаписать
-      </button>
-      <button onClick={handleDelete}
-        style={{ padding: '4px 10px', borderRadius: 20, border: '1px solid #EF4444', background: 'none', fontSize: 12, color: '#EF4444', cursor: 'pointer' }}>
-        Удалить
-      </button>
-    </div>
-  );
-  return (
-    <button onClick={handleRecord}
-      style={{ padding: '4px 12px', borderRadius: 20, border: '1px solid #AEAEB2', background: 'none', fontSize: 12, color: '#666666', cursor: 'pointer' }}>
-      Записать аромат (10с)
-    </button>
   );
 }
 
