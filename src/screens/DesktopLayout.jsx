@@ -1511,7 +1511,7 @@ export function DesktopLayout({
                 boxShadow: '0 8px 32px rgba(0,0,0,0.04)',
                 cursor: user ? 'default' : 'pointer',
               }}
-              onClick={() => { if (!user && !guestMode) { /* scroll to login or trigger login */ } }}
+              onClick={() => { if (!user && guestMode) setGuestMode(false); }}
             >
               {/* Decorative sparkle */}
               <div style={{ position: 'absolute', top: 20, right: 24, opacity: 0.08, pointerEvents: 'none' }}>
