@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { haptic } from '../utils/haptics';
+import { IS_NATIVE } from '../utils/platform';
 
 // iOS bottom-sheet for sort + price filter. Slide up from bottom, dim backdrop,
 // option pills with spring select state. Tapping outside or "Apply" closes.
@@ -37,7 +38,9 @@ export function SortFilterSheet({ open, onClose, sort, onSortChange, lang = 'ru'
             onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%', maxWidth: 480,
-              background: '#fff',
+              ...(IS_NATIVE
+                ? { background: 'rgba(255,255,255,0.82)', backdropFilter: 'saturate(180%) blur(30px)', WebkitBackdropFilter: 'saturate(180%) blur(30px)', borderTop: '0.5px solid rgba(255,255,255,0.85)' }
+                : { background: '#fff' }),
               borderRadius: '24px 24px 0 0',
               padding: '14px 18px',
               paddingBottom: 'calc(28px + env(safe-area-inset-bottom, 0))',
