@@ -2585,7 +2585,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
             const extra = (p?.sizes || p?.variants || []).length - 2;
             return <>
               {sizes.map((v, idx) => (
-                <span key={v.id || v.label || idx} style={{ fontSize: 10, padding: "3px 9px", background: T.accentPale, color: T.accent, borderRadius: 20, fontWeight: 500 }}>
+                <span key={v.id || v.label || idx} style={{ fontSize: 10, padding: "3px 9px", background: T.accentPale, color: T.text, borderRadius: 20, fontWeight: 500 }}>
                   {v.label}
                 </span>
               ))}
@@ -3575,12 +3575,12 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center", ...(isOOS ? { border: '2px solid #FF3B30', opacity: 0.7 } : {}) }}
             >
               <div style={{ width: 60, height: 60, borderRadius: 14, background: T.accentPale, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover", ...(isOOS ? { filter: 'grayscale(1)' } : {}) }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.accent, opacity: 0.5 } })}
+                {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover", ...(isOOS ? { filter: 'grayscale(1)' } : {}) }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.text, opacity: 0.5 } })}
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{item.prod.brand}</div>
                 <div style={{ color: T.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{item.prod.name}</div>
-                <div style={{ color: T.accent, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
+                <div style={{ color: T.text, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
                 {isOOS && <div style={{ color: '#FF3B30', fontSize: 11, fontWeight: 700, marginTop: 2 }}>{lang === 'kg' ? 'Кампада жок' : 'Нет в наличии'}</div>}
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
@@ -3590,7 +3590,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                   <motion.span key={item.qty} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 460, damping: 22 }} style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text, display: 'inline-block' }}>{item.qty}</motion.span>
                   <button onClick={() => { haptic('light'); updateQty(item, 1); }} style={{ width: 36, height: 36, borderRadius: 10, background: T.accent, border: "none", cursor: "pointer", fontSize: 18, fontWeight: 700, color: "#fff", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
                 </div>
-                <motion.div key={(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return fp * item.qty; })()} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.accent, fontWeight: 800, fontSize: 14 }}>{(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return formatSum(fp * item.qty); })()}</motion.div>
+                <motion.div key={(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return fp * item.qty; })()} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.text, fontWeight: 800, fontSize: 14 }}>{(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return formatSum(fp * item.qty); })()}</motion.div>
               </div>
             </motion.div>
           ); })}
@@ -3952,7 +3952,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               initial={{ y: -6, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
-              style={{ color: T.accent, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}
+              style={{ color: T.text, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}
             >
               {formatSum(total)}
             </motion.span>
@@ -4364,7 +4364,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
           style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
         >
           <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.orders, { style: { width: 18, height: 18, color: T.accent } })}
+            {React.cloneElement(IC.orders, { style: { width: 18, height: 18, color: T.text } })}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Менин заказтарым' : 'Мои заказы'}</div>
@@ -4385,7 +4385,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
           style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
         >
           <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
-            {React.cloneElement(IC.bell, { style: { width: 18, height: 18, color: T.accent } })}
+            {React.cloneElement(IC.bell, { style: { width: 18, height: 18, color: T.text } })}
             {unreadNotifCount > 0 && (
               <div style={{ position: "absolute", top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: "#FF3B30", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>
                 {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
@@ -4408,7 +4408,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
           style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
         >
           <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.settings, { style: { width: 18, height: 18, color: T.accent } })}
+            {React.cloneElement(IC.settings, { style: { width: 18, height: 18, color: T.text } })}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Тил' : 'Язык'}</div>
@@ -4434,7 +4434,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
             style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
           >
             <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {React.cloneElement(IC.chat, { style: { width: 18, height: 18, color: T.accent } })}
+              {React.cloneElement(IC.chat, { style: { width: 18, height: 18, color: T.text } })}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>WhatsApp</div>
@@ -4453,7 +4453,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
           style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
         >
           <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.phone, { style: { width: 18, height: 18, color: T.accent } })}
+            {React.cloneElement(IC.phone, { style: { width: 18, height: 18, color: T.text } })}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Колдоо борбору' : 'Связаться с поддержкой'}</div>
@@ -4523,7 +4523,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
                           initial={{ scale: 0.5, opacity: 0 }}
                           animate={{ scale: 1, opacity: 1 }}
                           transition={{ type: 'spring', stiffness: 460, damping: 22 }}
-                          style={{ color: T.accent, display: "flex" }}
+                          style={{ color: T.text, display: "flex" }}
                         >
                           {React.cloneElement(IC.check, { style: { width: 20, height: 20 } })}
                         </motion.div>
@@ -7629,7 +7629,7 @@ export default function App() {
             {/* Header */}
             <div style={{ padding: "8px 20px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {React.cloneElement(IC.bell, { style: { width: 20, height: 20, color: T.accent } })}
+                {React.cloneElement(IC.bell, { style: { width: 20, height: 20, color: T.text } })}
                 <span style={{ fontSize: 18, fontWeight: 800, color: T.text }}>{t.notifications}</span>
               </div>
               <div onClick={() => setShowNotifSheet(false)} style={{ width: 28, height: 28, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
