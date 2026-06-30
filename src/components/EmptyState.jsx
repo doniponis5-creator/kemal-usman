@@ -41,14 +41,14 @@ export function EmptyState({ icon, title, hint, action }) {
           width: 96,
           height: 96,
           borderRadius: 28,
-          background: '#FFFFFF',
+          background: "var(--ku-surface, #FFFFFF)",
           boxShadow:
             '0 1px 2px rgba(0,0,0,0.05),' +
             '0 8px 24px rgba(0,0,0,0.08)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#111',
+          color: "var(--ku-text, #111111)",
         }}
       >
         {icon && React.isValidElement(icon)
@@ -62,7 +62,7 @@ export function EmptyState({ icon, title, hint, action }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.18, duration: 0.3, ease: easeIOS }}
         style={{
-          color: '#111',
+          color: "var(--ku-text, #111111)",
           fontSize: 20,
           fontWeight: 700,
           letterSpacing: -0.3,

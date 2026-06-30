@@ -97,14 +97,14 @@ export default function AudioPlayerOverlay({ product }) {
             height: 32,
             borderRadius: "50%",
             padding: 0,
-            background: "#FFFFFF",
+            background: "var(--ku-surface, #FFFFFF)",
             border: "none",
             boxShadow: "0 2px 8px rgba(0,0,0,0.30)",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#111",
+            color: "var(--ku-text, #111111)",
             flexShrink: 0,
           }}
         >
@@ -151,7 +151,7 @@ export default function AudioPlayerOverlay({ product }) {
             style={{
               height: "100%",
               width: `${progress * 100}%`,
-              background: "#FFFFFF",
+              background: "var(--ku-surface, #FFFFFF)",
               borderRadius: 2,
               transition: "width 0.12s linear",
             }}

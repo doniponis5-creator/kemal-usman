@@ -104,7 +104,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
                   initial={false}
                   animate={{ width: idx <= currentIdx ? '100%' : '0%' }}
                   transition={{ duration: 0.5, delay: 0.15, ease: [0.32, 0.72, 0, 1] }}
-                  style={{ height: 2, background: '#111' }}
+                  style={{ height: 2, background: "var(--ku-accent, #111111)" }}
                 />
               </div>
             )}
@@ -155,7 +155,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
                     }}
                   />
                   <div style={{
-                    width: 8, height: 8, borderRadius: 4, background: '#fff',
+                    width: 8, height: 8, borderRadius: 4, background: "var(--ku-surface, #FFFFFF)",
                   }} />
                 </>
               )}

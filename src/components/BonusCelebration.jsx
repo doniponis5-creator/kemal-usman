@@ -76,7 +76,7 @@ export function BonusCelebration({ amount, title, subtitle, ctaLabel, onClose, l
           transition={{ type: 'spring', stiffness: 260, damping: 22 }}
           onClick={(e) => e.stopPropagation()}
           style={{
-            background: '#fff',
+            background: "var(--ku-surface, #FFFFFF)",
             borderRadius: 32,
             padding: '44px 32px 32px',
             width: '100%',
@@ -157,7 +157,7 @@ export function BonusCelebration({ amount, title, subtitle, ctaLabel, onClose, l
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.32 }}
             style={{
-              fontSize: 42, fontWeight: 900, color: '#111',
+              fontSize: 42, fontWeight: 900, color: "var(--ku-text, #111111)",
               marginBottom: 8, letterSpacing: -1,
               lineHeight: 1.1,
             }}
@@ -171,7 +171,7 @@ export function BonusCelebration({ amount, title, subtitle, ctaLabel, onClose, l
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.32 }}
             style={{
-              fontSize: 14, color: '#666',
+              fontSize: 14, color: "var(--ku-text-2, #666666)",
               marginBottom: 28, lineHeight: 1.5,
             }}
           >
@@ -190,7 +190,7 @@ export function BonusCelebration({ amount, title, subtitle, ctaLabel, onClose, l
               padding: 14,
               borderRadius: 14,
               border: 'none',
-              background: '#111',
+              background: "var(--ku-accent, #111111)",
               color: '#fff',
               fontSize: 15,
               fontWeight: 700,

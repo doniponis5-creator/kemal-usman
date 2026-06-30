@@ -270,6 +270,7 @@ input:-webkit-autofill {
   --ku-fill: rgba(0,0,0,0.06);
   --ku-fill-2: rgba(0,0,0,0.04);
   --ku-text-dim: #3A3A3C;
+  --ku-text-mid: #555555;
 }
 html[data-theme="dark"] {
   --ku-bg: #000000;
@@ -283,4 +284,5 @@ html[data-theme="dark"] {
   --ku-fill: rgba(255,255,255,0.10);
   --ku-fill-2: rgba(255,255,255,0.06);
   --ku-text-dim: #C7C7CC;
+  --ku-text-mid: #AEAEB2;
 }

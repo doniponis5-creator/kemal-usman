@@ -84,7 +84,7 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
         transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
         style={{
           position: 'fixed', inset: 0, zIndex: 1002,
-          background: '#fff',
+          background: "var(--ku-surface, #FFFFFF)",
           display: 'flex', flexDirection: 'column',
           x,
           ...(style || {}),

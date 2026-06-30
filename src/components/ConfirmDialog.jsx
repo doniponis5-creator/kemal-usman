@@ -51,25 +51,25 @@ export function ConfirmProvider({ children }) {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: '100%', maxWidth: 460, background: '#fff',
+              width: '100%', maxWidth: 460, background: "var(--ku-surface, #FFFFFF)",
               borderRadius: '20px 20px 0 0', padding: '24px 20px',
               paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0))',
               animation: 'slideUp .2s cubic-bezier(.32,.72,0,1)',
               boxShadow: '0 -10px 40px rgba(0,0,0,0.2)',
             }}
           >
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', textAlign: 'center', marginBottom: opts.message ? 8 : 20 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ku-text, #111111)", textAlign: 'center', marginBottom: opts.message ? 8 : 20 }}>
               {opts.title}
             </div>
             {opts.message && (
-              <div style={{ fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 20, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 14, color: "var(--ku-text-2, #666666)", textAlign: 'center', marginBottom: 20, lineHeight: 1.5 }}>
                 {opts.message}
               </div>
             )}
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 onClick={() => handle(false)}
-                style={{ flex: 1, padding: '14px', borderRadius: 12, border: '1px solid #eee', background: '#f5f5f5', color: '#666', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+                style={{ flex: 1, padding: '14px', borderRadius: 12, border: '1px solid var(--ku-border, #EEEEEE)', background: "var(--ku-surface-2, #F5F5F5)", color: "var(--ku-text-2, #666666)", fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
               >
                 {opts.cancelLabel}
               </button>

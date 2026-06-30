@@ -29,7 +29,7 @@ export class ErrorBoundary extends React.Component {
       <div style={{
         minHeight: '100svh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16,
-        background: '#111', color: '#fff', fontFamily: '-apple-system, sans-serif',
+        background: "var(--ku-accent, #111111)", color: '#fff', fontFamily: '-apple-system, sans-serif',
         textAlign: 'center',
       }}>
         <div style={{ fontSize: 48 }}>⚠️</div>
@@ -41,7 +41,7 @@ export class ErrorBoundary extends React.Component {
           onClick={() => { this.reset(); window.location.reload(); }}
           style={{
             marginTop: 12, padding: '12px 28px', borderRadius: 12,
-            border: 'none', background: '#fff', color: '#111',
+            border: 'none', background: "var(--ku-surface, #FFFFFF)", color: "var(--ku-text, #111111)",
             fontSize: 15, fontWeight: 700, cursor: 'pointer',
           }}
         >

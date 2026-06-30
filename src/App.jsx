@@ -3402,7 +3402,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(0,0,0,0.3)", marginBottom: 6, fontWeight: 600 }}>
               {lang === 'kg' ? 'Кардарлардын пикири' : 'Отзывы клиентов'}
             </div>
-            <div style={{ fontSize: 20, fontWeight: 400, color: "#0a0a0a", marginBottom: 20, fontFamily: "'Georgia', serif", fontStyle: "italic" }}>
+            <div style={{ fontSize: 20, fontWeight: 400, color: "var(--ku-text, #111111)", marginBottom: 20, fontFamily: "'Georgia', serif", fontStyle: "italic" }}>
               {lang === 'kg' ? 'Алар биз жөнүндө эмне дейт' : 'Что говорят о нас'}
             </div>
             <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
@@ -4760,7 +4760,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                 }}
               />
             </div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#3A3A3C' }}>Создание счёта{dots}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ku-text-dim, #3A3A3C)" }}>Создание счёта{dots}</div>
             <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 6 }}>Подождите немного</div>
           </motion.div>
         )}
@@ -5058,7 +5058,7 @@ function OrderReceipt({ order, settings, onClose }) {
           {items.map((item, idx) => (
             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#3A3A3C', lineHeight: 1.3 }}>{item.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ku-text-dim, #3A3A3C)", lineHeight: 1.3 }}>{item.name}</div>
                 <div style={{ fontSize: 11, color: '#8E8E93' }}>{item.qty} шт. × {item.price.toLocaleString()} сом</div>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ku-text, #111111)", flexShrink: 0, marginLeft: 8 }}>{(item.price * item.qty).toLocaleString()} сом</div>
@@ -5068,11 +5068,11 @@ function OrderReceipt({ order, settings, onClose }) {
           <div style={{ borderTop: '1px dashed #E0E0E0', paddingTop: 12, marginTop: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ fontSize: 12, color: '#8E8E93' }}>Оплата</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{payLabel}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text-mid, #555555)" }}>{payLabel}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ fontSize: 12, color: '#8E8E93' }}>Доставка</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{deliveryLabel}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text-mid, #555555)" }}>{deliveryLabel}</span>
             </div>
             {order.bonusDiscount > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -5103,7 +5103,7 @@ function OrderReceipt({ order, settings, onClose }) {
             {/* Selected image preview */}
             {selectedImage && (
               <div style={{ marginBottom: 10, position: 'relative' }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text-mid, #555555)", marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   Квитанция выбрана
                 </div>
@@ -7562,7 +7562,7 @@ export default function App() {
                 <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
                   {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
-                <span style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>{t.remember_me}</span>
+                <span style={{ fontSize: 13, color: "var(--ku-text-mid, #555555)", fontWeight: 500 }}>{t.remember_me}</span>
               </label>
               {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
@@ -7597,7 +7597,7 @@ export default function App() {
               <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
                 {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
-              <span style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>{t.remember_me}</span>
+              <span style={{ fontSize: 13, color: "var(--ku-text-mid, #555555)", fontWeight: 500 }}>{t.remember_me}</span>
             </label>
             {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>

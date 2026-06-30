@@ -23,7 +23,7 @@ export function Skeleton({ width = '100%', height = 16, radius = 8, style }) {
 export function ProductCardSkeleton() {
   return (
     <div style={{
-      background: '#fff', borderRadius: 16, overflow: 'hidden',
+      background: "var(--ku-surface, #FFFFFF)", borderRadius: 16, overflow: 'hidden',
       boxShadow: '0 2px 8px rgba(0,0,0,0.06)', minHeight: 220,
     }}>
       <Skeleton width="100%" height={150} radius={0} />
