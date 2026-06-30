@@ -1,38 +1,44 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { IS_NATIVE } from '../utils/platform';
+import { useGlass } from '../glass';
 
 /**
  * GlassNavBar — iOS 26 Liquid Glass floating bottom navigation.
  *
- * Mirrors the native SwiftUI bar in `LiquidGlassTabView.swift`:
- *   • white translucent capsule (`backdrop-filter` for the glass material)
- *   • selected tab gets a clean grey "pill" that slides between tabs via
- *     framer-motion's `layoutId` — this is the web equivalent of SwiftUI's
- *     `matchedGeometryEffect`. Combined with the outer glass blur this
- *     produces the Apple Music tab-bar feel.
- *   • snappy iOS 26 spring physics on every motion.
+ * WEB SAFETY: on web (IS_NATIVE === false) this renders EXACTLY as before —
+ * the `S.pill` material and the light color set. Glass material + dark-mode
+ * inks are layered on ONLY in the native app build.
+ *
+ * Mirrors the native SwiftUI bar in `LiquidGlassTabView.swift`: a translucent
+ * capsule, a sliding selected pill (framer-motion `layoutId` ≈ SwiftUI
+ * `matchedGeometryEffect`), snappy iOS 26 spring physics.
  */
 const iosSpring = { type: 'spring', stiffness: 420, damping: 32, mass: 0.85 };
 
 export function GlassNavBar({ items, active, onSelect }) {
-  const handleSelect = (id) => {
-    onSelect(id);
-  };
+  const glass = useGlass();
+  const dark = IS_NATIVE && glass.scheme === 'dark';
+
+  const handleSelect = (id) => { onSelect(id); };
+
+  // Web path = S.pill untouched. Native = Apple glass material (scheme-aware).
+  const pillStyle = IS_NATIVE
+    ? { ...S.pill, ...glass.style({ variant: 'regular', radius: 32 }) }
+    : S.pill;
 
   return (
     <div style={S.outer}>
-      <div style={S.pill}>
-        {items.map((item) => {
-          const isActive = item.id === active;
-          return (
-            <Tab
-              key={item.id}
-              item={item}
-              isActive={isActive}
-              onClick={() => handleSelect(item.id)}
-            />
-          );
-        })}
+      <div style={pillStyle}>
+        {items.map((item) => (
+          <Tab
+            key={item.id}
+            item={item}
+            isActive={item.id === active}
+            dark={dark}
+            onClick={() => handleSelect(item.id)}
+          />
+        ))}
       </div>
     </div>
   );
@@ -40,7 +46,13 @@ export function GlassNavBar({ items, active, onSelect }) {
 
 // ─── Subcomponents ────────────────────────────────────────────────────────────
 
-function Tab({ item, isActive, onClick }) {
+function Tab({ item, isActive, dark, onClick }) {
+  const activeColor = dark ? '#0A84FF' : '#007AFF';
+  const idleColor = dark ? 'rgba(235,235,245,0.62)' : 'rgba(0,0,0,0.6)';
+  const activePillStyle = dark
+    ? { ...S.activePill, background: 'rgba(255,255,255,0.16)', boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.22)' }
+    : S.activePill;
+
   return (
     <motion.button
       onClick={onClick}
@@ -50,13 +62,13 @@ function Tab({ item, isActive, onClick }) {
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
     >
-      {/* Sliding selected pill — layoutId gives smooth liquid morph
+      {/* Sliding selected pill — layoutId gives the smooth liquid morph
           between tabs (web equivalent of SwiftUI matchedGeometryEffect). */}
       {isActive && (
         <motion.div
           layoutId="ios26-selectedPill"
           transition={iosSpring}
-          style={S.activePill}
+          style={activePillStyle}
         />
       )}
 
@@ -64,7 +76,7 @@ function Tab({ item, isActive, onClick }) {
         <motion.div
           animate={{
             scale: isActive ? 1.06 : 1,
-            color: isActive ? '#007AFF' : 'rgba(0,0,0,0.6)',
+            color: isActive ? activeColor : idleColor,
           }}
           transition={iosSpring}
           style={S.iconWrap}
@@ -86,7 +98,7 @@ function Tab({ item, isActive, onClick }) {
 
         <motion.span
           animate={{
-            color: isActive ? '#007AFF' : 'rgba(0,0,0,0.6)',
+            color: isActive ? activeColor : idleColor,
             fontWeight: isActive ? 600 : 500,
           }}
           transition={iosSpring}
@@ -99,7 +111,7 @@ function Tab({ item, isActive, onClick }) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (web baseline — also the native layout; native overrides material) ─
 
 const S = {
   outer: {
@@ -113,7 +125,6 @@ const S = {
     justifyContent: 'center',
   },
 
-  // iOS 26 white Liquid Glass capsule — exact match of LiquidGlassTabView
   pill: {
     position: 'relative',
     width: '100%',
@@ -150,8 +161,6 @@ const S = {
     fontFamily: 'inherit',
   },
 
-  // Clean gray sliding pill — matches `Color(.systemGray5)` in
-  // LiquidGlassTabView. Solid fill, no glass / no backdrop blur.
   activePill: {
     position: 'absolute',
     inset: 4,

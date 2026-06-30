@@ -94,6 +94,8 @@ import { GlassNavBar } from "./components/GlassNavBar";
 // src/i18n/lang.jsx, src/appData.js, src/api/backend.js, src/utils/format.js
 import { TRANSLATIONS, LangContext, useLang } from "./i18n/lang.jsx";
 import { T, card, inputStyle, btnGreen, btnOutline } from "./theme.js";
+import { IS_NATIVE } from "./utils/platform";
+import { useGlass } from "./glass";
 import { IC } from "./icons.jsx";
 import { BG_PRESETS, DEFAULT_SETTINGS, FALLBACK_IMAGES, INITIAL_PRODUCTS, DEFAULT_BANNERS } from "./appData.js";
 import { api } from "./api/backend.js";
@@ -2641,6 +2643,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const { lang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
+  const glass = useGlass(); // Liquid Glass (native-only); web => no-op
   const [detail, setDetail] = useState(null);
   const [selVariant, setSelVariant] = useState(null);
   // First-time audio hint — visible briefly after catalog mount, capped at 5
@@ -3194,7 +3197,17 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             : "0 1px 0 rgba(0,0,0,0.04)",
         }}
         transition={{ duration: 0.2 }}
-        style={{
+        style={ IS_NATIVE ? {
+          background: glass.scheme === 'dark' ? 'rgba(24,24,27,0.72)' : 'rgba(255,255,255,0.72)',
+          backdropFilter: 'saturate(180%) blur(20px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+          borderBottom: glass.scheme === 'dark' ? '0.5px solid rgba(255,255,255,0.10)' : '0.5px solid rgba(0,0,0,0.06)',
+          paddingTop: "max(44px, env(safe-area-inset-top, 44px))",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+          overflow: "hidden",
+        } : {
           background: "#fff",
           paddingTop: "max(44px, env(safe-area-inset-top, 44px))",
           position: "sticky",
@@ -3215,7 +3228,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               style={{ overflow: "hidden", display: "flex", alignItems: "center", padding: "6px 16px 10px" }}
             >
               <div>
-                <div onClick={handleSecretTap} style={{ fontSize: 28, color: "#111", fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
+                <div onClick={handleSecretTap} style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "#111", fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
               </div>
             </motion.div>
           )}
@@ -3226,9 +3239,9 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           transition={{ type: "spring", stiffness: 420, damping: 36 }}
           style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}
         >
-          <div style={{ display: "flex", alignItems: "center", background: "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", background: (IS_NATIVE && glass.scheme === 'dark') ? 'rgba(255,255,255,0.10)' : "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="#AEAEB2" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#AEAEB2" strokeWidth="2" /></svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: "#111", width: "100%", fontFamily: "inherit" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "#111", width: "100%", fontFamily: "inherit" }} />
             <AnimatePresence>
               {search && (
                 <motion.button
