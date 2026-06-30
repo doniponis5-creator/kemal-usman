@@ -690,7 +690,7 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                 <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
                   {!isCover && (
                     <button onClick={() => onCoverChange(imgUrl)}
-                      style={{ flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(0,0,0,0.06)", color: "#3A3A3C", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                      style={{ flex: 1, fontSize: 9, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(0,0,0,0.06)", color: "var(--ku-text-dim, #3A3A3C)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                       Обложка
                     </button>
                   )}
@@ -2153,7 +2153,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
           <motion.div
             key={p.id || idx}
             onClick={() => onSelect(p)}
-            whileTap={{ scale: 0.98, backgroundColor: "#F8F8F8" }}
+            whileTap={{ scale: 0.98, backgroundColor: "var(--ku-surface-2, #F5F5F5)" }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -3042,7 +3042,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               )}
             </div>
 
-            <div style={{ height: 1, background: "#F2F2F7", marginBottom: 20 }} />
+            <div style={{ height: 1, background: "var(--ku-surface-2, #F5F5F5)", marginBottom: 20 }} />
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "var(--ku-text, #111111)", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
@@ -3414,7 +3414,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   transition={{ duration: 0.3, delay: i * 0.05 }}
                   style={{
                     minWidth: 260, maxWidth: 280, flexShrink: 0,
-                    background: "#f7f7f5", borderRadius: 16, padding: "20px 18px",
+                    background: "var(--ku-surface-2, #F5F5F5)", borderRadius: 16, padding: "20px 18px",
                     border: "1px solid rgba(0,0,0,0.05)", scrollSnapAlign: "start",
                   }}
                 >
@@ -3425,7 +3425,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       </svg>
                     ))}
                   </div>
-                  <div style={{ fontSize: 13, color: "#3A3A3C", lineHeight: 1.6, marginBottom: 14, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                  <div style={{ fontSize: 13, color: "var(--ku-text-dim, #3A3A3C)", lineHeight: 1.6, marginBottom: 14, display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                     "{r.text}"
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -3604,7 +3604,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           {/* iOS segmented control — gray track, white active pill that slides */}
           <div
             style={{
-              background: "#F2F2F7",
+              background: "var(--ku-surface-2, #F5F5F5)",
               borderRadius: 14,
               padding: 4,
               display: "flex",
@@ -3664,7 +3664,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               whileTap={editingAddress ? undefined : { scale: 0.97 }}
               transition={{ type: "spring", stiffness: 420, damping: 28 }}
               style={{
-                background: "#F2F2F7",
+                background: "var(--ku-surface-2, #F5F5F5)",
                 border: "none",
                 borderRadius: 14,
                 padding: 16,
@@ -3836,7 +3836,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               fontWeight: 500,
               color: "var(--ku-text, #111111)",
               padding: "12px 14px",
-              background: "#F2F2F7",
+              background: "var(--ku-surface-2, #F5F5F5)",
               border: "none",
               borderRadius: 12,
               outline: "none",
@@ -7545,10 +7545,10 @@ export default function App() {
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
               <div style={{ marginBottom: 10 }}>
-                <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+                <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
               </div>
               <div style={{ position: "relative", marginBottom: 8 }}>
-                <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+                <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
                 <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93", fontSize: 11, fontWeight: 600, letterSpacing: 0.2 }}>
                   {adminShowPass ? (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -7566,7 +7566,7 @@ export default function App() {
               </label>
               {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
+                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "var(--ku-text-dim, #3A3A3C)" }}>{t.cancel}</button>
                 <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
               </div>
             </div>
@@ -7580,10 +7580,10 @@ export default function App() {
           <div onClick={e => e.stopPropagation()} style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
             <div style={{ marginBottom: 10 }}>
-              <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+              <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
             </div>
             <div style={{ position: "relative", marginBottom: 8 }}>
-              <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+              <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
               <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93" }}>
                 {adminShowPass ? (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -7601,7 +7601,7 @@ export default function App() {
             </label>
             {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
+              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "var(--ku-text-dim, #3A3A3C)" }}>{t.cancel}</button>
               <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
             </div>
           </div>

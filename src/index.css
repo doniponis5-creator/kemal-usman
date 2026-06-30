@@ -269,6 +269,7 @@ input:-webkit-autofill {
   --ku-accent: #111111;
   --ku-fill: rgba(0,0,0,0.06);
   --ku-fill-2: rgba(0,0,0,0.04);
+  --ku-text-dim: #3A3A3C;
 }
 html[data-theme="dark"] {
   --ku-bg: #000000;
@@ -281,4 +282,5 @@ html[data-theme="dark"] {
   --ku-accent: #2C2C2E;
   --ku-fill: rgba(255,255,255,0.10);
   --ku-fill-2: rgba(255,255,255,0.06);
+  --ku-text-dim: #C7C7CC;
 }
