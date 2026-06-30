@@ -4747,10 +4747,19 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
         />
         <PremiumRow
           icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg>}
-          iconBg="#34C759"
+          iconBg={settings?.cashPaymentEnabled === true ? '#34C759' : '#8E8E93'}
           label={lang === 'kg' ? 'Накталай' : 'Наличные при получении'}
-          hint={lang === 'kg' ? 'Дайыма иштейт' : 'Всегда доступны'}
-          isLast
+          hint={settings?.cashPaymentEnabled === true
+            ? (lang === 'kg' ? 'Күйүк — кардарларга көрүнөт' : 'Включена — видна клиентам')
+            : (lang === 'kg' ? 'Өчүк — жашырылган' : 'Выключена — скрыта из оформления')}
+          onClick={() => {
+            const next = !(settings?.cashPaymentEnabled === true);
+            setSettings(p => ({ ...p, cashPaymentEnabled: next }));
+            haptic('light');
+            showToast?.(next
+              ? (lang === 'kg' ? 'Накталай төлөм күйгүзүлдү' : 'Наличные включены')
+              : (lang === 'kg' ? 'Накталай төлөм өчүрүлдү' : 'Наличные выключены'));
+          }} isLast
         />
       </Card>
 

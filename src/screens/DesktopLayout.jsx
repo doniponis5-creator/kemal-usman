@@ -169,8 +169,14 @@ export function DesktopLayout({
   const [deliveryType, setDeliveryType] = useState('pickup');
   const [address, setAddress] = useState('');
   const [comment, setComment] = useState('');
-  const [payMethod, setPayMethod] = useState('cash');
+  const [payMethod, setPayMethod] = useState('odengi');
   const [showPayQr, setShowPayQr] = useState(false);
+  const onlinePayOn = settings?.onlinePaymentEnabled !== false;
+  const cashPayOn = settings?.cashPaymentEnabled === true;
+  useEffect(() => {
+    if (payMethod === 'cash' && !cashPayOn) setPayMethod(onlinePayOn ? 'odengi' : 'cash');
+    else if (payMethod === 'odengi' && !onlinePayOn) setPayMethod(cashPayOn ? 'cash' : 'odengi');
+  }, [onlinePayOn, cashPayOn]);
   const [useBonus, setUseBonus] = useState(false);
   const [modalVariantId, setModalVariantId] = useState(null);
   const [modalImgIndex, setModalImgIndex] = useState(0);
@@ -2423,7 +2429,7 @@ export function DesktopLayout({
                     {[
                       { id: 'odengi', label: 'Онлайн', logo: <svg style={{width:22,height:22}} viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="#FF6B00" strokeWidth="2" fill="none"/><path d="M2 10h20" stroke="#FF6B00" strokeWidth="2"/></svg> },
                       { id: 'cash',  label: 'Наличные', logo: <CashLogo size={22} /> },
-                    ].filter(opt => opt.id !== 'odengi' || settings?.onlinePaymentEnabled !== false).map(pm => (
+                    ].filter(opt => (opt.id === 'odengi' ? onlinePayOn : opt.id === 'cash' ? cashPayOn : true)).map(pm => (
                       <div key={pm.id} onClick={() => setPayMethod(pm.id)}
                         style={{ flex: 1, padding: '10px 4px', textAlign: 'center', fontSize: 10,
                           letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',

@@ -95,7 +95,7 @@ import { GlassNavBar } from "./components/GlassNavBar";
 import { TRANSLATIONS, LangContext, useLang } from "./i18n/lang.jsx";
 import { T, card, inputStyle, btnGreen, btnOutline } from "./theme.js";
 import { IC } from "./icons.jsx";
-import { PAYMENT_METHODS, BG_PRESETS, DEFAULT_SETTINGS, FALLBACK_IMAGES, INITIAL_PRODUCTS, DEFAULT_BANNERS } from "./appData.js";
+import { BG_PRESETS, DEFAULT_SETTINGS, FALLBACK_IMAGES, INITIAL_PRODUCTS, DEFAULT_BANNERS } from "./appData.js";
 import { api } from "./api/backend.js";
 import { formatSum, pickName, pickDesc, generateReferralCode } from "./utils/format.js";
 import { withSuspense } from "./utils/lazyScreen.jsx";
@@ -3442,8 +3442,21 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
   const [deliveryType, setDeliveryType] = useState("delivery");
   const [address, setAddress] = useState("");
   const [editingAddress, setEditingAddress] = useState(false);
-  const [payMethod, setPayMethod] = useState(PAYMENT_METHODS[0].id);
+  const [payMethod, setPayMethod] = useState('odengi');
   const [showPayQr, setShowPayQr] = useState(false);
+
+  // To'lov usullari admin tomonidan boshqariladi:
+  //   onlinePaymentEnabled !== false → ОНЛАЙН ko'rinadi (default ON)
+  //   cashPaymentEnabled   === true  → НАЛИЧНЫЕ ko'rinadi (default OFF)
+  // Tanlangan usul admin tomonidan yashirilsa — mavjud usulga qaytaramiz,
+  // shunda checkout hech qachon yashirin usulni yubormaydi. Backend tegilmagan
+  // (eski/qo'lda cash buyurtmalar uchun 'cash' baribir ishlaydi).
+  const onlinePayOn = settings?.onlinePaymentEnabled !== false;
+  const cashPayOn = settings?.cashPaymentEnabled === true;
+  useEffect(() => {
+    if (payMethod === 'cash' && !cashPayOn) setPayMethod(onlinePayOn ? 'odengi' : 'cash');
+    else if (payMethod === 'odengi' && !onlinePayOn) setPayMethod(cashPayOn ? 'cash' : 'odengi');
+  }, [onlinePayOn, cashPayOn]);
 
   // Reverse-geocode current device location into a human-readable address.
   const getLocation = () => {
@@ -3826,7 +3839,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           {[
             { id: 'odengi', label: 'Онлайн оплата', logo: <svg style={{width:24,height:24,flexShrink:0,display:'block'}} viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" strokeWidth="1.8" fill="none"/><path d="M2 10h20" stroke="currentColor" strokeWidth="1.8"/><rect x="5" y="14" width="4" height="2" rx="1" fill="currentColor"/></svg> },
             { id: 'cash',  label: 'Наличные / Нак. акча', logo: <CashLogo size={24} /> },
-          ].filter(opt => opt.id !== 'odengi' || settings?.onlinePaymentEnabled !== false).map(opt => {
+          ].filter(opt => (opt.id === 'odengi' ? onlinePayOn : opt.id === 'cash' ? cashPayOn : true)).map(opt => {
             const selected = payMethod === opt.id;
             return (
               <motion.button
