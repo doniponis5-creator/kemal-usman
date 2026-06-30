@@ -2,18 +2,18 @@
 // Rule: all colors come from T — never hardcode hex in JSX.
 
 export const T = {
-  bg: "#F5F5F5",
-  bgSecond: "#EEEEEE",
-  white: "#FFFFFF",
-  accent: "#111111",
+  bg: "var(--ku-bg, #F5F5F5)",
+  bgSecond: "var(--ku-surface-2, #EEEEEE)",
+  white: "var(--ku-surface, #FFFFFF)",
+  accent: "var(--ku-accent, #111111)",
   accentDark: "#000000",
-  accentLight: "rgba(0,0,0,0.06)",
-  accentPale: "rgba(0,0,0,0.04)",
-  text: "#111111",
-  textSecond: "#666666",
-  textMuted: "#AEAEB2",
-  border: "#EEEEEE",
-  card: "#FFFFFF",
+  accentLight: "var(--ku-fill, rgba(0,0,0,0.06))",
+  accentPale: "var(--ku-fill-2, rgba(0,0,0,0.04))",
+  text: "var(--ku-text, #111111)",
+  textSecond: "var(--ku-text-2, #666666)",
+  textMuted: "var(--ku-text-3, #AEAEB2)",
+  border: "var(--ku-border, #EEEEEE)",
+  card: "var(--ku-surface, #FFFFFF)",
   // iOS premium depth — tight contact + soft ambient (y:8, blur:20, low opacity)
   shadow:   "0 1px 2px rgba(0,0,0,0.04), 0 8px 20px rgba(0,0,0,0.06)",
   shadowSm: "0 1px 3px rgba(0,0,0,0.05), 0 4px 10px rgba(0,0,0,0.04)",
@@ -35,7 +35,7 @@ export const card = (extra = {}) => ({
 });
 
 export const inputStyle = {
-  background: "#F5F5F5",
+  background: "var(--ku-surface-2, #F5F5F5)",
   border: "none",
   borderRadius: 12,
   color: T.text,
@@ -48,7 +48,7 @@ export const inputStyle = {
 };
 
 export const btnGreen = (extra = {}) => ({
-  background: "#111111",
+  background: "var(--ku-accent, #111111)",
   color: "#fff",
   border: "none",
   borderRadius: 14,

@@ -15,6 +15,17 @@ import App from './App.jsx'
 // PRO: configure native iOS / Android shell — status bar style, splash hide, keyboard adjust.
 // Each plugin is dynamically imported and silently no-ops on web.
 async function initNativeShell() {
+  // Native only: drive [data-theme] from the system so the dark token set
+  // applies. Web never gets data-theme => stays on the light :root values.
+  try {
+    const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (isNative) {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const applyTheme = () => { document.documentElement.dataset.theme = mq.matches ? 'dark' : 'light'; };
+      applyTheme();
+      if (mq.addEventListener) mq.addEventListener('change', applyTheme);
+    }
+  } catch { /* web */ }
   try {
     const sbMod = await import(/* @vite-ignore */ '@capacitor/' + 'status-bar')
     if (sbMod?.StatusBar) {

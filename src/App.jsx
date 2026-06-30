@@ -176,7 +176,7 @@ function NavBar({ items, active, onSelect }) {
             onClick={() => handleSelect(item.id)}
             whileTap={{ scale: 0.92 }}
             transition={{ duration: 0.18 }}
-            style={{ width: 52, height: 52, borderRadius: "50%", background: "#111111", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transform: "translateY(-12px)" }}>
+            style={{ width: 52, height: 52, borderRadius: "50%", background: "var(--ku-accent, #111111)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", boxShadow: "0 4px 16px rgba(0,0,0,0.25)", transform: "translateY(-12px)" }}>
             {React.cloneElement(item.icon, { style: { width: 24, height: 24 } })}
           </motion.button>
         );
@@ -354,10 +354,10 @@ function CropModal({ src, onDone, onCancel }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: '#111', textAlign: 'center', marginBottom: 4 }}>Обрезать фото</div>
-        <div style={{ fontSize: 12, color: '#AEAEB2', textAlign: 'center', marginBottom: 16 }}>Перетащите фото на нужное место</div>
-        <div style={{ position: 'relative', margin: '0 auto 16px', width: SIZE, height: SIZE, borderRadius: 14, overflow: 'hidden', cursor: 'grab', border: '2px solid #111', background: '#fff' }}>
+      <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ku-text, #111111)", textAlign: 'center', marginBottom: 4 }}>Обрезать фото</div>
+        <div style={{ fontSize: 12, color: "var(--ku-text-3, #AEAEB2)", textAlign: 'center', marginBottom: 16 }}>Перетащите фото на нужное место</div>
+        <div style={{ position: 'relative', margin: '0 auto 16px', width: SIZE, height: SIZE, borderRadius: 14, overflow: 'hidden', cursor: 'grab', border: '2px solid #111', background: "var(--ku-surface, #FFFFFF)" }}>
           <canvas
             ref={canvasRef}
             width={SIZE}
@@ -368,19 +368,19 @@ function CropModal({ src, onDone, onCancel }) {
             onTouchStart={onMouseDown}
             onTouchMove={onMouseMove}
             onTouchEnd={onMouseUp}
-            style={{ display: 'block', touchAction: 'none', background: '#fff' }}
+            style={{ display: 'block', touchAction: 'none', background: "var(--ku-surface, #FFFFFF)" }}
           />
           {[[0, 0], [SIZE - 20, 0], [0, SIZE - 20], [SIZE - 20, SIZE - 20]].map(([x, y], i) => (
             <div key={i} style={{ position: 'absolute', left: x, top: y, width: 20, height: 20, borderTop: i < 2 ? '3px solid #111' : 'none', borderBottom: i >= 2 ? '3px solid #111' : 'none', borderLeft: i % 2 === 0 ? '3px solid #111' : 'none', borderRight: i % 2 !== 0 ? '3px solid #111' : 'none' }} />
           ))}
         </div>
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: '#AEAEB2', marginBottom: 6, textAlign: 'center' }}>Масштаб</div>
+          <div style={{ fontSize: 11, color: "var(--ku-text-3, #AEAEB2)", marginBottom: 6, textAlign: 'center' }}>Масштаб</div>
           <input type="range" min={0.3} max={3} step={0.01} value={scale} onChange={e => setScale(Number(e.target.value))} style={{ width: '100%' }} />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: 14, borderRadius: 12, border: '1px solid #eee', background: '#f5f5f5', fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#666' }}>Отмена</button>
-          <button onClick={handleDone} style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: '#111', fontSize: 14, fontWeight: 700, cursor: 'pointer', color: '#fff' }}>Готово ✓</button>
+          <button onClick={onCancel} style={{ flex: 1, padding: 14, borderRadius: 12, border: '1px solid var(--ku-border, #EEEEEE)', background: "var(--ku-surface-2, #F5F5F5)", fontSize: 14, fontWeight: 600, cursor: 'pointer', color: "var(--ku-text-2, #666666)" }}>Отмена</button>
+          <button onClick={handleDone} style={{ flex: 1, padding: 14, borderRadius: 12, border: 'none', background: "var(--ku-accent, #111111)", fontSize: 14, fontWeight: 700, cursor: 'pointer', color: '#fff' }}>Готово ✓</button>
         </div>
       </div>
     </div>
@@ -469,7 +469,7 @@ export function BannerCropModal({ src, onDone, onCancel }) {
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 99990,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: '#111', borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
+      <div style={{ background: "var(--ku-accent, #111111)", borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', textAlign: 'center', marginBottom: 2 }}>
           Баннер (Десктоп)
         </div>
@@ -504,7 +504,7 @@ export function BannerCropModal({ src, onDone, onCancel }) {
           </button>
           <button onClick={handleDone}
             style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
-              background: '#C9A84C', fontSize: 14, fontWeight: 700, cursor: 'pointer', color: '#111' }}>
+              background: '#C9A84C', fontSize: 14, fontWeight: 700, cursor: 'pointer', color: "var(--ku-text, #111111)" }}>
             Готово ✓
           </button>
         </div>
@@ -628,7 +628,7 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                 }}
               >
                 {imgUrl ? (
-                  <img src={imgUrl} style={{ width: "100%", height: "100%", objectFit: "cover", background: "#fff" }} alt="" />
+                  <img src={imgUrl} style={{ width: "100%", height: "100%", objectFit: "cover", background: "var(--ku-surface, #FFFFFF)" }} alt="" />
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, color: "#C7C7CC" }}>
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -641,7 +641,7 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                 {isCover && (
                   <div style={{
                     position: "absolute", top: 6, left: 6,
-                    background: "#111", color: "#fff",
+                    background: "var(--ku-accent, #111111)", color: "#fff",
                     fontSize: 9, fontWeight: 700, letterSpacing: 0.3,
                     borderRadius: 6, padding: "3px 8px",
                     boxShadow: "0 2px 6px rgba(0,0,0,0.25)",
@@ -660,20 +660,20 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                   }}>
                     {/* Replace */}
                     <button onClick={(e) => { e.stopPropagation(); fileRefs[i].current?.click(); }}
-                      style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "#111", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                      style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </button>
                     {/* Move left */}
                     {i > 0 && images[i-1] && (
                       <button onClick={(e) => { e.stopPropagation(); moveImage(i, -1); }}
-                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "#111", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
                       </button>
                     )}
                     {/* Move right */}
                     {i < 2 && images[i+1] && (
                       <button onClick={(e) => { e.stopPropagation(); moveImage(i, 1); }}
-                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "#111", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                       </button>
                     )}
@@ -886,7 +886,7 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
             <div key={i} style={{ flex: 1, height: 2.5, borderRadius: 2, background: 'rgba(255,255,255,0.25)', overflow: 'hidden' }}>
               <div
                 style={{
-                  height: '100%', borderRadius: 2, background: '#fff',
+                  height: '100%', borderRadius: 2, background: "var(--ku-surface, #FFFFFF)",
                   width: i < itemIdx ? '100%' : i === itemIdx ? `${progress * 100}%` : '0%',
                   transition: i === itemIdx ? 'none' : 'width 0.2s',
                 }}
@@ -1142,12 +1142,12 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
                 }
               }}
               style={{
-                flex: 1, background: '#fff', color: '#111', border: 'none',
+                flex: 1, background: "var(--ku-surface, #FFFFFF)", color: "var(--ku-text, #111111)", border: 'none',
                 padding: '15px 20px', borderRadius: 16, fontSize: 15, fontWeight: 700,
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--ku-text, #111111)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
                 <path d="M16 10a4 4 0 01-8 0"/>
               </svg>
@@ -1213,7 +1213,7 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
                 padding: gi === groupIdx ? 2 : 0,
               }}>
                 {gi === groupIdx ? (
-                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: "var(--ku-accent, #111111)", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <span style={{ fontSize: 15 }}>{g.icon}</span>
                   </div>
                 ) : (
@@ -1367,8 +1367,8 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
   const inp = {
     width: "100%", padding: "14px 16px", fontSize: 15,
-    background: "#F5F5F5", border: "1px solid #E5E5EA",
-    borderRadius: 14, color: "#111", outline: "none", boxSizing: "border-box",
+    background: "var(--ku-surface-2, #F5F5F5)", border: "1px solid #E5E5EA",
+    borderRadius: 14, color: "var(--ku-text, #111111)", outline: "none", boxSizing: "border-box",
   };
   const lbl = { fontSize: 10, color: "#8E8E93", marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
 
@@ -1390,7 +1390,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
             transition={{ type: "spring", damping: 28, stiffness: 300 }}
             style={{
               position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 9999,
-              background: "#fff", borderRadius: "24px 24px 0 0",
+              background: "var(--ku-surface, #FFFFFF)", borderRadius: "24px 24px 0 0",
               padding: "28px 20px", paddingBottom: "calc(28px + env(safe-area-inset-bottom, 0px))",
               maxHeight: "90vh", overflowY: "auto",
               boxShadow: "0 -8px 40px rgba(0,0,0,0.15)",
@@ -1400,7 +1400,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
             <div style={{ width: 36, height: 4, borderRadius: 2, background: "#E0E0E0", margin: "0 auto 20px" }} />
 
             {/* Title */}
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 4, textAlign: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4, textAlign: "center" }}>
               {lang === "ru" ? "Регистрация" : "Катталуу"}
             </div>
             <div style={{ fontSize: 13, color: "#8E8E93", marginBottom: 20, textAlign: "center" }}>
@@ -1434,7 +1434,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
                 {/* Referral */}
                 <div style={{ marginBottom: 14 }}>
-                  <button onClick={() => setShowRefInput(p => !p)} style={{ background: "none", border: "none", color: "#AEAEB2", fontSize: 12, cursor: "pointer", padding: 0, letterSpacing: 0.5 }}>
+                  <button onClick={() => setShowRefInput(p => !p)} style={{ background: "none", border: "none", color: "var(--ku-text-3, #AEAEB2)", fontSize: 12, cursor: "pointer", padding: 0, letterSpacing: 0.5 }}>
                     {lang === "ru" ? "Есть реферальный код? +" : "Реферал код барбы? +"}
                   </button>
                   {showRefInput && (
@@ -1452,7 +1452,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                 )}
 
                 <button onClick={handleRequestOtp} disabled={otpLoading} style={{
-                  width: "100%", padding: "16px", background: "#111", border: "none",
+                  width: "100%", padding: "16px", background: "var(--ku-accent, #111111)", border: "none",
                   borderRadius: 14, fontSize: 14, fontWeight: 700, color: "#fff",
                   cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
                   opacity: otpLoading ? 0.6 : 1,
@@ -1478,7 +1478,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                 )}
 
                 <button onClick={handleVerifyOtp} disabled={otpLoading} style={{
-                  width: "100%", padding: "16px", background: "#111", border: "none",
+                  width: "100%", padding: "16px", background: "var(--ku-accent, #111111)", border: "none",
                   borderRadius: 14, fontSize: 14, fontWeight: 700, color: "#fff",
                   cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
                   marginBottom: 10, opacity: otpLoading ? 0.6 : 1,
@@ -1633,8 +1633,8 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   if (desktopMode) {
     const inputDesktop = {
       width: '100%', padding: '13px 16px', fontSize: 15,
-      background: '#F5F5F5', border: '1px solid #E5E5EA',
-      borderRadius: 14, color: '#111', outline: 'none',
+      background: "var(--ku-surface-2, #F5F5F5)", border: '1px solid #E5E5EA',
+      borderRadius: 14, color: "var(--ku-text, #111111)", outline: 'none',
       boxSizing: 'border-box',
     };
     const labelDesktop = { fontSize: 10, color: '#8E8E93', marginBottom: 6, letterSpacing: 2, textTransform: 'uppercase' };
@@ -1667,7 +1667,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
             {/* Referral */}
             <div style={{ width: '100%', marginBottom: 14 }}>
-              <button onClick={() => setShowRefInput(p => !p)} style={{ background: 'none', border: 'none', color: '#AEAEB2', fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
+              <button onClick={() => setShowRefInput(p => !p)} style={{ background: 'none', border: 'none', color: "var(--ku-text-3, #AEAEB2)", fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
                 {lang === 'ru' ? 'Есть реферальный код? +' : 'Реферал код барбы? +'}
               </button>
               {showRefInput && (
@@ -1686,7 +1686,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
             <button onClick={handleRequestOtp} disabled={otpLoading} style={{
               width: '100%', padding: '15px',
-              background: '#111', border: 'none',
+              background: "var(--ku-accent, #111111)", border: 'none',
               borderRadius: 12, fontSize: 14, fontWeight: 700,
               color: '#fff', cursor: otpLoading ? 'default' : 'pointer', letterSpacing: 2,
               marginBottom: 14, boxSizing: 'border-box',
@@ -1715,7 +1715,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
 
             <button onClick={handleVerifyOtp} disabled={otpLoading} style={{
               width: '100%', padding: '15px',
-              background: '#111', border: 'none',
+              background: "var(--ku-accent, #111111)", border: 'none',
               borderRadius: 12, fontSize: 14, fontWeight: 700,
               color: '#fff', cursor: otpLoading ? 'default' : 'pointer', letterSpacing: 2,
               marginBottom: 10, boxSizing: 'border-box',
@@ -1921,7 +1921,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           {/* Request-code button — disabled while in flight */}
           <button onClick={handleRequestOtp} disabled={otpLoading} style={{
             width: "100%", padding: "15px",
-            background: "#111",
+            background: "var(--ku-accent, #111111)",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 12, fontSize: 14, fontWeight: 700,
             color: "#fff", cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
@@ -1965,7 +1965,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           {/* Verify button */}
           <button onClick={handleVerifyOtp} disabled={otpLoading} style={{
             width: "100%", padding: "15px",
-            background: "#111",
+            background: "var(--ku-accent, #111111)",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 12, fontSize: 14, fontWeight: 700,
             color: "#fff", cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
@@ -2134,7 +2134,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
         left: 0,
         right: 0,
         zIndex: 2000,
-        background: "#fff",
+        background: "var(--ku-surface, #FFFFFF)",
         borderRadius: isMobile ? "0 0 16px 16px" : 16,
         boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
         maxHeight: isMobile ? "60vh" : 480,
@@ -2171,7 +2171,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
               width: isMobile ? 48 : 56,
               height: isMobile ? 48 : 56,
               borderRadius: 10,
-              background: "#FFFFFF",
+              background: "var(--ku-surface, #FFFFFF)",
               border: "1px solid #F2F2F7",
               overflow: "hidden",
               flexShrink: 0,
@@ -2194,7 +2194,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
               <div style={{
                 fontSize: isMobile ? 14 : 15,
                 fontWeight: 600,
-                color: "#111",
+                color: "var(--ku-text, #111111)",
                 lineHeight: 1.3,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -2219,7 +2219,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
                 <>
                   {si ? (
                     <>
-                      <div style={{ fontSize: 11, color: "#AEAEB2", textDecoration: "line-through" }}>
+                      <div style={{ fontSize: 11, color: "var(--ku-text-3, #AEAEB2)", textDecoration: "line-through" }}>
                         {price.toLocaleString()} сом
                       </div>
                       <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "#E53935" }}>
@@ -2227,7 +2227,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
                       </div>
                     </>
                   ) : (
-                    <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "#111" }}>
+                    <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "var(--ku-text, #111111)" }}>
                       {price > 0 ? `от ${price.toLocaleString()} сом` : ""}
                     </div>
                   )}
@@ -2236,7 +2236,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
             </div>
             {/* Arrow */}
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, opacity: 0.3 }}>
-              <path d="M9 18l6-6-6-6" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M9 18l6-6-6-6" stroke="var(--ku-text, #111111)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </motion.div>
         );
@@ -2386,7 +2386,7 @@ function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
   const containerStyle = {
     width: "100%",
     height: isCard ? 200 : 260,
-    background: "#FFFFFF",
+    background: "var(--ku-surface, #FFFFFF)",
     position: "relative",
     overflow: "hidden",
   };
@@ -2432,7 +2432,7 @@ function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
         }}
       >
         {React.cloneElement(IC.bottle, { style: { width: isCard ? 44 : 56, height: isCard ? 44 : 56, color: "#D1D1D6" } })}
-        <span style={{ fontSize: isCard ? 10 : 12, fontWeight: 500, color: "#AEAEB2", letterSpacing: 0.3 }}>
+        <span style={{ fontSize: isCard ? 10 : 12, fontWeight: 500, color: "var(--ku-text-3, #AEAEB2)", letterSpacing: 0.3 }}>
           {lang === 'kg' ? 'Сүрөт жок' : 'Нет фото'}
         </span>
       </div>
@@ -2466,7 +2466,7 @@ function AppDownloadBanner({ settings }) {
       transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
       style={{
         margin: "0 16px 12px", padding: "10px 12px", borderRadius: 14,
-        background: "#111111", display: "flex", alignItems: "center", gap: 10,
+        background: "var(--ku-accent, #111111)", display: "flex", alignItems: "center", gap: 10,
         boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
       }}
     >
@@ -2476,7 +2476,7 @@ function AppDownloadBanner({ settings }) {
         <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11 }}>Удобнее, быстрее и с уведомлениями о заказе</div>
       </div>
       <a href={url} target="_blank" rel="noopener noreferrer"
-        style={{ background: "#fff", color: "#111", borderRadius: 999, padding: "7px 14px", fontSize: 12, fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>
+        style={{ background: "var(--ku-surface, #FFFFFF)", color: "var(--ku-text, #111111)", borderRadius: 999, padding: "7px 14px", fontSize: 12, fontWeight: 700, textDecoration: "none", flexShrink: 0 }}>
         Скачать
       </a>
       <button
@@ -2566,7 +2566,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
           {p?.isAuthor && (
             <div style={{
               display: "inline-flex", alignItems: "center", gap: 4,
-              background: "#111", color: "#fff", borderRadius: 8,
+              background: "var(--ku-accent, #111111)", color: "#fff", borderRadius: 8,
               padding: "3px 9px 3px 6px", fontSize: 10, fontWeight: 700,
               letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
               boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
@@ -2602,10 +2602,10 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
               saleMinP !== null ? (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                   <span style={{ color: '#FF3B30', fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(saleMinP)}</span>
-                  <span style={{ color: '#AEAEB2', fontSize: 12, textDecoration: 'line-through' }}>{formatSum(minP)}</span>
+                  <span style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 12, textDecoration: 'line-through' }}>{formatSum(minP)}</span>
                 </div>
               ) : minP > 0 ? (
-                <span style={{ color: "#111111", fontWeight: 600, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(minP)}</span>
+                <span style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(minP)}</span>
               ) : (
                 <span style={{ color: "#8E8E93", fontWeight: 600, fontSize: 13, letterSpacing: -0.2 }}>{lang === 'kg' ? 'Баасы такталууда' : 'Цена уточняется'}</span>
               )
@@ -2879,7 +2879,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               position: "relative",
               width: "100%",
               height: heroHeight,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "var(--ku-surface, #FFFFFF)",
               overflow: "hidden",
             }}
             onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
@@ -2983,7 +2983,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
             style={{
-            background: "#FFFFFF",
+            background: "var(--ku-surface, #FFFFFF)",
             borderTopLeftRadius: 24,
             borderTopRightRadius: 24,
             marginTop: -24,
@@ -2999,8 +2999,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           }}>
 
             <div style={{ marginBottom: 20 }}>
-              <div style={{ color: "#AEAEB2", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
-              <div style={{ color: "#111", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 8 }}>{pickName(detail, lang)}</div>
+              <div style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
+              <div style={{ color: "var(--ku-text, #111111)", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 8 }}>{pickName(detail, lang)}</div>
               {/* Sale badge + countdown in detail */}
               {(() => {
                 const si = getSaleInfo(detail);
@@ -3027,7 +3027,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       background: "none",
                       border: "none",
                       padding: 0,
-                      color: "#111",
+                      color: "var(--ku-text, #111111)",
                       fontSize: 13,
                       fontWeight: 600,
                       letterSpacing: -0.1,
@@ -3045,7 +3045,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             <div style={{ height: 1, background: "#F2F2F7", marginBottom: 20 }} />
 
             <div style={{ marginBottom: 20 }}>
-              <div style={{ color: "#111", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
+              <div style={{ color: "var(--ku-text, #111111)", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
                 {detail.variants.filter(v => v.inStock).map((v, i) => {
                   const isSel = selVariant?.id === v.id;
@@ -3138,14 +3138,14 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                         <span style={{ color: "#FF3B30", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
                           {formatSum(salePrice(selVariant.price, si.percent))}
                         </span>
-                        <span style={{ color: "#AEAEB2", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
+                        <span style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
                           {formatSum(selVariant.price)}
                         </span>
                       </>
                     );
                   }
                   return (
-                    <span style={{ color: "#111", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
+                    <span style={{ color: "var(--ku-text, #111111)", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
                       {formatSum(selVariant.price)}
                     </span>
                   );
@@ -3208,7 +3208,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           zIndex: 20,
           overflow: "hidden",
         } : {
-          background: "#fff",
+          background: "var(--ku-surface, #FFFFFF)",
           paddingTop: "max(44px, env(safe-area-inset-top, 44px))",
           position: "sticky",
           top: 0,
@@ -3251,7 +3251,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   exit={{ opacity: 0, scale: 0.6 }}
                   transition={{ type: "spring", stiffness: 420, damping: 28 }}
                   onClick={() => setSearch("")}
-                  style={{ background: "none", border: "none", padding: 2, cursor: "pointer", display: "flex", alignItems: "center", color: "#AEAEB2", flexShrink: 0 }}
+                  style={{ background: "none", border: "none", padding: 2, cursor: "pointer", display: "flex", alignItems: "center", color: "var(--ku-text-3, #AEAEB2)", flexShrink: 0 }}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </motion.button>
@@ -3310,7 +3310,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       : '0 0 0 rgba(0,0,0,0)',
                   }}
                   transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "0.5px solid #EEEEEE"), fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)" } : {}) }}
+                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "0.5px solid var(--ku-border, #EEEEEE)"), fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)" } : {}) }}
                 >
                   {c === "all" ? t.allCategories : c}
                 </motion.button>
@@ -3333,7 +3333,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           aria-label={lang === 'kg' ? 'Иргөө' : 'Сортировка'}
           style={{
             width: 36, height: 36, borderRadius: 18,
-            border: sort !== 'default' ? 'none' : '0.5px solid #EEE',
+            border: sort !== 'default' ? 'none' : '0.5px solid var(--ku-border, #EEEEEE)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', flexShrink: 0,
           }}
@@ -3430,14 +3430,14 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{
-                      width: 30, height: 30, borderRadius: "50%", background: "#111",
+                      width: 30, height: 30, borderRadius: "50%", background: "var(--ku-accent, #111111)",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       color: "#fff", fontSize: 11, fontWeight: 600,
                     }}>
                       {(r.name || "?").charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>{r.name}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text, #111111)" }}>{r.name}</div>
                       {r.city && <div style={{ fontSize: 10, color: "rgba(0,0,0,0.35)" }}>{r.city}</div>}
                     </div>
                   </div>
@@ -3558,7 +3558,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "calc(var(--nav-height) + 100px)" /* navbar + sticky checkout button + breathing room */ }}>
-      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "#111", background: "#f5f5f5" }}>{t.cart}</div>
+      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "var(--ku-text, #111111)", background: "var(--ku-surface-2, #F5F5F5)" }}>{t.cart}</div>
       {/* Items — PRO: AnimatePresence makes adds spring in, removes swipe out */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         <AnimatePresence initial={false}>
@@ -3635,7 +3635,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       style={{
                         position: "absolute",
                         inset: 0,
-                        background: "#FFFFFF",
+                        background: "var(--ku-surface, #FFFFFF)",
                         borderRadius: 10,
                         boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                       }}
@@ -3695,7 +3695,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       background: "transparent",
                       fontSize: 15,
                       fontWeight: 500,
-                      color: "#111",
+                      color: "var(--ku-text, #111111)",
                       padding: 0,
                       fontFamily: "inherit",
                       letterSpacing: -0.2,
@@ -3770,8 +3770,8 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       </div>
       {/* Comment */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ background: "#fff", border: "0.5px solid #E5E5EA", borderRadius: 16, padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "#AEAEB2", marginBottom: 10 }}>Комментарий к заказу</div>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", border: "0.5px solid #E5E5EA", borderRadius: 16, padding: 14, marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: "var(--ku-text-3, #AEAEB2)", marginBottom: 10 }}>Комментарий к заказу</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {[
               { icon: "📞", text: "Позвоните перед доставкой", value: "Позвоните перед доставкой" },
@@ -3826,7 +3826,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
             initial={false}
             whileFocus={{
               boxShadow: "0 0 0 3px rgba(10, 132, 255, 0.20)",
-              backgroundColor: "#FFFFFF",
+              backgroundColor: "var(--ku-surface, #FFFFFF)",
             }}
             transition={{ duration: 0.18 }}
             style={{
@@ -3834,7 +3834,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               minHeight: 56,
               fontSize: 14,
               fontWeight: 500,
-              color: "#111",
+              color: "var(--ku-text, #111111)",
               padding: "12px 14px",
               background: "#F2F2F7",
               border: "none",
@@ -3925,7 +3925,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               <div style={{ color: T.textMuted, fontSize: 12 }}>{formatSum(bonusBalance)} · {t.maxDiscount} {useBonusPercent}%</div>
             </div>
             <div onClick={() => setUseBonus(v => !v)} style={{ width: 48, height: 28, borderRadius: 14, background: useBonus ? T.accent : T.border, cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
-              <div style={{ position: "absolute", top: 3, left: useBonus ? 23 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+              <div style={{ position: "absolute", top: 3, left: useBonus ? 23 : 3, width: 22, height: 22, borderRadius: "50%", background: "var(--ku-surface, #FFFFFF)", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
             </div>
           </div>
         </div>
@@ -4027,7 +4027,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
   }
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      <div style={{ padding: "52px 16px 14px", fontSize: 26, fontWeight: 800, color: "#111" }}>{t.myOrders}</div>
+      <div style={{ padding: "52px 16px 14px", fontSize: 26, fontWeight: 800, color: "var(--ku-text, #111111)" }}>{t.myOrders}</div>
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         <AnimatePresence initial={false}>
           {orders.slice().reverse().map((order, i) => (
@@ -4103,7 +4103,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={() => { setReviewOrderId(order.id); setReviewText(''); setReviewRating(5); }}
-                    style={{ background: 'none', border: '1px solid #111', borderRadius: 20, padding: '5px 14px', fontSize: 11, fontWeight: 600, color: '#111', cursor: 'pointer' }}>
+                    style={{ background: 'none', border: '1px solid #111', borderRadius: 20, padding: '5px 14px', fontSize: 11, fontWeight: 600, color: "var(--ku-text, #111111)", cursor: 'pointer' }}>
                     {lang === 'kg' ? 'Пикир калтыруу' : 'Оставить отзыв'}
                   </motion.button>
                 )}
@@ -4120,7 +4120,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                   animate={{ opacity: 1, height: 'auto' }}
                   style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid #F2F2F7' }}>
                   <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111', marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text, #111111)", marginBottom: 8 }}>
                       {lang === 'kg' ? 'Баа бериңиз:' : 'Ваша оценка:'}
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
@@ -4713,7 +4713,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
         exit={{ y: '100%' }}
         transition={{ type: 'spring', stiffness: 320, damping: 32 }}
         style={{
-          background: '#fff',
+          background: "var(--ku-surface, #FFFFFF)",
           borderRadius: '24px 24px 0 0',
           width: '100%', maxWidth: 460,
           paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0))',
@@ -4731,7 +4731,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
           textAlign: 'center',
           borderBottom: phase === 'waiting' ? '0.5px solid rgba(0,0,0,0.06)' : 'none',
         }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#111', letterSpacing: -0.3 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--ku-text, #111111)", letterSpacing: -0.3 }}>
             Онлайн оплата
           </div>
           <motion.div
@@ -4788,7 +4788,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                   src={paymentData.qr_url} alt="QR"
                   style={{
                     width: 180, height: 180, display: 'block',
-                    borderRadius: 12, border: '1px solid #eee',
+                    borderRadius: 12, border: '1px solid var(--ku-border, #EEEEEE)',
                   }}
                 />
                 <div style={{ fontSize: 12, color: '#8E8E93', marginTop: 10, letterSpacing: 0.2 }}>
@@ -4800,7 +4800,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
             {/* Divider with text */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 16px' }}>
               <div style={{ flex: 1, height: 0.5, background: '#E5E5EA' }} />
-              <span style={{ fontSize: 11, color: '#AEAEB2', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>или</span>
+              <span style={{ fontSize: 11, color: "var(--ku-text-3, #AEAEB2)", fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>или</span>
               <div style={{ flex: 1, height: 0.5, background: '#E5E5EA' }} />
             </div>
 
@@ -4893,7 +4893,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
               initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.25 }}
             >
-              <div style={{ fontSize: 20, fontWeight: 800, color: '#111', marginBottom: 4 }}>Оплата прошла!</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4 }}>Оплата прошла!</div>
               <div style={{ fontSize: 14, color: '#8E8E93' }}>Заказ успешно оплачен</div>
             </motion.div>
           </motion.div>
@@ -4918,14 +4918,14 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                 <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/>
               </svg>
             </motion.div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#111', marginBottom: 6 }}>Ошибка оплаты</div>
+            <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ku-text, #111111)", marginBottom: 6 }}>Ошибка оплаты</div>
             <div style={{ fontSize: 13, color: '#8E8E93', marginBottom: 24, lineHeight: 1.5, padding: '0 12px' }}>{error}</div>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleCancel}
               style={{
                 padding: '14px 32px',
-                background: '#111', color: '#fff', border: 'none',
+                background: "var(--ku-accent, #111111)", color: '#fff', border: 'none',
                 borderRadius: 14, fontSize: 15, fontWeight: 700,
                 cursor: 'pointer', letterSpacing: -0.2,
               }}
@@ -5026,7 +5026,7 @@ function OrderReceipt({ order, settings, onClose }) {
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
         transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-        style={{ background: '#fff', borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
+        style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
       >
         <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5EA', margin: '0 auto 16px' }} />
 
@@ -5042,7 +5042,7 @@ function OrderReceipt({ order, settings, onClose }) {
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </motion.div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#111', marginBottom: 4 }}>Заказ оформлен!</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4 }}>Заказ оформлен!</div>
           <div style={{ fontSize: 13, color: '#8E8E93' }}>Заказ №{order.id}</div>
         </div>
 
@@ -5050,7 +5050,7 @@ function OrderReceipt({ order, settings, onClose }) {
         <div style={{ background: '#FAFAFA', borderRadius: 14, padding: '16px', marginBottom: 16, border: '1px solid #F2F2F7' }}>
           {/* Dashed top border for receipt feel */}
           <div style={{ borderBottom: '1px dashed #E0E0E0', paddingBottom: 12, marginBottom: 12 }}>
-            <div style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: '#AEAEB2', fontWeight: 700, textAlign: 'center' }}>Kemal Usman Parfum</div>
+            <div style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: "var(--ku-text-3, #AEAEB2)", fontWeight: 700, textAlign: 'center' }}>Kemal Usman Parfum</div>
             <div style={{ fontSize: 10, color: '#CCC', textAlign: 'center', marginTop: 2 }}>{order.date}</div>
           </div>
 
@@ -5061,7 +5061,7 @@ function OrderReceipt({ order, settings, onClose }) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#3A3A3C', lineHeight: 1.3 }}>{item.name}</div>
                 <div style={{ fontSize: 11, color: '#8E8E93' }}>{item.qty} шт. × {item.price.toLocaleString()} сом</div>
               </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#111', flexShrink: 0, marginLeft: 8 }}>{(item.price * item.qty).toLocaleString()} сом</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ku-text, #111111)", flexShrink: 0, marginLeft: 8 }}>{(item.price * item.qty).toLocaleString()} сом</div>
             </div>
           ))}
 
@@ -5083,8 +5083,8 @@ function OrderReceipt({ order, settings, onClose }) {
           </div>
 
           <div style={{ borderTop: '1.5px solid #E0E0E0', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 16, fontWeight: 800, color: '#111' }}>Итого</span>
-            <span style={{ fontSize: 18, fontWeight: 900, color: '#111' }}>{(order.total || 0).toLocaleString()} сом</span>
+            <span style={{ fontSize: 16, fontWeight: 800, color: "var(--ku-text, #111111)" }}>Итого</span>
+            <span style={{ fontSize: 18, fontWeight: 900, color: "var(--ku-text, #111111)" }}>{(order.total || 0).toLocaleString()} сом</span>
           </div>
         </div>
 
@@ -5961,7 +5961,7 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
             ))}
           </div>
         ) : (
-          <span style={{ fontSize: 10, fontWeight: 600, color: '#666', whiteSpace: 'nowrap', letterSpacing: -0.1 }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--ku-text-2, #666666)", whiteSpace: 'nowrap', letterSpacing: -0.1 }}>
             {t.listenBtn || (isRu ? 'Слушать' : 'Угуу')}
           </span>
         )}
@@ -7153,7 +7153,7 @@ export default function App() {
           {/* Right — white login card */}
           <div style={{
             width: 480, flexShrink: 0,
-            background: '#fff',
+            background: "var(--ku-surface, #FFFFFF)",
             display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center',
             padding: '48px 52px',
@@ -7177,10 +7177,10 @@ export default function App() {
 
             {/* Logo mark */}
             <div style={{ marginBottom: 36, textAlign: 'center' }}>
-              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 5, textTransform: 'uppercase', color: '#111' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 5, textTransform: 'uppercase', color: "var(--ku-text, #111111)" }}>
                 Kemal Usman
               </div>
-              <div style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: '#AEAEB2', marginTop: 4 }}>
+              <div style={{ fontSize: 9, letterSpacing: 4, textTransform: 'uppercase', color: "var(--ku-text-3, #AEAEB2)", marginTop: 4 }}>
                 Parfum
               </div>
             </div>
@@ -7318,14 +7318,14 @@ export default function App() {
       ) : isDesktop && isAdmin ? (
         /* ── DESKTOP ADMIN WRAPPER — no mobile CSS vars, no NavBar ── */
         <div style={{
-          width: '100%', minHeight: '100vh', background: '#fff',
+          width: '100%', minHeight: '100vh', background: "var(--ku-surface, #FFFFFF)",
           fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif",
-          color: '#111',
+          color: "var(--ku-text, #111111)",
         }}>
           {/* Sticky black top bar */}
           <div style={{
             position: 'sticky', top: 0, zIndex: 100,
-            background: '#111', padding: '0 48px',
+            background: "var(--ku-accent, #111111)", padding: '0 48px',
             height: 56, display: 'flex', alignItems: 'center',
             justifyContent: 'space-between',
           }}>
@@ -7542,13 +7542,13 @@ export default function App() {
           : (!hasNativeBar && <GlassNavBar items={USER_NAV} active={screen} onSelect={setScreen} />)}
         {showAdminLogin && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowAdminLogin(false)}>
-            <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
+            <div onClick={e => e.stopPropagation()} style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
               <div style={{ marginBottom: 10 }}>
-                <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+                <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
               </div>
               <div style={{ position: "relative", marginBottom: 8 }}>
-                <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+                <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
                 <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93", fontSize: 11, fontWeight: 600, letterSpacing: 0.2 }}>
                   {adminShowPass ? (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -7566,8 +7566,8 @@ export default function App() {
               </label>
               {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
-                <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
+                <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
+                <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
               </div>
             </div>
           </div>
@@ -7577,13 +7577,13 @@ export default function App() {
       {/* ── DESKTOP ADMIN LOGIN MODAL — rendered at root level so it works on desktop too ── */}
       {showAdminLogin && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowAdminLogin(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#111", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 20, textAlign: "center", letterSpacing: -0.3 }}>{t.adminPanel}</div>
             <div style={{ marginBottom: 10 }}>
-              <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+              <input type="email" autoComplete="username" value={adminLoginEmail} onChange={e => { setAdminLoginEmail(e.target.value); setAdminLoginErr(""); }} placeholder="admin@kemalusman.kg" style={{ width: "100%", padding: "14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} autoFocus onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
             </div>
             <div style={{ position: "relative", marginBottom: 8 }}>
-              <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
+              <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
               <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93" }}>
                 {adminShowPass ? (
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -7601,8 +7601,8 @@ export default function App() {
             </label>
             {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid #eee", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
-              <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "#111", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
+              <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "#f7f7f8", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "#3A3A3C" }}>{t.cancel}</button>
+              <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
             </div>
           </div>
         </div>
@@ -7615,7 +7615,7 @@ export default function App() {
             onClick={e => e.stopPropagation()}
             style={{
               position: "absolute", bottom: 0, left: 0, right: 0,
-              background: "#fff", borderRadius: "24px 24px 0 0",
+              background: "var(--ku-surface, #FFFFFF)", borderRadius: "24px 24px 0 0",
               maxHeight: "80vh", overflowY: "auto",
               paddingBottom: "max(20px, env(safe-area-inset-bottom, 20px))",
               boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",

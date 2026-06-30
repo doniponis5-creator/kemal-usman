@@ -253,3 +253,32 @@ input:-webkit-autofill {
   background: rgba(255, 255, 255, 0.14) !important;
   box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06);
 }
+
+/* ─── iOS Liquid Glass — themeable tokens ────────────────────────────────────
+   Light values == the app's original colors, so the WEB build (which never
+   gets [data-theme="dark"]) renders byte-identical. The dark set applies only
+   when main.jsx sets html[data-theme="dark"] — native app + system dark. */
+:root {
+  --ku-bg: #F5F5F5;
+  --ku-surface: #FFFFFF;
+  --ku-surface-2: #F5F5F5;
+  --ku-text: #111111;
+  --ku-text-2: #666666;
+  --ku-text-3: #AEAEB2;
+  --ku-border: #EEEEEE;
+  --ku-accent: #111111;
+  --ku-fill: rgba(0,0,0,0.06);
+  --ku-fill-2: rgba(0,0,0,0.04);
+}
+html[data-theme="dark"] {
+  --ku-bg: #000000;
+  --ku-surface: #1C1C1E;
+  --ku-surface-2: #2C2C2E;
+  --ku-text: #F5F5F7;
+  --ku-text-2: #AEAEB2;
+  --ku-text-3: #8E8E93;
+  --ku-border: rgba(255,255,255,0.14);
+  --ku-accent: #2C2C2E;
+  --ku-fill: rgba(255,255,255,0.10);
+  --ku-fill-2: rgba(255,255,255,0.06);
+}
