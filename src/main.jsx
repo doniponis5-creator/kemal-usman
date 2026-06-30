@@ -15,13 +15,6 @@ import App from './App.jsx'
 // PRO: configure native iOS / Android shell — status bar style, splash hide, keyboard adjust.
 // Each plugin is dynamically imported and silently no-ops on web.
 async function initNativeShell() {
-  // Native only: opt the WebView into BOTH schemes so `prefers-color-scheme: dark`
-  // can actually match. index.css declares `color-scheme: light` for the WEB build
-  // (unchanged), which otherwise pins WebKit to light and suppresses dark detection.
-  try {
-    const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-    if (isNative) document.documentElement.style.colorScheme = 'light dark';
-  } catch { /* web: optional-catch, matches file style */ }
   try {
     const sbMod = await import(/* @vite-ignore */ '@capacitor/' + 'status-bar')
     if (sbMod?.StatusBar) {
