@@ -3558,7 +3558,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "calc(var(--nav-height) + 100px)" /* navbar + sticky checkout button + breathing room */ }}>
-      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "var(--ku-text, #111111)", background: "var(--ku-surface-2, #F5F5F5)" }}>{t.cart}</div>
+      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "var(--ku-text, #111111)", background: "var(--ku-bg, #F5F5F5)" }}>{t.cart}</div>
       {/* Items — PRO: AnimatePresence makes adds spring in, removes swipe out */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         <AnimatePresence initial={false}>
