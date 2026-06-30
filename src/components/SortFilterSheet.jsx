@@ -39,7 +39,7 @@ export function SortFilterSheet({ open, onClose, sort, onSortChange, lang = 'ru'
             style={{
               width: '100%', maxWidth: 480,
               ...(IS_NATIVE
-                ? { background: 'rgba(255,255,255,0.82)', backdropFilter: 'saturate(180%) blur(30px)', WebkitBackdropFilter: 'saturate(180%) blur(30px)', borderTop: '0.5px solid rgba(255,255,255,0.85)' }
+                ? { background: 'var(--ku-glass, rgba(255,255,255,0.82))', backdropFilter: 'saturate(180%) blur(30px)', WebkitBackdropFilter: 'saturate(180%) blur(30px)', borderTop: '0.5px solid rgba(255,255,255,0.85)' }
                 : { background: "var(--ku-surface, #FFFFFF)" }),
               borderRadius: '24px 24px 0 0',
               padding: '14px 18px',

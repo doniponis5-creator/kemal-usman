@@ -166,7 +166,7 @@ function NavBar({ items, active, onSelect }) {
     onSelect(id);
   };
   return (
-    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "rgba(255,255,255,0.85)", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)", borderTop: "0.5px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
+    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "var(--ku-glass, rgba(255,255,255,0.85))", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)", borderTop: "0.5px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
       {items.map((item) => {
         const isActive = item.id === active;
         const isCenter = item.center;
@@ -660,20 +660,20 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                   }}>
                     {/* Replace */}
                     <button onClick={(e) => { e.stopPropagation(); fileRefs[i].current?.click(); }}
-                      style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                      style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "var(--ku-glass-thick, rgba(255,255,255,0.92))", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </button>
                     {/* Move left */}
                     {i > 0 && images[i-1] && (
                       <button onClick={(e) => { e.stopPropagation(); moveImage(i, -1); }}
-                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "var(--ku-glass-thick, rgba(255,255,255,0.92))", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="15 18 9 12 15 6"/></svg>
                       </button>
                     )}
                     {/* Move right */}
                     {i < 2 && images[i+1] && (
                       <button onClick={(e) => { e.stopPropagation(); moveImage(i, 1); }}
-                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "rgba(255,255,255,0.92)", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
+                        style={{ width: 32, height: 32, borderRadius: 10, border: "none", background: "var(--ku-glass-thick, rgba(255,255,255,0.92))", color: "var(--ku-text, #111111)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, boxShadow: "0 2px 6px rgba(0,0,0,0.15)" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
                       </button>
                     )}
@@ -3113,7 +3113,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             flexShrink: 0,
             padding: "16px 18px 0",
             paddingBottom: "calc(env(safe-area-inset-bottom, 34px) + 22px)",
-            background: "rgba(255,255,255,0.82)",
+            background: "var(--ku-glass, rgba(255,255,255,0.82))",
             backdropFilter: "blur(28px) saturate(180%)",
             WebkitBackdropFilter: "blur(28px) saturate(180%)",
             borderTop: "0.5px solid rgba(0,0,0,0.06)",
