@@ -3298,15 +3298,19 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   onClick={() => { haptic('light'); setCat(c); }}
                   whileTap={{ scale: 0.94 }}
                   animate={{
-                    background: active ? "#111111" : 'rgba(0,0,0,0)',
-                    color: active ? '#fff' : T.textSecond,
+                    background: active
+                      ? ((IS_NATIVE && glass.scheme === 'dark') ? 'rgba(255,255,255,0.92)' : "#111111")
+                      : (IS_NATIVE ? (glass.scheme === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.5)') : 'rgba(0,0,0,0)'),
+                    color: active
+                      ? ((IS_NATIVE && glass.scheme === 'dark') ? '#111' : '#fff')
+                      : ((IS_NATIVE && glass.scheme === 'dark') ? 'rgba(235,235,245,0.62)' : T.textSecond),
                     scale: active ? 1.04 : 1,
                     boxShadow: active
                       ? '0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)'
                       : '0 0 0 rgba(0,0,0,0)',
                   }}
                   transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : "0.5px solid #EEEEEE", fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "0.5px solid #EEEEEE"), fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)" } : {}) }}
                 >
                   {c === "all" ? t.allCategories : c}
                 </motion.button>
