@@ -71,7 +71,7 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
       <motion.div
         style={{
           position: 'fixed', inset: 0, zIndex: 1001,
-          background: '#000',
+          background: "var(--ku-accent, #111111)",
           opacity: backdropOpacity,
           pointerEvents: 'none',
         }}

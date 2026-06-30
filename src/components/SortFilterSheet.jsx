@@ -48,7 +48,7 @@ export function SortFilterSheet({ open, onClose, sort, onSortChange, lang = 'ru'
             }}
           >
             {/* drag-handle */}
-            <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5EA', margin: '0 auto 18px' }} />
+            <div style={{ width: 36, height: 4, borderRadius: 4, background: "var(--ku-surface-2, #F5F5F5)", margin: '0 auto 18px' }} />
 
             <div style={{ fontSize: 17, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 18 }}>
               {lang === 'kg' ? 'Иргөө' : 'Сортировка'}
@@ -63,7 +63,7 @@ export function SortFilterSheet({ open, onClose, sort, onSortChange, lang = 'ru'
                     onClick={() => { haptic('light'); onSortChange(s.id); }}
                     whileTap={{ scale: 0.98 }}
                     animate={{
-                      borderColor: selected ? '#111' : '#EEE',
+                      borderColor: selected ? "var(--ku-accent, #111111)" : "var(--ku-border, #EEEEEE)",
                       background: selected ? 'rgba(0,0,0,0.04)' : 'transparent',
                     }}
                     transition={{ duration: 0.18 }}

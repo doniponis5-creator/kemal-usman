@@ -122,7 +122,7 @@ function Toast({ toast, onDismiss }) {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 9999,
-            background: toast.type === 'error' ? T.danger : "#111111",
+            background: toast.type === 'error' ? T.danger : "var(--ku-accent, #111111)",
             color: "#F5F5F5",
             padding: "12px 22px",
             borderRadius: 30,
@@ -186,7 +186,7 @@ function NavBar({ items, active, onSelect }) {
             onClick={() => handleSelect(item.id)}
             whileTap={{ scale: 0.94 }}
             transition={{ duration: 0.18 }}
-            style={{ flex: 1, minHeight: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? "#111111" : T.textMuted, position: "relative", paddingBottom: 4, fontSize: 11 }}>
+            style={{ flex: 1, minHeight: 48, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 3, background: "none", border: "none", cursor: "pointer", color: isActive ? "var(--ku-text, #111111)" : T.textMuted, position: "relative", paddingBottom: 4, fontSize: 11 }}>
             <motion.div
               animate={{ scale: isActive ? 1.08 : 1, y: isActive ? -1 : 0 }}
               transition={{ type: 'spring', stiffness: 320, damping: 22 }}
@@ -357,7 +357,7 @@ function CropModal({ src, onDone, onCancel }) {
       <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: 20, width: '100%', maxWidth: 360 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ku-text, #111111)", textAlign: 'center', marginBottom: 4 }}>Обрезать фото</div>
         <div style={{ fontSize: 12, color: "var(--ku-text-3, #AEAEB2)", textAlign: 'center', marginBottom: 16 }}>Перетащите фото на нужное место</div>
-        <div style={{ position: 'relative', margin: '0 auto 16px', width: SIZE, height: SIZE, borderRadius: 14, overflow: 'hidden', cursor: 'grab', border: '2px solid #111', background: "var(--ku-surface, #FFFFFF)" }}>
+        <div style={{ position: 'relative', margin: '0 auto 16px', width: SIZE, height: SIZE, borderRadius: 14, overflow: 'hidden', cursor: 'grab', border: '2px solid var(--ku-accent, #111111)', background: "var(--ku-surface, #FFFFFF)" }}>
           <canvas
             ref={canvasRef}
             width={SIZE}
@@ -613,7 +613,7 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                     : imgUrl
                       ? "1.5px solid rgba(0,0,0,0.08)"
                       : "1.5px dashed rgba(0,0,0,0.12)",
-                  background: imgUrl ? "#fff" : "rgba(120,120,128,0.04)",
+                  background: imgUrl ? "var(--ku-surface, #FFFFFF)" : "rgba(120,120,128,0.04)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   cursor: "pointer",
                   overflow: "hidden", position: "relative",
@@ -847,7 +847,7 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
       transition={{ duration: 0.25 }}
       style={{
         position: 'fixed', inset: 0, zIndex: 10000,
-        background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: "var(--ku-accent, #111111)", display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
       {/* Main story area */}
@@ -985,7 +985,7 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   <svg width="48" height="100" viewBox="0 0 60 140" fill="none" opacity="0.3">
-                    <rect x="20" y="0" width="20" height="16" rx="2" fill="#555"/>
+                    <rect x="20" y="0" width="20" height="16" rx="2" fill="var(--ku-text-mid, #555555)"/>
                     <rect x="8" y="16" width="44" height="110" rx="4" fill="#444"/>
                   </svg>
                 </div>
@@ -1065,8 +1065,8 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
                       onClick={() => setSelVarIdx(vi)}
                       style={{
                         padding: '8px 18px', borderRadius: 12,
-                        background: vi === selVarIdx ? '#fff' : 'rgba(255,255,255,0.08)',
-                        color: vi === selVarIdx ? '#111' : '#fff',
+                        background: vi === selVarIdx ? "var(--ku-surface, #FFFFFF)" : 'rgba(255,255,255,0.08)',
+                        color: vi === selVarIdx ? "var(--ku-text, #111111)" : '#fff',
                         border: vi === selVarIdx ? 'none' : '1px solid rgba(255,255,255,0.1)',
                         fontSize: 13, fontWeight: vi === selVarIdx ? 700 : 500,
                         cursor: 'pointer',
@@ -1288,7 +1288,7 @@ function BannerSlider({ banners }) {
       </AnimatePresence>
       {validBanners.length > 1 && (
         <div style={{ position: "absolute", bottom: 10, right: 14, display: "flex", gap: 5 }}>
-          {validBanners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "#fff" : "rgba(255,255,255,0.5)", transition: "width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.35s", cursor: "pointer" }} />)}
+          {validBanners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "var(--ku-surface, #FFFFFF)" : "rgba(255,255,255,0.5)", transition: "width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.35s", cursor: "pointer" }} />)}
         </div>
       )}
     </div>
@@ -1367,7 +1367,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
   const inp = {
     width: "100%", padding: "14px 16px", fontSize: 15,
-    background: "var(--ku-surface-2, #F5F5F5)", border: "1px solid #E5E5EA",
+    background: "var(--ku-surface-2, #F5F5F5)", border: "1px solid var(--ku-border, #EEEEEE)",
     borderRadius: 14, color: "var(--ku-text, #111111)", outline: "none", boxSizing: "border-box",
   };
   const lbl = { fontSize: 10, color: "#8E8E93", marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
@@ -1397,7 +1397,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
             }}
           >
             {/* Handle */}
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#E0E0E0", margin: "0 auto 20px" }} />
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--ku-surface-2, #F5F5F5)", margin: "0 auto 20px" }} />
 
             {/* Title */}
             <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4, textAlign: "center" }}>
@@ -1493,7 +1493,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                   </button>
                   <button onClick={() => { if (resendCooldown <= 0 && !otpLoading) handleRequestOtp(); }}
                     disabled={resendCooldown > 0 || otpLoading}
-                    style={{ background: "none", border: "none", color: resendCooldown > 0 ? "#CCC" : "#555", fontSize: 12, cursor: (resendCooldown > 0 || otpLoading) ? "default" : "pointer", padding: 0 }}>
+                    style={{ background: "none", border: "none", color: resendCooldown > 0 ? "#CCC" : "var(--ku-text-mid, #555555)", fontSize: 12, cursor: (resendCooldown > 0 || otpLoading) ? "default" : "pointer", padding: 0 }}>
                     {resendCooldown > 0 ? (lang === "ru" ? `Повторно через ${resendCooldown}с` : `${resendCooldown}с кийин кайра`) : (lang === "ru" ? "Отправить ещё раз" : "Кайра жөнөтүү")}
                   </button>
                 </div>
@@ -1633,7 +1633,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   if (desktopMode) {
     const inputDesktop = {
       width: '100%', padding: '13px 16px', fontSize: 15,
-      background: "var(--ku-surface-2, #F5F5F5)", border: '1px solid #E5E5EA',
+      background: "var(--ku-surface-2, #F5F5F5)", border: '1px solid var(--ku-border, #EEEEEE)',
       borderRadius: 14, color: "var(--ku-text, #111111)", outline: 'none',
       boxSizing: 'border-box',
     };
@@ -1730,7 +1730,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
                 {lang === 'ru' ? 'Изменить номер' : 'Номерди өзгөртүү'}
               </button>
               <button onClick={handleResendOtp} disabled={resendCooldown > 0 || otpLoading}
-                style={{ background: 'none', border: 'none', color: resendCooldown > 0 ? '#CCC' : '#555', fontSize: 12, cursor: (resendCooldown > 0 || otpLoading) ? 'default' : 'pointer', padding: 0, letterSpacing: 0.5 }}>
+                style={{ background: 'none', border: 'none', color: resendCooldown > 0 ? '#CCC' : "var(--ku-text-mid, #555555)", fontSize: 12, cursor: (resendCooldown > 0 || otpLoading) ? 'default' : 'pointer', padding: 0, letterSpacing: 0.5 }}>
                 {resendCooldown > 0 ? (lang === 'ru' ? `Повторно через ${resendCooldown}с` : `${resendCooldown}с кийин кайра`) : (lang === 'ru' ? 'Отправить ещё раз' : 'Кайра жөнөтүү')}
               </button>
             </div>
@@ -1808,7 +1808,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             padding: "5px 14px", borderRadius: 26, border: "none", cursor: "pointer",
             fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
             background: lang === l ? "rgba(255,255,255,0.9)" : "transparent",
-            color: lang === l ? "#111" : "rgba(255,255,255,0.7)",
+            color: lang === l ? "var(--ku-text, #111111)" : "rgba(255,255,255,0.7)",
             transition: "all 0.2s"
           }}>{l === "ru" ? "РУС" : "КЫР"}</button>
         ))}
@@ -2348,7 +2348,7 @@ function SaleProgressBar({ product }) {
         <span style={{ fontSize: 10, color: '#FF3B30', fontWeight: 600 }}>−{sale.percent}%</span>
         <span style={{ fontSize: 10, color: '#8E8E93' }}>{label}</span>
       </div>
-      <div style={{ height: 3, background: '#F2F2F7', borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{ height: 3, background: "var(--ku-surface-2, #F5F5F5)", borderRadius: 2, overflow: 'hidden' }}>
         <motion.div
           initial={{ width: 0 }}
           animate={{ width: `${sale.progress * 100}%` }}
@@ -2614,7 +2614,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
           <div
             style={{
               width: 36, height: 36, borderRadius: 18,
-              background: stk ? "#111111" : T.border,
+              background: stk ? "var(--ku-accent, #111111)" : T.border,
               display: "flex", alignItems: "center", justifyContent: "center",
               color: "#fff", fontWeight: 700, fontSize: 20,
               boxShadow: stk ? "0 4px 10px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08)" : "none",
@@ -2964,7 +2964,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       width: i === imgIndex ? 20 : 6,
                       height: 6,
                       borderRadius: 3,
-                      background: i === imgIndex ? "#111" : "rgba(0,0,0,0.30)",
+                      background: i === imgIndex ? "var(--ku-accent, #111111)" : "rgba(0,0,0,0.30)",
                       transition: "width 0.25s",
                       cursor: "pointer",
                     }}
@@ -3062,8 +3062,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                         whileTap={{ scale: 0.94 }}
                         animate={{
                           scale: isSel ? 1.04 : 1,
-                          backgroundColor: isSel ? "#111111" : "#fafafa",
-                          borderColor: isSel ? "#111111" : "#ebebeb",
+                          backgroundColor: isSel ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)",
+                          borderColor: isSel ? "var(--ku-accent, #111111)" : "var(--ku-border, #EEEEEE)",
                           boxShadow: isSel
                             ? "0 6px 18px rgba(17,17,17,0.22), 0 1px 3px rgba(0,0,0,0.10)"
                             : "0 1px 2px rgba(0,0,0,0.03)",
@@ -3073,12 +3073,12 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                           width: "100%",
                           padding: "13px 8px",
                           borderRadius: 14,
-                          border: isSel ? "1.5px solid #111" : "1.5px solid #ebebeb",
+                          border: isSel ? "1.5px solid var(--ku-accent, #111111)" : "1.5px solid var(--ku-border, #EEEEEE)",
                           cursor: "pointer",
                           textAlign: "center",
                         }}
                       >
-                        <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? "#fff" : "#111", lineHeight: 1.2 }}>{v.label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? "#fff" : "var(--ku-text, #111111)", lineHeight: 1.2 }}>{v.label}</div>
                         {(() => {
                           const si = getSaleInfo(detail);
                           if (si) {
@@ -3228,7 +3228,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               style={{ overflow: "hidden", display: "flex", alignItems: "center", padding: "6px 16px 10px" }}
             >
               <div>
-                <div onClick={handleSecretTap} style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "#111", fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
+                <div onClick={handleSecretTap} style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
               </div>
             </motion.div>
           )}
@@ -3240,8 +3240,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}
         >
           <div style={{ display: "flex", alignItems: "center", background: (IS_NATIVE && glass.scheme === 'dark') ? 'rgba(255,255,255,0.10)' : "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="#AEAEB2" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="#AEAEB2" strokeWidth="2" /></svg>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "#111", width: "100%", fontFamily: "inherit" }} />
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="var(--ku-text-3, #AEAEB2)" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="var(--ku-text-3, #AEAEB2)" strokeWidth="2" /></svg>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", width: "100%", fontFamily: "inherit" }} />
             <AnimatePresence>
               {search && (
                 <motion.button
@@ -3322,8 +3322,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           onClick={() => { haptic('light'); setSortSheetOpen(true); }}
           whileTap={{ scale: 0.92 }}
           animate={{
-            background: sort !== 'default' ? '#111' : '#FFFFFF',
-            color: sort !== 'default' ? '#fff' : '#111',
+            background: sort !== 'default' ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)",
+            color: sort !== 'default' ? '#fff' : "var(--ku-text, #111111)",
             scale: sort !== 'default' ? 1.04 : 1,
             boxShadow: sort !== 'default'
               ? '0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)'
@@ -3647,7 +3647,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       fontWeight: 600,
                       fontSize: 13,
                       letterSpacing: -0.1,
-                      color: active ? "#111" : "#6E6E73",
+                      color: active ? "var(--ku-text, #111111)" : "#6E6E73",
                       transition: "color 0.18s",
                     }}
                   >
@@ -3707,7 +3707,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       fontSize: 15,
                       fontWeight: 500,
                       letterSpacing: -0.2,
-                      color: address ? "#111" : "#9A9AA0",
+                      color: address ? "var(--ku-text, #111111)" : "#9A9AA0",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -3770,7 +3770,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       </div>
       {/* Comment */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ background: "var(--ku-surface, #FFFFFF)", border: "0.5px solid #E5E5EA", borderRadius: 16, padding: 14, marginBottom: 14 }}>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", border: "0.5px solid var(--ku-border, #EEEEEE)", borderRadius: 16, padding: 14, marginBottom: 14 }}>
           <div style={{ fontSize: 12, color: "var(--ku-text-3, #AEAEB2)", marginBottom: 10 }}>Комментарий к заказу</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {[
@@ -3796,8 +3796,8 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                     }
                   }}
                   animate={{
-                    backgroundColor: active ? "#111111" : "#F2F2F7",
-                    color: active ? "#FFFFFF" : "#3A3A3C",
+                    backgroundColor: active ? "var(--ku-accent, #111111)" : "var(--ku-surface-2, #F5F5F5)",
+                    color: active ? "#FFFFFF" : "var(--ku-text-dim, #3A3A3C)",
                   }}
                   style={{
                     padding: "8px 12px",
@@ -3865,7 +3865,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                 whileTap={{ scale: 0.97 }}
                 animate={{
                   borderColor: selected ? 'rgba(17,17,17,0.12)' : T.border,
-                  backgroundColor: selected ? '#111' : '#fff',
+                  backgroundColor: selected ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)",
                 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 28 }}
                 style={{
@@ -3940,7 +3940,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           ].filter(Boolean).map(row => (
             <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
               <span style={{ color: "#8E8E93", fontSize: 13, fontWeight: 500, letterSpacing: -0.05 }}>{row.label}</span>
-              <span style={{ color: row.color || "#3A3A3C", fontWeight: 500, fontSize: 13, letterSpacing: -0.05 }}>{row.val}</span>
+              <span style={{ color: row.color || "var(--ku-text-dim, #3A3A3C)", fontWeight: 500, fontSize: 13, letterSpacing: -0.05 }}>{row.val}</span>
             </div>
           ))}
           <div style={{ height: 1, background: T.border, margin: "10px 0 14px" }} />
@@ -4103,7 +4103,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={() => { setReviewOrderId(order.id); setReviewText(''); setReviewRating(5); }}
-                    style={{ background: 'none', border: '1px solid #111', borderRadius: 20, padding: '5px 14px', fontSize: 11, fontWeight: 600, color: "var(--ku-text, #111111)", cursor: 'pointer' }}>
+                    style={{ background: 'none', border: '1px solid var(--ku-accent, #111111)', borderRadius: 20, padding: '5px 14px', fontSize: 11, fontWeight: 600, color: "var(--ku-text, #111111)", cursor: 'pointer' }}>
                     {lang === 'kg' ? 'Пикир калтыруу' : 'Оставить отзыв'}
                   </motion.button>
                 )}
@@ -4309,7 +4309,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
       )}
       <div style={{ margin: "0 16px 14px", display: "flex", gap: 8 }}>
         {[{ id: "bonus", label: t.bonusHistory }, { id: "info", label: t.accountInfo }].map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: tab === tb.id ? "none" : `1px solid ${T.border}`, background: tab === tb.id ? "#111111" : "transparent", color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
+          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: tab === tb.id ? "none" : `1px solid ${T.border}`, background: tab === tb.id ? "var(--ku-accent, #111111)" : "transparent", color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
         ))}
       </div>
       {tab === "bonus" ? (
@@ -4722,7 +4722,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
       >
         {/* Grab handle */}
         <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E0E0E0' }} />
+          <div style={{ width: 36, height: 4, borderRadius: 4, background: "var(--ku-surface-2, #F5F5F5)" }} />
         </div>
 
         {/* Header strip */}
@@ -4779,7 +4779,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 style={{
-                  background: '#FAFAFA', borderRadius: 16, padding: 16,
+                  background: "var(--ku-surface, #FFFFFF)", borderRadius: 16, padding: 16,
                   marginBottom: 16, border: '1px solid #F2F2F7',
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
                 }}
@@ -4799,9 +4799,9 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
 
             {/* Divider with text */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '4px 0 16px' }}>
-              <div style={{ flex: 1, height: 0.5, background: '#E5E5EA' }} />
+              <div style={{ flex: 1, height: 0.5, background: "var(--ku-surface-2, #F5F5F5)" }} />
               <span style={{ fontSize: 11, color: "var(--ku-text-3, #AEAEB2)", fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase' }}>или</span>
-              <div style={{ flex: 1, height: 0.5, background: '#E5E5EA' }} />
+              <div style={{ flex: 1, height: 0.5, background: "var(--ku-surface-2, #F5F5F5)" }} />
             </div>
 
             {/* Open wallet button */}
@@ -5028,7 +5028,7 @@ function OrderReceipt({ order, settings, onClose }) {
         transition={{ type: 'spring', stiffness: 320, damping: 30 }}
         style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: '20px 20px 0 0', padding: '24px 20px', paddingBottom: 'calc(40px + env(safe-area-inset-bottom, 0))', width: '100%', maxWidth: 460 }}
       >
-        <div style={{ width: 36, height: 4, borderRadius: 4, background: '#E5E5EA', margin: '0 auto 16px' }} />
+        <div style={{ width: 36, height: 4, borderRadius: 4, background: "var(--ku-surface-2, #F5F5F5)", margin: '0 auto 16px' }} />
 
         {/* Success icon */}
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
@@ -5047,7 +5047,7 @@ function OrderReceipt({ order, settings, onClose }) {
         </div>
 
         {/* Receipt card */}
-        <div style={{ background: '#FAFAFA', borderRadius: 14, padding: '16px', marginBottom: 16, border: '1px solid #F2F2F7' }}>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 14, padding: '16px', marginBottom: 16, border: '1px solid #F2F2F7' }}>
           {/* Dashed top border for receipt feel */}
           <div style={{ borderBottom: '1px dashed #E0E0E0', paddingBottom: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: "var(--ku-text-3, #AEAEB2)", fontWeight: 700, textAlign: 'center' }}>Kemal Usman Parfum</div>
@@ -5131,9 +5131,9 @@ function OrderReceipt({ order, settings, onClose }) {
                 onClick={() => fileInputRef.current?.click()}
                 style={{
                   flex: 1, padding: '13px 8px',
-                  background: selectedImage ? '#E8F5E9' : '#F5F5F5',
-                  color: selectedImage ? '#2E7D32' : '#3A3A3C',
-                  border: selectedImage ? '1.5px solid #A5D6A7' : '1.5px solid #E0E0E0',
+                  background: selectedImage ? '#E8F5E9' : "var(--ku-surface-2, #F5F5F5)",
+                  color: selectedImage ? '#2E7D32' : "var(--ku-text-dim, #3A3A3C)",
+                  border: selectedImage ? '1.5px solid #A5D6A7' : '1.5px solid var(--ku-border, #EEEEEE)',
                   borderRadius: 14, fontSize: 12, fontWeight: 700, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
@@ -5173,7 +5173,7 @@ function OrderReceipt({ order, settings, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 style={{
                   width: '100%', padding: 15, marginBottom: 10,
-                  background: sending ? '#8E8E93' : '#111', color: '#fff', border: 'none', borderRadius: 14,
+                  background: sending ? '#8E8E93' : "var(--ku-accent, #111111)", color: '#fff', border: 'none', borderRadius: 14,
                   fontSize: 14, fontWeight: 700, cursor: sending ? 'default' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
@@ -5191,7 +5191,7 @@ function OrderReceipt({ order, settings, onClose }) {
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={onClose}
-          style={{ width: '100%', padding: 15, background: isBankPayment ? '#F5F5F5' : '#111', color: isBankPayment ? '#3A3A3C' : '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+          style={{ width: '100%', padding: 15, background: isBankPayment ? "var(--ku-surface-2, #F5F5F5)" : "var(--ku-accent, #111111)", color: isBankPayment ? "var(--ku-text-dim, #3A3A3C)" : '#fff', border: 'none', borderRadius: 14, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
         >
           Готово
         </motion.button>
@@ -5946,7 +5946,7 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
           width: 22, height: 22, borderRadius: '50%',
           background: isPlaying ? 'rgba(255,59,48,0.2)' : 'rgba(0,0,0,0.07)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: isPlaying ? '#FF3B30' : '#666', flexShrink: 0,
+          color: isPlaying ? '#FF3B30' : "var(--ku-text-2, #666666)", flexShrink: 0,
         }}>
           {isPlaying
             ? <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
@@ -7167,7 +7167,7 @@ export default function App() {
                   style={{
                     padding: '5px 12px', fontSize: 10, letterSpacing: 2,
                     textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700,
-                    background: lang === l ? '#111' : '#F5F5F5',
+                    background: lang === l ? "var(--ku-accent, #111111)" : "var(--ku-surface-2, #F5F5F5)",
                     color: lang === l ? '#fff' : '#8E8E93',
                   }}>
                   {l === 'ru' ? 'РУС' : 'КЫР'}
@@ -7364,7 +7364,7 @@ export default function App() {
                 style={{
                   padding: '14px 20px', fontSize: 12, fontWeight: 600,
                   letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer',
-                  color: adminScreen === tab.id ? '#111' : '#AEAEB2',
+                  color: adminScreen === tab.id ? "var(--ku-text, #111111)" : "var(--ku-text-3, #AEAEB2)",
                   borderBottom: adminScreen === tab.id ? '2px solid #111' : '2px solid transparent',
                   marginBottom: -1, display: 'flex', alignItems: 'center', gap: 6,
                 }}>
@@ -7434,7 +7434,7 @@ export default function App() {
         <div style={{ paddingBottom: 'calc(var(--nav-height) + 16px)', background: T.bg }}>
           {isAdmin ? (
             <>
-              <div style={{ padding: "16px 16px 0", paddingTop: "max(52px, calc(env(safe-area-inset-top, 44px) + 8px))", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#000000", borderBottom: "0.5px solid rgba(255,255,255,0.15)", paddingBottom: 12 }}>
+              <div style={{ padding: "16px 16px 0", paddingTop: "max(52px, calc(env(safe-area-inset-top, 44px) + 8px))", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--ku-accent, #111111)", borderBottom: "0.5px solid rgba(255,255,255,0.15)", paddingBottom: 12 }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: 2, textTransform: "uppercase" }}>{t.adminPanel}</div>
               </div>
               {/* PRO: animate admin tab transitions — fade-up between tabs.
@@ -7559,7 +7559,7 @@ export default function App() {
               </div>
               {/* Remember me checkbox */}
               <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer", padding: "4px 0", WebkitTapHighlightColor: "transparent" }} onClick={() => setAdminRemember(v => !v)}>
-                <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
                   {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <span style={{ fontSize: 13, color: "var(--ku-text-mid, #555555)", fontWeight: 500 }}>{t.remember_me}</span>
@@ -7594,7 +7594,7 @@ export default function App() {
             </div>
             {/* Remember me checkbox */}
             <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer", padding: "4px 0", WebkitTapHighlightColor: "transparent" }} onClick={() => setAdminRemember(v => !v)}>
-              <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "#111" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 8, border: adminRemember ? "none" : "1.5px solid #D1D1D6", background: adminRemember ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s", flexShrink: 0 }}>
                 {adminRemember && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
               </div>
               <span style={{ fontSize: 13, color: "var(--ku-text-mid, #555555)", fontWeight: 500 }}>{t.remember_me}</span>
@@ -7624,7 +7624,7 @@ export default function App() {
           >
             {/* Handle */}
             <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: "#E0E0E0" }} />
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--ku-surface-2, #F5F5F5)" }} />
             </div>
             {/* Header */}
             <div style={{ padding: "8px 20px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -7671,7 +7671,7 @@ export default function App() {
                         }}
                         style={{
                           padding: "14px 16px", borderRadius: 16, marginBottom: 8, cursor: "pointer",
-                          background: isRead ? "#FAFAFA" : "#F0F7FF",
+                          background: isRead ? "var(--ku-surface, #FFFFFF)" : "#F0F7FF",
                           border: isRead ? "1px solid #F2F2F7" : "1px solid #D0E4FF",
                           transition: "all 0.2s",
                         }}

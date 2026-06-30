@@ -75,7 +75,7 @@ export function ConfirmProvider({ children }) {
               </button>
               <button
                 onClick={() => handle(true)}
-                style={{ flex: 1, padding: '14px', borderRadius: 12, border: 'none', background: opts.destructive ? '#E53935' : '#111', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+                style={{ flex: 1, padding: '14px', borderRadius: 12, border: 'none', background: opts.destructive ? '#E53935' : "var(--ku-accent, #111111)", color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
               >
                 {opts.confirmLabel}
               </button>

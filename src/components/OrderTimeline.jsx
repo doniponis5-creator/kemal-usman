@@ -96,7 +96,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
                 right: 'calc(50% + 12px)',
                 top: 11,
                 height: 2,
-                background: '#E5E5EA',
+                background: "var(--ku-surface-2, #F5F5F5)",
                 zIndex: 1,
                 overflow: 'hidden',
               }}>
@@ -113,8 +113,8 @@ export function OrderTimeline({ status, lang = 'ru' }) {
             <motion.div
               initial={false}
               animate={{
-                background: (isCompleted || isCurrent) ? '#111' : 'transparent',
-                borderColor: isPending ? '#E5E5EA' : '#111',
+                background: (isCompleted || isCurrent) ? "var(--ku-accent, #111111)" : 'transparent',
+                borderColor: isPending ? "var(--ku-border, #EEEEEE)" : "var(--ku-accent, #111111)",
                 scale: isCurrent ? 1.12 : 1,
               }}
               transition={{ type: 'spring', stiffness: 360, damping: 24 }}
@@ -150,7 +150,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
                       position: 'absolute',
                       inset: -2,
                       borderRadius: '50%',
-                      border: '2px solid #111',
+                      border: '2px solid var(--ku-accent, #111111)',
                       pointerEvents: 'none',
                     }}
                   />
@@ -165,7 +165,7 @@ export function OrderTimeline({ status, lang = 'ru' }) {
             <div style={{
               fontSize: 10,
               marginTop: 6,
-              color: isPending ? '#AEAEB2' : isCurrent ? '#111' : '#666',
+              color: isPending ? "var(--ku-text-3, #AEAEB2)" : isCurrent ? "var(--ku-text, #111111)" : "var(--ku-text-2, #666666)",
               fontWeight: isCurrent ? 700 : 500,
               textAlign: 'center',
               maxWidth: 60,
