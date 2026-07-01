@@ -166,7 +166,7 @@ function NavBar({ items, active, onSelect }) {
     onSelect(id);
   };
   return (
-    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "var(--ku-glass, rgba(255,255,255,0.85))", backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)", borderTop: "0.5px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
+    <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, width: "100%", background: "var(--ku-glass, rgba(255,255,255,0.85))", backdropFilter: "saturate(180%) blur(14px)", WebkitBackdropFilter: "saturate(180%) blur(14px)", borderTop: "0.5px solid rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-around", zIndex: 1000, paddingTop: 8, paddingBottom: "env(safe-area-inset-bottom, 8px)", boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}>
       {items.map((item) => {
         const isActive = item.id === active;
         const isCenter = item.center;
@@ -2410,6 +2410,7 @@ function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
           src={src}
           alt={alt}
           loading="lazy"
+          decoding="async"
           style={imgStyle}
           onError={(e) => {
             // 404 / blocked / corrupt → reveal the fallback sibling.
@@ -2826,8 +2827,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             width: 36, height: 36,
             borderRadius: 18,
             background: "rgba(0,0,0,0.55)",
-            backdropFilter: "blur(20px) saturate(180%)",
-            WebkitBackdropFilter: "blur(20px) saturate(180%)",
+            backdropFilter: "blur(14px) saturate(180%)",
+            WebkitBackdropFilter: "blur(14px) saturate(180%)",
             border: "0.5px solid rgba(255,255,255,0.20)",
             boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
             cursor: "pointer",
@@ -3115,8 +3116,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             padding: "16px 18px 0",
             paddingBottom: "calc(env(safe-area-inset-bottom, 34px) + 22px)",
             background: "var(--ku-glass, rgba(255,255,255,0.82))",
-            backdropFilter: "blur(28px) saturate(180%)",
-            WebkitBackdropFilter: "blur(28px) saturate(180%)",
+            backdropFilter: "blur(14px) saturate(180%)",
+            WebkitBackdropFilter: "blur(14px) saturate(180%)",
             borderTop: "0.5px solid rgba(0,0,0,0.06)",
             boxShadow: "0 -1px 24px rgba(0,0,0,0.04)",
           }}
@@ -3200,8 +3201,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
         transition={{ duration: 0.2 }}
         style={ IS_NATIVE ? {
           background: glass.scheme === 'dark' ? 'rgba(24,24,27,0.72)' : 'rgba(255,255,255,0.72)',
-          backdropFilter: 'saturate(180%) blur(20px)',
-          WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+          backdropFilter: 'saturate(180%) blur(14px)',
+          WebkitBackdropFilter: 'saturate(180%) blur(14px)',
           borderBottom: glass.scheme === 'dark' ? '0.5px solid rgba(255,255,255,0.10)' : '0.5px solid rgba(0,0,0,0.06)',
           paddingTop: "max(44px, env(safe-area-inset-top, 44px))",
           position: "sticky",
@@ -3311,7 +3312,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       : '0 0 0 rgba(0,0,0,0)',
                   }}
                   transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "0.5px solid var(--ku-border, #EEEEEE)"), fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(20px)", WebkitBackdropFilter: "saturate(180%) blur(20px)" } : {}) }}
+                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "0.5px solid var(--ku-border, #EEEEEE)"), fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(14px)", WebkitBackdropFilter: "saturate(180%) blur(14px)" } : {}) }}
                 >
                   {c === "all" ? t.allCategories : c}
                 </motion.button>
@@ -5371,8 +5372,8 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
           whileTap={!dragState.current.moved ? { scale: 0.93 } : {}}
           style={{
             background: "rgba(18,18,20,0.82)",
-            backdropFilter: "blur(24px) saturate(180%)",
-            WebkitBackdropFilter: "blur(24px) saturate(180%)",
+            backdropFilter: "blur(18px) saturate(180%)",
+            WebkitBackdropFilter: "blur(18px) saturate(180%)",
             borderRadius: 50,
             padding: expanded ? "8px 16px 8px 8px" : "8px",
             border: "0.5px solid rgba(255,255,255,0.12)",

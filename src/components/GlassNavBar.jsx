@@ -136,8 +136,8 @@ const S = {
     display: 'flex',
     alignItems: 'stretch',
     background: 'rgba(255, 255, 255, 0.72)',
-    backdropFilter: 'saturate(180%) blur(40px)',
-    WebkitBackdropFilter: 'saturate(180%) blur(40px)',
+    backdropFilter: 'saturate(180%) blur(26px)',
+    WebkitBackdropFilter: 'saturate(180%) blur(26px)',
     border: '0.5px solid rgba(255, 255, 255, 0.55)',
     boxShadow:
       '0 14px 32px rgba(0, 0, 0, 0.12),' +
