@@ -2880,7 +2880,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               position: "relative",
               width: "100%",
               height: heroHeight,
-              backgroundColor: "var(--ku-surface, #FFFFFF)",
+              backgroundColor: "#FFFFFF", // detail hero: image surroundings stay white in dark
               overflow: "hidden",
             }}
             onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
