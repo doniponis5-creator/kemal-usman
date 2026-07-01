@@ -48,7 +48,7 @@ import { MotionScreen } from "./components/MotionScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 // PRO: shimmering placeholder while PocketBase loads
 import { CatalogGridSkeleton } from "./components/Skeleton";
-import { motion, AnimatePresence, animate as fmAnimate, useMotionValue, useTransform } from "framer-motion";
+import { motion, AnimatePresence, animate as fmAnimate, useMotionValue, useTransform, useAnimationControls } from "framer-motion";
 
 // Smoothly counts between previous and new value when `value` changes —
 // used by the floating checkout bar's price label so it doesn't snap.
@@ -6113,6 +6113,16 @@ export default function App() {
     try { localStorage.setItem('parfum_lang', lang); } catch { /* ignore */ }
   }, [lang]);
   const [screen, setScreen] = useState("catalog");
+  // iOS tab-switch crossfade — quick fade+scale on the active screen. Keeps all
+  // screens mounted (state preserved, no white flash); only the visible one shows.
+  const screenFx = useAnimationControls();
+  const screenFxMounted = React.useRef(false);
+  React.useEffect(() => {
+    if (!screenFxMounted.current) { screenFxMounted.current = true; return; }
+    screenFx.set({ opacity: 0.5, scale: 0.994 });
+    screenFx.start({ opacity: 1, scale: 1, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
   const [adminScreen, setAdminScreen] = useState(() => {
     // Reload'dan keyin admin o'z tabiga qaytadi (sessionStorage — tab-lokal)
     try { return sessionStorage.getItem('parfum_admin_screen') || "orders"; } catch { return "orders"; }
@@ -7480,7 +7490,7 @@ export default function App() {
               {pbLoading ? (
                 <div style={{ paddingTop: 100 }}><CatalogGridSkeleton count={6} /></div>
               ) : (
-                <>
+                <motion.div animate={screenFx} style={{ width: '100%' }}>
                   <div
                     style={{ display: screen === 'catalog' ? 'block' : 'none' }}
                     aria-hidden={screen !== 'catalog'}
@@ -7510,7 +7520,7 @@ export default function App() {
                   >
                     <ErrorBoundary><ProfileScreen user={user} onLogout={handleLogout} onDeleteAccount={handleDeleteAccount} bonusBalance={bonusBalance} bonusHistory={bonusHistory} referralCode={referralCode} settings={settings} onCopyReferral={handleCopyReferral} onAdminLogin={() => { setIsAdmin(true); localStorage.setItem('parfum_is_admin', 'true'); window.location.hash = 'admin'; setAdminScreen("orders"); }} goToOrders={() => setScreen("myorders")} onOpenNotifications={() => setShowNotifSheet(true)} unreadNotifCount={clientNotifications.filter(n => { const phone = user?.phone; if (!phone) return false; if (n.targetPhone && n.targetPhone !== phone) return false; const readBy = n.readBy ? (() => { try { return JSON.parse(n.readBy); } catch { return []; } })() : []; return !readBy.includes(phone); }).length} /></ErrorBoundary>
                   </div>
-                </>
+                </motion.div>
               )}
             </MotionScreen>
           )}
