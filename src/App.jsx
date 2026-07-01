@@ -2498,7 +2498,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
   const hintVisible = !preview && showAudioHint && !!audioForHint;
   return (
     <div
-      onClick={onClick}
+      onClick={onClick ? () => { haptic('light'); onClick(); } : undefined}
       style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: onClick ? "pointer" : "default" }), WebkitTransform: 'translateZ(0)' }}
     >
       {/* Image area — delegates rendering to <ProductImage>. Overlays
@@ -3155,7 +3155,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             </div>
           )}
           <motion.button
-            onClick={() => { if (!selVariant) return; haptic('medium'); addToCart(detail.id, selVariant.id); edgeRef.current?.close(); }}
+            onClick={() => { if (!selVariant) return; haptic('success'); addToCart(detail.id, selVariant.id); edgeRef.current?.close(); }}
             disabled={!selVariant?.inStock}
             whileTap={selVariant?.inStock ? { scale: 0.97 } : {}}
             transition={{ type: "spring", stiffness: 420, damping: 28 }}
