@@ -37,6 +37,7 @@
     "framer-motion": "^11.18.2",
     "i18next": "^23.16.8",
     "i18next-browser-languagedetector": "^8.0.4",
+    "onesignal-cordova-plugin": "^5.2.13",
     "pocketbase": "^0.26.8",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

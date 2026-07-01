@@ -43,6 +43,7 @@ import AudioHintTooltip, { shouldShowAudioHint } from "./components/AudioHintToo
 import { normalizePhone } from "./utils/phone";
 // PRO: Native haptic feedback on cart / buttons (no-op on web).
 import { haptic } from "./utils/haptics";
+import { initPush, setPushUser, clearPushUser } from "./api/onesignal";
 // PRO: screen transitions + button micro-animations
 import { MotionScreen } from "./components/MotionScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -6189,6 +6190,16 @@ export default function App() {
     const sysDark = typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches;
     document.documentElement.dataset.theme = (isAdmin || !sysDark) ? 'light' : 'dark';
   }, [isAdmin]);
+  // Remote push (OneSignal) — no-op until plugin + VITE_ONESIGNAL_APP_ID configured.
+  React.useEffect(() => {
+    initPush((data) => {
+      const scr = data && data.screen;
+      if (scr === 'myorders' || scr === 'cart' || scr === 'catalog' || scr === 'profile') setScreen(scr);
+    });
+  }, []);
+  React.useEffect(() => {
+    if (user && user.phone) setPushUser(user.phone); else clearPushUser();
+  }, [user]);
   const [settings, setSettings] = useState(() => {
     const loginBg = localStorage.getItem('parfum_login_bg') || null;
     const instagramScreen = localStorage.getItem('parfum_insta_screen') || null;
