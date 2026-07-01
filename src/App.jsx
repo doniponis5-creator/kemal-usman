@@ -6119,8 +6119,10 @@ export default function App() {
   const screenFxMounted = React.useRef(false);
   React.useEffect(() => {
     if (!screenFxMounted.current) { screenFxMounted.current = true; return; }
-    screenFx.set({ opacity: 0.5, scale: 0.994 });
-    screenFx.start({ opacity: 1, scale: 1, transition: { duration: 0.2, ease: [0.32, 0.72, 0, 1] } });
+    // opacity-only = compositor-cheap; scaling a subtree with backdrop-filter
+    // (glass header/chips) was the source of the lag. Light + fast.
+    screenFx.set({ opacity: 0.55 });
+    screenFx.start({ opacity: 1, transition: { duration: 0.15, ease: [0.25, 0.6, 0, 1] } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
   const [adminScreen, setAdminScreen] = useState(() => {
