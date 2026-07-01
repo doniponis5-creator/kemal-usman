@@ -95,15 +95,19 @@ const mm = (q) => (typeof matchMedia !== 'undefined' ? matchMedia(q) : null);
 
 /** Current color scheme. WEB IS ALWAYS 'light' — dark mode never touches the browser. */
 export function useColorScheme() {
-  const read = () => (IS_NATIVE && mm('(prefers-color-scheme: dark)') && mm('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  // Single source of truth = html[data-theme] (set by main.jsx from the system,
+  // and forced to 'light' while in the admin panel). Keeps CSS vars and JS glass
+  // perfectly in sync.
+  const read = () => (IS_NATIVE && typeof document !== 'undefined' && document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   const [scheme, setScheme] = useState(read);
   useEffect(() => {
-    if (!IS_NATIVE) return undefined;
-    const q = mm('(prefers-color-scheme: dark)');
-    if (!q) return undefined;
-    const on = () => setScheme(q.matches ? 'dark' : 'light');
-    q.addEventListener && q.addEventListener('change', on);
-    return () => q.removeEventListener && q.removeEventListener('change', on);
+    if (!IS_NATIVE || typeof document === 'undefined') return undefined;
+    const el = document.documentElement;
+    const update = () => setScheme(el.dataset.theme === 'dark' ? 'dark' : 'light');
+    const obs = new MutationObserver(update);
+    obs.observe(el, { attributes: true, attributeFilter: ['data-theme'] });
+    update();
+    return () => obs.disconnect();
   }, []);
   return scheme;
 }

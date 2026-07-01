@@ -21,7 +21,7 @@ async function initNativeShell() {
     const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
     if (isNative) {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const applyTheme = () => { document.documentElement.dataset.theme = mq.matches ? 'dark' : 'light'; };
+      const applyTheme = () => { document.documentElement.dataset.theme = (!window.__forceLight && mq.matches) ? 'dark' : 'light'; };
       applyTheme();
       if (mq.addEventListener) mq.addEventListener('change', applyTheme);
     }

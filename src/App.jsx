@@ -6180,6 +6180,14 @@ export default function App() {
     return false;
   });
   const [toast, setToast] = useState(null);
+  // Admin panel keeps its original LIGHT look even when the phone is in dark
+  // mode: force html[data-theme]=light while in admin, restore system on exit.
+  React.useEffect(() => {
+    if (!IS_NATIVE || typeof document === 'undefined') return;
+    window.__forceLight = isAdmin;
+    const sysDark = typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = (isAdmin || !sysDark) ? 'light' : 'dark';
+  }, [isAdmin]);
   const [settings, setSettings] = useState(() => {
     const loginBg = localStorage.getItem('parfum_login_bg') || null;
     const instagramScreen = localStorage.getItem('parfum_insta_screen') || null;
