@@ -2499,7 +2499,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
   return (
     <div
       onClick={onClick ? () => { haptic('light'); onClick(); } : undefined}
-      style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: onClick ? "pointer" : "default" }), WebkitTransform: 'translateZ(0)' }}
+      style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: onClick ? "pointer" : "default" }), WebkitTransform: 'translateZ(0)', ...(IS_NATIVE ? { boxShadow: '0 2px 6px rgba(20,16,8,0.05), 0 14px 30px rgba(20,16,8,0.10)' } : {}) }}
     >
       {/* Image area — delegates rendering to <ProductImage>. Overlays
           (gradient, badges, audio button, out-of-stock chip) sit on top
