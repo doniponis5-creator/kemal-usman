@@ -5,6 +5,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/backend.js";
 import { sendWhatsApp as sendWhatsAppServer } from "../api/whatsapp";
+import { sendPushBroadcast } from "../api/onesignal";
 import { PB_URL, audioUrl, fileUrl, pb } from "../api/pb";
 import { BG_PRESETS, INITIAL_PRODUCTS } from "../appData.js";
 import { MotionScreen } from "../components/MotionScreen";
@@ -3565,6 +3566,7 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
   const [productSearch, setProductSearch] = useState("");
   const [clientSearch, setClientSearch] = useState("");
   const [sendWhatsApp, setSendWhatsApp] = useState(true);
+  const [sendPush, setSendPush] = useState(true);
   const [waSendProgress, setWaSendProgress] = useState(""); // "3/15" progress
 
   // Load notifications
@@ -3615,6 +3617,16 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
       };
       const created = await api.createNotification(data);
       setNotifications(prev => [created, ...prev]);
+
+      // 1b. Native push (OneSignal) to all subscribers — arrives when the app is closed.
+      if (sendPush && targetType === 'all') {
+        try {
+          await sendPushBroadcast({ title: title.trim(), message: body.trim(), screen: 'catalog' });
+        } catch (e) {
+          console.warn('push send failed:', e);
+          showToast('Push: ' + ((e && e.message) || 'xato'), 'error');
+        }
+      }
 
       // 2. Send WhatsApp via Green API
       if (sendWhatsApp) {
@@ -3864,6 +3876,24 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
               📤 {targetType === 'all' ? t.notifSendAll : (selectedClient?.name || targetPhone || t.notifSendOne)}
             </div>
           </div>
+        )}
+
+        {/* Push toggle — native banner, arrives even when the app is closed (broadcast to all) */}
+        {targetType === 'all' && (
+        <label
+          onClick={() => setSendPush(!sendPush)}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 0", cursor: "pointer", marginBottom: 8, userSelect: "none" }}
+        >
+          <div style={{ width: 44, height: 26, borderRadius: 14, padding: 2, background: sendPush ? '#0A84FF' : '#E0E0E0', transition: 'background 0.2s', display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: 22, height: 22, borderRadius: 12, background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)', transform: sendPush ? 'translateX(18px)' : 'translateX(0)', transition: 'transform 0.2s' }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+            🔔 Push {lang === 'kg' ? '(колдонмо жабык болсо да)' : '(даже если приложение закрыто)'}
+          </span>
+          {sendPush && (
+            <span style={{ fontSize: 11, color: '#0A84FF', fontWeight: 600 }}>{lang === 'kg' ? 'баарына' : 'всем'}</span>
+          )}
+        </label>
         )}
 
         {/* WhatsApp toggle */}

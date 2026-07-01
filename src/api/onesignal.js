@@ -1,3 +1,4 @@
+import { authedFetch } from './pb';
 // ─── OneSignal remote push ───────────────────────────────────────────────────
 // Delivers notifications even when the app is closed / backgrounded / locked.
 //
@@ -58,4 +59,18 @@ export function setPushUser(userId) {
 export function clearPushUser() {
   if (!OneSignal) return;
   try { OneSignal.logout(); } catch { /* ignore */ }
+}
+
+// ─── Admin: broadcast a push to all subscribers (via the server hook) ────────
+// The OneSignal REST key stays on the PB host; this only calls our own route.
+export async function sendPushBroadcast({ title, message, screen, url } = {}) {
+  return authedFetch('/api/custom/push/send', {
+    method: 'POST',
+    body: JSON.stringify({
+      title: title || '',
+      message: message || '',
+      screen: screen || 'catalog',
+      url: url || '',
+    }),
+  });
 }
