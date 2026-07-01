@@ -2386,7 +2386,7 @@ function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
   const containerStyle = {
     width: "100%",
     height: isCard ? 200 : 260,
-    background: "var(--ku-surface, #FFFFFF)",
+    background: "#FFFFFF", // image surroundings stay white in dark so product photos (white bg) blend fully
     position: "relative",
     overflow: "hidden",
   };
