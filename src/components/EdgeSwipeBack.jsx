@@ -1,30 +1,45 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
 import { haptic } from '../utils/haptics';
 
-// iOS-style "swipe from left edge to dismiss" gesture, identical timing curve
-// to UIKit's interactivePopGestureRecognizer. Touches starting OUTSIDE the
-// 30px edge zone are ignored — that's intentional so other touch handlers
-// (image gallery swipe, scroll) inside the modal still work.
+// iOS push-navigation modal. Slides IN from the right on mount and OUT to the
+// right on dismiss (back button, add-to-cart, or the left-edge swipe-back
+// gesture) — one consistent axis, matching UIKit push/pop. Touches starting
+// outside the 30px left edge are ignored so the inner image gallery + scroll
+// keep working.
 
-const EDGE_ZONE = 30;          // px from left edge that arms the gesture
-const DISMISS_DISTANCE = 100;  // drag past this → dismiss
-const DISMISS_VELOCITY = 500;  // px/s flick → dismiss
+const EDGE_ZONE = 30;
+const DISMISS_DISTANCE = 100;   // drag past this → dismiss
+const DISMISS_VELOCITY = 500;   // px/s flick → dismiss
+const EASE = [0.32, 0.72, 0, 1];
 
-export function EdgeSwipeBack({ onDismiss, children, style }) {
-  const x = useMotionValue(0);
+export const EdgeSwipeBack = forwardRef(function EdgeSwipeBack({ onDismiss, children, style }, ref) {
+  const screenW = typeof window !== 'undefined' ? window.innerWidth : 400;
+  const x = useMotionValue(screenW);   // start off-screen right, then slide in
   const startRef = useRef(null);
   const trackingRef = useRef(false);
   const dirRef = useRef(null);
 
-  const screenW = typeof window !== 'undefined' ? window.innerWidth : 400;
-  // Backdrop fades out as user drags right; modal opacity stays 1.
-  const backdropOpacity = useTransform(x, [0, screenW * 0.7], [0.45, 0]);
+  // Backdrop dims in as the modal arrives; fades out as it leaves.
+  const backdropOpacity = useTransform(x, [0, screenW * 0.7], [0.5, 0]);
+
+  // Entry — slide from the right (iOS push).
+  useEffect(() => {
+    const controls = animate(x, 0, { duration: 0.34, ease: EASE });
+    return () => controls.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Exit — slide to the right, then unmount. Shared by every dismiss path.
+  const close = () => {
+    animate(x, screenW, { duration: 0.26, ease: EASE, onComplete: () => onDismiss?.() });
+  };
+  useImperativeHandle(ref, () => ({ close }));
 
   const handleTouchStart = (e) => {
     const t = e.touches?.[0];
     if (!t) return;
-    if (t.clientX > EDGE_ZONE) return; // not in edge zone — let children handle
+    if (t.clientX > EDGE_ZONE) return;   // not in edge zone — let children handle
     startRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
     trackingRef.current = true;
     dirRef.current = null;
@@ -39,9 +54,7 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
     if (dirRef.current === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
       dirRef.current = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
     }
-    if (dirRef.current === 'x' && dx > 0) {
-      x.set(dx);
-    }
+    if (dirRef.current === 'x' && dx > 0) x.set(dx);
   };
 
   const handleTouchEnd = (e) => {
@@ -55,11 +68,7 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
 
     if (dx > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) {
       haptic('light');
-      animate(x, screenW, {
-        duration: 0.22,
-        ease: [0.32, 0.72, 0, 1],
-        onComplete: () => onDismiss?.(),
-      });
+      close();
     } else {
       animate(x, 0, { type: 'spring', stiffness: 380, damping: 32 });
     }
@@ -67,24 +76,20 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
 
   return (
     <>
-      {/* Dark backdrop fades out as user drags */}
+      {/* Dark backdrop revealed behind the sliding modal */}
       <motion.div
         style={{
           position: 'fixed', inset: 0, zIndex: 1001,
-          background: "var(--ku-accent, #111111)",
+          background: '#000',
           opacity: backdropOpacity,
           pointerEvents: 'none',
         }}
       />
-      {/* Modal — slides up on entry, drag-tracked horizontally */}
+      {/* Modal — push in/out on the x axis, drag-tracked for swipe-back */}
       <motion.div
-        initial={{ y: '100%', opacity: 0.6 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
-        transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
         style={{
           position: 'fixed', inset: 0, zIndex: 1002,
-          background: "var(--ku-surface, #FFFFFF)",
+          background: 'var(--ku-surface, #FFFFFF)',
           display: 'flex', flexDirection: 'column',
           x,
           ...(style || {}),
@@ -98,4 +103,4 @@ export function EdgeSwipeBack({ onDismiss, children, style }) {
       </motion.div>
     </>
   );
-}
+});

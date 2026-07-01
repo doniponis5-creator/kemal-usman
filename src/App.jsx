@@ -2644,6 +2644,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
   const glass = useGlass(); // Liquid Glass (native-only); web => no-op
+  const edgeRef = React.useRef(null);
   const [detail, setDetail] = useState(null);
   const [selVariant, setSelVariant] = useState(null);
   // First-time audio hint — visible briefly after catalog mount, capped at 5
@@ -2809,12 +2810,12 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
     const dismiss = () => { setDetail(null); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(false); };
 
     return (
-      <EdgeSwipeBack onDismiss={dismiss}>
+      <EdgeSwipeBack ref={edgeRef} onDismiss={dismiss}>
 
         {/* Back button — high-contrast dark glass, white arrow. Reads cleanly
             on any cover (light beige, dark photo, blurred backdrop). */}
         <motion.button
-          onClick={dismiss}
+          onClick={() => edgeRef.current?.close()}
           whileTap={{ scale: 0.86 }}
           transition={{ type: "spring", stiffness: 420, damping: 28 }}
           style={{
@@ -3154,7 +3155,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             </div>
           )}
           <motion.button
-            onClick={() => { if (!selVariant) return; haptic('medium'); addToCart(detail.id, selVariant.id); dismiss(); }}
+            onClick={() => { if (!selVariant) return; haptic('medium'); addToCart(detail.id, selVariant.id); edgeRef.current?.close(); }}
             disabled={!selVariant?.inStock}
             whileTap={selVariant?.inStock ? { scale: 0.97 } : {}}
             transition={{ type: "spring", stiffness: 420, damping: 28 }}
