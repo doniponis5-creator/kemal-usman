@@ -49,9 +49,9 @@ routerAdd('POST', '/api/custom/push/send', (c) => {
 
   try {
     const res = $http.send({
-      url: 'https://onesignal.com/api/v1/notifications',
+      url: 'https://api.onesignal.com/notifications',
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Basic ' + KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Key ' + KEY },
       body: JSON.stringify(payload),
       timeout: 20,
     });
