@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'framer-motion';
-import { haptic } from '../utils/haptics';
 
 // iOS push-navigation modal. Slides IN from the right on mount and OUT to the
 // right on dismiss (back button, add-to-cart, or the left-edge swipe-back
@@ -67,7 +66,8 @@ export const EdgeSwipeBack = forwardRef(function EdgeSwipeBack({ onDismiss, chil
     trackingRef.current = false;
 
     if (dx > DISMISS_DISTANCE || velocity > DISMISS_VELOCITY) {
-      haptic('light');
+      // No haptic here — native iOS swipe-back is silent; vibration mid-
+      // transition felt like jank on device.
       close();
     } else {
       animate(x, 0, { type: 'spring', stiffness: 380, damping: 32 });
@@ -91,6 +91,10 @@ export const EdgeSwipeBack = forwardRef(function EdgeSwipeBack({ onDismiss, chil
           position: 'fixed', inset: 0, zIndex: 1002,
           background: 'var(--ku-surface, #FFFFFF)',
           display: 'flex', flexDirection: 'column',
+          // Justified will-change: this single layer IS continuously
+          // transformed (push/pop + drag tracking) — pre-promote it so the
+          // first frame of the gesture doesn't stutter.
+          willChange: 'transform',
           x,
           ...(style || {}),
         }}

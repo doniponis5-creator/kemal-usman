@@ -4,8 +4,9 @@ import React from 'react';
 // already in src/index.css.
 
 const baseStyle = {
+  // Theme-aware shimmer — identical in light mode, correct in native dark.
   background:
-    'linear-gradient(90deg, #f5f5f5 0%, #ececec 50%, #f5f5f5 100%)',
+    'linear-gradient(90deg, var(--ku-surface-2, #F5F5F5) 0%, var(--ku-border, #ECECEC) 50%, var(--ku-surface-2, #F5F5F5) 100%)',
   backgroundSize: '200% 100%',
   animation: 'shimmer 1.4s linear infinite',
   borderRadius: 8,

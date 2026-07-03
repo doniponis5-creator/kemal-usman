@@ -7,7 +7,7 @@
     "scrollEnabled": true,
     "limitsNavigationsToAppBoundDomains": false,
     "preferredContentMode": "mobile",
-    "backgroundColor": "#FAF6EE"
+    "backgroundColor": "#FFFFFF"
   },
   "android": {
     "backgroundColor": "#ffffff",
@@ -17,14 +17,14 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 900,
+      "launchShowDuration": 500,
       "launchAutoHide": true,
-      "launchFadeOutDuration": 300,
-      "backgroundColor": "#1A1208",
+      "launchFadeOutDuration": 200,
+      "backgroundColor": "#FFFFFF",
       "androidScaleType": "CENTER_CROP",
       "iosSpinnerStyle": "large",
       "spinnerColor": "#C9A84C",
-      "showSpinner": true,
+      "showSpinner": false,
       "splashFullScreen": true,
       "splashImmersive": true
     },

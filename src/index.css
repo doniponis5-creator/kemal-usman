@@ -1,12 +1,6 @@
 :root {
   --text: #6b6375;
-  --text-h: #08060d;
   --bg: #fff;
-  --code-bg: #f4f3ec;
-
-  --sans: system-ui, -apple-system, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-  --heading: var(--sans);
-  --mono: ui-monospace, Consolas, monospace;
 
   /* ─── Adaptive layout tokens — use these instead of magic numbers ───── */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -162,48 +156,15 @@ img[data-loading="true"] {
   }
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
 p {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* A11y: visible keyboard focus ring (web/desktop; :focus-visible never fires
+   from touch taps, so mobile stays clean). Inputs keep their own focus style. */
+:focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid var(--ku-accent, #111111);
+  outline-offset: 2px;
 }
 
 /* Product card tap feedback — pure CSS, no JS overhead on 500+ cards */

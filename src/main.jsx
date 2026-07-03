@@ -12,6 +12,28 @@ import { initSentry } from './utils/sentry'
 initSentry()
 import App from './App.jsx'
 
+// Branded intro (#ku-intro in index.html): show once per session — on native
+// every launch is a fresh session, so it plays on every app open; on web a
+// reload within the same tab skips it. CSS handles the animation; we only
+// time the outro and clean up the node.
+(() => {
+  const el = document.getElementById('ku-intro');
+  if (!el) return;
+  try {
+    if (sessionStorage.getItem('ku_intro_seen')) { el.remove(); return; }
+    sessionStorage.setItem('ku_intro_seen', '1');
+  } catch { /* private mode — just play it */ }
+  // Native tab bar stays hidden while this flag is up (App.jsx syncs 'intro');
+  // on outro we flip it and notify so the bar springs in WITH the catalog.
+  window.__kuIntroActive = true;
+  setTimeout(() => {
+    el.classList.add('ku-intro-out');
+    window.__kuIntroActive = false;
+    window.dispatchEvent(new Event('ku:intro-done'));
+  }, 1350);
+  setTimeout(() => el.remove(), 1900);
+})();
+
 // PRO: configure native iOS / Android shell — status bar style, splash hide, keyboard adjust.
 // Each plugin is dynamically imported and silently no-ops on web.
 async function initNativeShell() {

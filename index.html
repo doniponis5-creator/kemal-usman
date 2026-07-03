@@ -28,6 +28,52 @@
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet" />
   </head>
   <body>
+    <!-- ── Branded intro — "Kemal Usman" wordmark, light letter-spacing settle.
+         Pure CSS (CSP blocks inline JS); main.jsx removes the node after the
+         outro. Native splash is plain white, so this reads as ONE seamless
+         launch animation. Dark-scheme variant below. ── -->
+    <style>
+      #ku-intro {
+        position: fixed; inset: 0; z-index: 999999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; background: #FFFFFF;
+        transition: opacity 0.45s ease, visibility 0.45s;
+      }
+      #ku-intro .ku-name {
+        font-family: 'Playfair Display', 'Bodoni 72', Didot, Georgia, serif;
+        font-style: italic; font-weight: 700;
+        font-size: clamp(26px, 8vw, 34px);
+        color: #111111;
+        animation: kuNameIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      #ku-intro .ku-sub {
+        font-family: -apple-system, system-ui, sans-serif;
+        font-size: 11px; font-weight: 600;
+        letter-spacing: 0.45em; text-indent: 0.45em;
+        color: #C9A84C;
+        animation: kuSubIn 0.7s ease 0.45s both;
+      }
+      #ku-intro.ku-intro-out { opacity: 0; visibility: hidden; pointer-events: none; }
+      @keyframes kuNameIn {
+        from { opacity: 0; letter-spacing: 0.28em; transform: translateY(6px); }
+        to   { opacity: 1; letter-spacing: 0.04em; transform: none; }
+      }
+      @keyframes kuSubIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      @media (prefers-color-scheme: dark) {
+        #ku-intro { background: #0B0B0C; }
+        #ku-intro .ku-name { color: #F5F5F7; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #ku-intro .ku-name, #ku-intro .ku-sub { animation: none; }
+      }
+    </style>
+    <div id="ku-intro" aria-hidden="true">
+      <div class="ku-name">Kemal Usman</div>
+      <div class="ku-sub">PARFUM</div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

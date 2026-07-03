@@ -20,10 +20,17 @@ export const T = {
   shadowLg: "0 2px 4px rgba(0,0,0,0.05), 0 16px 32px rgba(0,0,0,0.10)",
   danger: "#E53935",
   success: "#43A047",
+  successIOS: "#34C759",  // iOS system green — chips, paid/new states
+  warning: "#FF9500",     // iOS system orange
+  gold: "#C9A84C",        // premium accent (VIP/bonus)
+  gray: "#8E8E93",        // iOS systemGray — legible in light AND dark
   bonus: "#FF6B00",
   referral: "#7C5CBF",
   navH: 64,
 };
+
+// Radius scale — snap every borderRadius to one of these (circles = size/2 are exempt).
+export const R = { xs: 8, sm: 10, md: 12, lg: 14, xl: 16, xxl: 20, sheet: 24, pill: 999 };
 
 // Card helper
 export const card = (extra = {}) => ({

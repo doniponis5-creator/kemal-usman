@@ -13,7 +13,7 @@ import { motion } from 'framer-motion';
 //     action={<button onClick={...}>Перейти в каталог</button>}
 //   />
 
-const easeIOS = [0.32, 0.72, 0, 1];
+import { iosEase as easeIOS } from './MotionScreen';
 
 export function EmptyState({ icon, title, hint, action }) {
   return (

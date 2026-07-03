@@ -31,12 +31,12 @@ module.exports = {
     if (!digits) throw new Error('invalid_phone');
     const chatId = digits + '@c.us';
 
-    // Russian — matches the previous SMS template's tone. Keeping the brand
-    // header bold so users see it's from the shop, not a random sender.
+    // Russian — matches the previous SMS template's tone. Code is placed
+    // FIRST so it's visible in the notification banner/lock-screen preview
+    // (which truncates to the first line) without opening the chat.
     const message =
-      '🔐 *Kemal Usman Parfum*\n\n' +
-      'Ваш код подтверждения:\n\n' +
-      '*' + code + '*\n\n' +
+      '*' + code + '*' + ' — Kemal Usman Parfum\n\n' +
+      'Ваш код подтверждения.\n' +
       'Код действителен 5 минут.\n' +
       'Никому не сообщайте этот код.';
 

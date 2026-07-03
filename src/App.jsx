@@ -45,7 +45,9 @@ import { normalizePhone } from "./utils/phone";
 import { haptic } from "./utils/haptics";
 import { initPush, setPushUser, clearPushUser } from "./api/onesignal";
 // PRO: screen transitions + button micro-animations
-import { MotionScreen } from "./components/MotionScreen";
+import { MotionScreen, iosEase, iosSpring } from "./components/MotionScreen";
+import { BottomSheet } from "./components/BottomSheet";
+import { OrderSuccessGate } from "./components/OrderSuccess";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 // PRO: shimmering placeholder while PocketBase loads
 import { CatalogGridSkeleton } from "./components/Skeleton";
@@ -59,7 +61,7 @@ function AnimatedSum({ value, duration = 0.5 }) {
   React.useEffect(() => {
     const controls = fmAnimate(prevRef.current, value, {
       duration,
-      ease: [0.32, 0.72, 0, 1],
+      ease: iosEase,
       onUpdate: (v) => setDisplay(Math.round(v)),
     });
     prevRef.current = value;
@@ -120,13 +122,15 @@ function Toast({ toast, onDismiss }) {
           style={{
             position: "fixed",
             top: "calc(env(safe-area-inset-top, 12px) + 12px)",
-            left: "50%",
-            transform: "translateX(-50%)",
+            left: 16,
+            right: 16,
+            margin: "0 auto",
+            width: "fit-content",
             zIndex: 9999,
             background: toast.type === 'error' ? T.danger : "var(--ku-accent, #111111)",
             color: "#F5F5F5",
             padding: "12px 22px",
-            borderRadius: 30,
+            borderRadius: 999,
             fontSize: 14,
             fontWeight: 600,
             letterSpacing: -0.1,
@@ -147,16 +151,103 @@ function Toast({ toast, onDismiss }) {
   );
 }
 
+// PRO: inline activity indicator — fixed-size SVG arc, linear rotate (spinner
+// exception to the no-linear rule). Drop into any loading button.
+function Spinner({ size = 14, color = "#fff" }) {
+  return (
+    <motion.svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden
+      animate={{ rotate: 360 }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
+      style={{ display: "block", flexShrink: 0 }}
+    >
+      <circle cx="12" cy="12" r="9" stroke={color} strokeOpacity="0.25" strokeWidth="2.5" />
+      <path d="M12 3a9 9 0 0 1 9 9" stroke={color} strokeWidth="2.5" strokeLinecap="round" />
+    </motion.svg>
+  );
+}
+
+// PRO: 6-cell OTP field. ONE hidden input drives all cells — this keeps iOS
+// SMS autofill (autoComplete="one-time-code"), paste and the system keyboard
+// working exactly like a plain input. Cells are pure visuals. `dark` variant
+// matches the glassmorphism login screen.
+function OtpBoxes({ value, onChange, error = false, dark = false, autoFocus = true }) {
+  const inputRef = useRef(null);
+  const [focused, setFocused] = useState(false);
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] || "");
+  const activeIdx = Math.min(value.length, 5);
+  const pal = dark
+    ? { bg: "rgba(255,255,255,0.08)", border: "rgba(255,255,255,0.15)", borderFilled: "rgba(255,255,255,0.45)", borderActive: "rgba(255,255,255,0.75)", text: "#fff", err: "#ff7b7b" }
+    : { bg: "var(--ku-surface-2, #F5F5F5)", border: "var(--ku-border, #EEEEEE)", borderFilled: "var(--ku-text-3, #AEAEB2)", borderActive: "var(--ku-accent, #111111)", text: "var(--ku-text, #111111)", err: T.danger };
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        ref={inputRef}
+        type="tel" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+        value={value} autoFocus={autoFocus}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        aria-label="SMS code"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", background: "transparent", caretColor: "transparent", zIndex: 2, cursor: "text" }}
+      />
+      <motion.div
+        animate={error ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }}
+        transition={{ duration: 0.4, ease: iosEase }}
+        style={{ display: "flex", gap: 8, justifyContent: "center" }}
+      >
+        {digits.map((d, i) => {
+          const filled = d !== "";
+          const active = focused && i === activeIdx && value.length < 6;
+          return (
+            <motion.div
+              key={i}
+              initial={false}
+              animate={{
+                scale: filled ? [1.08, 1] : 1,
+                borderColor: error ? pal.err : active ? pal.borderActive : filled ? pal.borderFilled : pal.border,
+              }}
+              transition={{ duration: 0.18, ease: iosEase }}
+              style={{
+                flex: 1, maxWidth: 44, minWidth: 0, height: 52, borderRadius: 12,
+                background: pal.bg, border: "1.5px solid",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 22, fontWeight: 700, color: pal.text,
+                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+              }}
+            >
+              {d}
+            </motion.div>
+          );
+        })}
+      </motion.div>
+    </div>
+  );
+}
+
 export function StatusChip({ status }) {
   const { lang } = useLang();
   const labels = {
     ru: { new: "Новый", confirmed: "Подтверждён", preparing: "Готовится", delivering: "Доставляется", delivered: "Доставлен", cancelled: "Отменён" },
     kg: { new: "Жаңы", confirmed: "Тастыкталды", preparing: "Даярдалууда", delivering: "Жеткирилүүдө", delivered: "Жеткирилди", cancelled: "Жокко чыгарылды" },
   };
-  const colors = { new: { bg: "#FFF3E0", color: "#FF6B00" }, confirmed: { bg: "#E3F2FD", color: "#1976D2" }, preparing: { bg: "#E8F5E9", color: "#388E3C" }, delivering: { bg: "#EDE7F6", color: "#7C5CBF" }, delivered: { bg: "#E8F5E9", color: "#388E3C" }, cancelled: { bg: "#FFEBEE", color: "#E53935" } };
-  const c = colors[status] || { bg: "rgba(0,0,0,0.08)", color: T.textSecond };
+  // iOS tinted-fill chips: 12% tint of the ink color + status dot.
+  const colors = {
+    new:        { tint: "255,107,0",  color: "#FF6B00" },
+    confirmed:  { tint: "0,122,255",  color: "#007AFF" },
+    preparing:  { tint: "67,160,71",  color: "#388E3C" },
+    delivering: { tint: "124,92,191", color: "#7C5CBF" },
+    delivered:  { tint: "67,160,71",  color: "#388E3C" },
+    cancelled:  { tint: "229,57,53",  color: T.danger },
+  };
+  const c = colors[status] || { tint: "120,120,128", color: T.textSecond };
   const label = (labels[lang] || labels.ru)[status] || status;
-  return <span style={{ background: c.bg, color: c.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700 }}>{label}</span>;
+  return (
+    <span style={{ background: `rgba(${c.tint},0.12)`, color: c.color, borderRadius: 20, padding: "4px 12px", fontSize: 11, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span style={{ width: 6, height: 6, borderRadius: 3, background: c.color, flexShrink: 0 }} />
+      {label}
+    </span>
+  );
 }
 
 function NavBar({ items, active, onSelect }) {
@@ -200,7 +291,7 @@ function NavBar({ items, active, onSelect }) {
                   key={item.badge}
                   initial={{ scale: 0.4, opacity: 0 }}
                   animate={{ scale: [0.4, 1.35, 1], opacity: 1 }}
-                  transition={{ duration: 0.42, times: [0, 0.55, 1], ease: [0.32, 0.72, 0, 1] }}
+                  transition={{ duration: 0.42, times: [0, 0.55, 1], ease: iosEase }}
                   style={{ position: "absolute", top: -4, right: -6, background: T.danger, color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", border: "2px solid #fff" }}>
                   {item.badge}
                 </motion.div>
@@ -225,10 +316,10 @@ function NavBar({ items, active, onSelect }) {
 // Description renderer — splits by keyword patterns, not newlines
 // Handles text that may have no real \n (PocketBase may store as single block)
 const DESC_SECTIONS = [
-  { kw: "Верхние", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M12 3L20 11H15V21H9V11H4L12 3Z" fill={c || '#FF9500'}/></svg> },
+  { kw: "Верхние", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M12 3L20 11H15V21H9V11H4L12 3Z" fill={c || T.warning}/></svg> },
   { kw: "Средние", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M6 3H18L21 9L12 21L3 9L6 3Z" fill={c || '#AF52DE'}/></svg> },
-  { kw: "Базовые", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22L6.66 19.7C7.14 19.87 7.64 20 8 20C19 20 22 3 22 3C21 5 14 5.25 9 6.25C4 7.25 2 11.5 2 13.5C2 15.5 3.75 17.25 3.75 17.25C7 8 17 8 17 8Z" fill={c || '#34C759'}/></svg> },
-  { kw: "Тип", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><rect x="5" y="2" width="14" height="20" rx="2" stroke={c || '#8E8E93'} strokeWidth="1.5" fill="none"/><path d="M9 2V4H15V2" stroke={c || '#8E8E93'} strokeWidth="1.5"/><line x1="9" y1="9" x2="15" y2="9" stroke={c || '#8E8E93'} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="13" x2="15" y2="13" stroke={c || '#8E8E93'} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="17" x2="12" y2="17" stroke={c || '#8E8E93'} strokeWidth="1.5" strokeLinecap="round"/></svg> },
+  { kw: "Базовые", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22L6.66 19.7C7.14 19.87 7.64 20 8 20C19 20 22 3 22 3C21 5 14 5.25 9 6.25C4 7.25 2 11.5 2 13.5C2 15.5 3.75 17.25 3.75 17.25C7 8 17 8 17 8Z" fill={c || T.successIOS}/></svg> },
+  { kw: "Тип", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><rect x="5" y="2" width="14" height="20" rx="2" stroke={c || T.gray} strokeWidth="1.5" fill="none"/><path d="M9 2V4H15V2" stroke={c || T.gray} strokeWidth="1.5"/><line x1="9" y1="9" x2="15" y2="9" stroke={c || T.gray} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="13" x2="15" y2="13" stroke={c || T.gray} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="17" x2="12" y2="17" stroke={c || T.gray} strokeWidth="1.5" strokeLinecap="round"/></svg> },
 ];
 
 export function DescRenderer({ text, color, iconColor }) {
@@ -495,7 +586,7 @@ export function BannerCropModal({ src, onDone, onCancel }) {
           </div>
           <input type="range" min={0.1} max={4} step={0.01} value={zoom}
             onChange={e => { const z = Number(e.target.value); setZoom(z); draw(z, pos); }}
-            style={{ width: '100%', accentColor: '#C9A84C' }} />
+            style={{ width: '100%', accentColor: T.gold }} />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onCancel}
@@ -505,7 +596,7 @@ export function BannerCropModal({ src, onDone, onCancel }) {
           </button>
           <button onClick={handleDone}
             style={{ flex: 1, padding: '12px 0', borderRadius: 12, border: 'none',
-              background: '#C9A84C', fontSize: 14, fontWeight: 700, cursor: 'pointer', color: "var(--ku-text, #111111)" }}>
+              background: T.gold, fontSize: 14, fontWeight: 700, cursor: 'pointer', color: "var(--ku-text, #111111)" }}>
             Готово ✓
           </button>
         </div>
@@ -578,18 +669,18 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
       )}
       {/* Header with count indicator */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#8E8E93", letterSpacing: -0.1 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: T.gray, letterSpacing: -0.1 }}>
           {t.selectCover || 'Выберите обложку'}
         </div>
         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
           {[0,1,2].map(i => (
             <div key={i} style={{
               width: 6, height: 6, borderRadius: "50%",
-              background: images[i] ? "#34C759" : "rgba(120,120,128,0.20)",
+              background: images[i] ? T.successIOS : "rgba(120,120,128,0.20)",
               transition: "background 0.22s",
             }} />
           ))}
-          <span style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500, marginLeft: 4 }}>{filledCount}/3</span>
+          <span style={{ fontSize: 11, color: T.gray, fontWeight: 500, marginLeft: 4 }}>{filledCount}/3</span>
         </div>
       </div>
 
@@ -700,7 +791,7 @@ export function MultiImageUpload({ images = [], coverImg, onImagesChange, onCove
                     ↑
                   </button>
                   <button onClick={() => handleRemove(i)}
-                    style={{ width: 28, fontSize: 10, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(229,57,53,0.08)", color: "#E53935", fontWeight: 600, cursor: "pointer" }}>
+                    style={{ width: 28, fontSize: 10, padding: "4px 0", borderRadius: 8, border: "none", background: "rgba(229,57,53,0.08)", color: T.danger, fontWeight: 600, cursor: "pointer" }}>
                     ✕
                   </button>
                 </div>
@@ -968,7 +1059,7 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
               initial={{ opacity: 0, scale: 0.8, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: -30 }}
-              transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+              transition={{ duration: 0.4, ease: iosEase }}
               style={{ textAlign: 'center', width: '100%' }}
             >
               {imgSrc ? (
@@ -1239,11 +1330,17 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
 function BannerSlider({ banners }) {
   const [idx, setIdx] = useState(0);
   const [imgErrors, setImgErrors] = useState({});
+  const [paused, setPaused] = useState(false);
+  const touchRef = useRef(null);
+
+  // Auto-advance — one-shot timer per slide, so a manual swipe restarts the
+  // full 4.5s (no jarring double-jump). Touching the banner pauses it.
   useEffect(() => {
-    if (!banners.length) return;
-    const timer = setInterval(() => setIdx(i => (i + 1) % banners.length), 4500);
-    return () => clearInterval(timer);
-  }, [banners.length]);
+    if (!banners.length || paused) return;
+    const timer = setTimeout(() => setIdx(i => (i + 1) % banners.length), 4500);
+    return () => clearTimeout(timer);
+  }, [banners.length, idx, paused]);
+
   if (!banners.length) return null;
   // Filter out banners whose images failed to load
   const validBanners = banners.filter(b => !b.img || !imgErrors[b.id]);
@@ -1251,25 +1348,57 @@ function BannerSlider({ banners }) {
   const safeIdx = idx % validBanners.length;
   const b = validBanners[safeIdx];
   const fallbackBg = b.bg || "linear-gradient(135deg, #111111 0%, #000000 100%)";
+  // Ken Burns alternates per slide: even slides settle IN, odd slides drift OUT.
+  const kenBurns = safeIdx % 2 === 0
+    ? { initial: { scale: 1.08 }, animate: { scale: 1 } }
+    : { initial: { scale: 1 }, animate: { scale: 1.07 } };
+
+  // Manual swipe — same threshold pattern as the detail hero carousel.
+  // Direction check (|dx| > |dy|*1.2) keeps vertical page scroll untouched.
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY };
+    setPaused(true);
+  };
+  const onTouchEnd = (e) => {
+    setPaused(false);
+    const start = touchRef.current;
+    touchRef.current = null;
+    if (!start || validBanners.length <= 1) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      haptic('light');
+      setIdx(i => dx < 0
+        ? (i + 1) % validBanners.length
+        : (i - 1 + validBanners.length) % validBanners.length);
+    }
+  };
+
   return (
-    <div style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", aspectRatio: "21 / 9" }}>
-      {/* PRO: crossfade + sekin Ken Burns zoom — premium jonlilik */}
+    <div
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={() => { touchRef.current = null; setPaused(false); }}
+      style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", aspectRatio: "21 / 9" }}
+    >
+      {/* PRO: crossfade + Ken Burns (alternating direction) — premium jonlilik */}
       <AnimatePresence initial={false}>
         <motion.div
           key={b.id}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.7, ease: "easeInOut" }}
+          transition={{ duration: 0.7, ease: iosEase }}
           style={{ position: "absolute", inset: 0, background: fallbackBg }}
         >
           {b.img && !imgErrors[b.id] && (
             <motion.img
               src={b.img} alt=""
               onError={() => setImgErrors(prev => ({ ...prev, [b.id]: true }))}
-              initial={{ scale: 1.08 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 5, ease: "linear" }}
+              initial={kenBurns.initial}
+              animate={kenBurns.animate}
+              transition={{ duration: 5, ease: "easeOut" }}
               style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", display: "block" }}
             />
           )}
@@ -1288,8 +1417,17 @@ function BannerSlider({ banners }) {
         </motion.div>
       </AnimatePresence>
       {validBanners.length > 1 && (
-        <div style={{ position: "absolute", bottom: 10, right: 14, display: "flex", gap: 5 }}>
-          {validBanners.map((_, i) => <div key={i} onClick={() => setIdx(i)} style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "var(--ku-surface, #FFFFFF)" : "rgba(255,255,255,0.5)", transition: "width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.35s", cursor: "pointer" }} />)}
+        <div style={{ position: "absolute", bottom: -2, right: 2, display: "flex" }}>
+          {/* Dot visuals stay 6px; each sits in a 30px padded hit-area (HIG). */}
+          {validBanners.map((_, i) => (
+            <div
+              key={i}
+              onClick={(e) => { e.stopPropagation(); if (i !== safeIdx) haptic('light'); setIdx(i); }}
+              style={{ padding: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+            >
+              <div style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "var(--ku-surface, #FFFFFF)" : "rgba(255,255,255,0.5)", transition: "width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.35s" }} />
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -1371,7 +1509,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
     background: "var(--ku-surface-2, #F5F5F5)", border: "1px solid var(--ku-border, #EEEEEE)",
     borderRadius: 14, color: "var(--ku-text, #111111)", outline: "none", boxSizing: "border-box",
   };
-  const lbl = { fontSize: 10, color: "#8E8E93", marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
+  const lbl = { fontSize: 10, color: T.gray, marginBottom: 6, letterSpacing: 2, textTransform: "uppercase" };
 
   return (
     <AnimatePresence>
@@ -1404,7 +1542,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
             <div style={{ fontSize: 18, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4, textAlign: "center" }}>
               {lang === "ru" ? "Регистрация" : "Катталуу"}
             </div>
-            <div style={{ fontSize: 13, color: "#8E8E93", marginBottom: 20, textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: T.gray, marginBottom: 20, textAlign: "center" }}>
               {lang === "ru" ? "Для оформления заказа зарегистрируйтесь" : "Заказ берүү үчүн катталыңыз"}
             </div>
 
@@ -1449,7 +1587,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                 </div>
 
                 {err && (
-                  <div style={{ color: "#E53935", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 10, border: "1px solid #FFCDD2", textAlign: "center" }}>{err}</div>
+                  <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "rgba(229,57,53,0.06)", borderRadius: 10, border: "1px solid rgba(229,57,53,0.25)", textAlign: "center" }}>{err}</div>
                 )}
 
                 <button onClick={handleRequestOtp} disabled={otpLoading} style={{
@@ -1458,7 +1596,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                   cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
                   opacity: otpLoading ? 0.6 : 1,
                 }}>
-                  {otpLoading ? (lang === "ru" ? "ОТПРАВКА..." : "ЖӨНӨТҮҮ...") : (lang === "ru" ? "ПОЛУЧИТЬ КОД" : "КОДДУ АЛУУ")}
+                  {otpLoading ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === "ru" ? "ОТПРАВКА..." : "ЖӨНӨТҮҮ..."}</span> : (lang === "ru" ? "ПОЛУЧИТЬ КОД" : "КОДДУ АЛУУ")}
                 </button>
               </>
             ) : (
@@ -1466,16 +1604,11 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                 {/* OTP input */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={lbl}>{lang === "ru" ? "КОД ИЗ SMS" : "SMS КОДУ"}</div>
-                  <input
-                    type="tel" inputMode="numeric" maxLength={6} value={otpCode}
-                    onChange={e => { setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErr(""); }}
-                    placeholder="••••••" autoFocus
-                    style={{ ...inp, fontSize: 22, letterSpacing: 8, textAlign: "center", fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
-                  />
+                  <OtpBoxes value={otpCode} onChange={(v) => { setOtpCode(v); setErr(""); }} error={!!err} />
                 </div>
 
                 {err && (
-                  <div style={{ color: "#E53935", fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "#FFF5F5", borderRadius: 10, border: "1px solid #FFCDD2", textAlign: "center" }}>{err}</div>
+                  <div style={{ color: T.danger, fontSize: 13, marginBottom: 12, padding: "10px 14px", background: "rgba(229,57,53,0.06)", borderRadius: 10, border: "1px solid rgba(229,57,53,0.25)", textAlign: "center" }}>{err}</div>
                 )}
 
                 <button onClick={handleVerifyOtp} disabled={otpLoading} style={{
@@ -1484,12 +1617,12 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                   cursor: otpLoading ? "default" : "pointer", letterSpacing: 2,
                   marginBottom: 10, opacity: otpLoading ? 0.6 : 1,
                 }}>
-                  {otpLoading ? (lang === "ru" ? "ПРОВЕРКА..." : "ТЕКШЕРҮҮ...") : (lang === "ru" ? "ВОЙТИ И ЗАКАЗАТЬ" : "КИРҮҮ ЖАНА ЗАКАЗ БЕРҮҮ")}
+                  {otpLoading ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === "ru" ? "ПРОВЕРКА..." : "ТЕКШЕРҮҮ..."}</span> : (lang === "ru" ? "ВОЙТИ И ЗАКАЗАТЬ" : "КИРҮҮ ЖАНА ЗАКАЗ БЕРҮҮ")}
                 </button>
 
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <button onClick={() => { setOtpStep("idle"); setOtpCode(""); setErr(""); }}
-                    style={{ background: "none", border: "none", color: "#8E8E93", fontSize: 12, cursor: "pointer", padding: 0 }}>
+                    style={{ background: "none", border: "none", color: T.gray, fontSize: 12, cursor: "pointer", padding: 0 }}>
                     {lang === "ru" ? "Изменить номер" : "Номерди өзгөртүү"}
                   </button>
                   <button onClick={() => { if (resendCooldown <= 0 && !otpLoading) handleRequestOtp(); }}
@@ -1638,7 +1771,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       borderRadius: 14, color: "var(--ku-text, #111111)", outline: 'none',
       boxSizing: 'border-box',
     };
-    const labelDesktop = { fontSize: 10, color: '#8E8E93', marginBottom: 6, letterSpacing: 2, textTransform: 'uppercase' };
+    const labelDesktop = { fontSize: 10, color: T.gray, marginBottom: 6, letterSpacing: 2, textTransform: 'uppercase' };
     return (
       <div style={{ width: '100%' }}>
         {/* Phone */}
@@ -1682,7 +1815,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             </div>
 
             {err && (
-              <div style={{ width: '100%', color: '#E53935', fontSize: 13, marginBottom: 12, padding: '10px 14px', background: '#FFF5F5', borderRadius: 10, border: '1px solid #FFCDD2', textAlign: 'center', boxSizing: 'border-box' }}>{err}</div>
+              <div style={{ width: '100%', color: T.danger, fontSize: 13, marginBottom: 12, padding: '10px 14px', background: 'rgba(229,57,53,0.06)', borderRadius: 10, border: '1px solid rgba(229,57,53,0.25)', textAlign: 'center', boxSizing: 'border-box' }}>{err}</div>
             )}
 
             <button onClick={handleRequestOtp} disabled={otpLoading} style={{
@@ -1693,7 +1826,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
               marginBottom: 14, boxSizing: 'border-box',
               opacity: otpLoading ? 0.6 : 1,
             }}>
-              {otpLoading ? (lang === 'ru' ? 'ОТПРАВКА…' : 'ЖӨНӨТҮҮ…') : (lang === 'ru' ? 'ПОЛУЧИТЬ КОД' : 'КОДДУ АЛУУ')}
+              {otpLoading ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === 'ru' ? 'ОТПРАВКА…' : 'ЖӨНӨТҮҮ…'}</span> : (lang === 'ru' ? 'ПОЛУЧИТЬ КОД' : 'КОДДУ АЛУУ')}
             </button>
           </>
         ) : (
@@ -1701,17 +1834,11 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             {/* OTP code input */}
             <div style={{ width: '100%', marginBottom: 14 }}>
               <div style={labelDesktop}>{lang === 'ru' ? 'КОД ИЗ SMS' : 'SMS КОДУ'}</div>
-              <input
-                type="tel" inputMode="numeric" maxLength={6} value={otpCode}
-                onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setErr(''); }}
-                placeholder="••••••"
-                autoFocus
-                style={{ ...inputDesktop, fontSize: 22, letterSpacing: 8, textAlign: 'center', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}
-              />
+              <OtpBoxes value={otpCode} onChange={(v) => { setOtpCode(v); setErr(''); }} error={!!err} />
             </div>
 
             {err && (
-              <div style={{ width: '100%', color: '#E53935', fontSize: 13, marginBottom: 12, padding: '10px 14px', background: '#FFF5F5', borderRadius: 10, border: '1px solid #FFCDD2', textAlign: 'center', boxSizing: 'border-box' }}>{err}</div>
+              <div style={{ width: '100%', color: T.danger, fontSize: 13, marginBottom: 12, padding: '10px 14px', background: 'rgba(229,57,53,0.06)', borderRadius: 10, border: '1px solid rgba(229,57,53,0.25)', textAlign: 'center', boxSizing: 'border-box' }}>{err}</div>
             )}
 
             <button onClick={handleVerifyOtp} disabled={otpLoading} style={{
@@ -1722,12 +1849,12 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
               marginBottom: 10, boxSizing: 'border-box',
               opacity: otpLoading ? 0.6 : 1,
             }}>
-              {otpLoading ? (lang === 'ru' ? 'ПРОВЕРКА…' : 'ТЕКШЕРҮҮ…') : (lang === 'ru' ? 'ВОЙТИ' : 'КИРҮҮ')}
+              {otpLoading ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === 'ru' ? 'ПРОВЕРКА…' : 'ТЕКШЕРҮҮ…'}</span> : (lang === 'ru' ? 'ВОЙТИ' : 'КИРҮҮ')}
             </button>
 
             <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <button onClick={() => { setOtpStep('idle'); setOtpCode(''); setErr(''); }}
-                style={{ background: 'none', border: 'none', color: '#8E8E93', fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
+                style={{ background: 'none', border: 'none', color: T.gray, fontSize: 12, cursor: 'pointer', padding: 0, letterSpacing: 0.5 }}>
                 {lang === 'ru' ? 'Изменить номер' : 'Номерди өзгөртүү'}
               </button>
               <button onClick={handleResendOtp} disabled={resendCooldown > 0 || otpLoading}
@@ -1741,7 +1868,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
         {/* Guest */}
         {onGuest && (
           <button onClick={setGuestMode} style={{
-            background: 'none', border: '1.5px solid #D1D1D6', color: '#8E8E93', fontSize: 13,
+            background: 'none', border: '1.5px solid #D1D1D6', color: T.gray, fontSize: 13,
             cursor: 'pointer', letterSpacing: 1, padding: '12px 0', borderRadius: 14,
             width: '100%', fontWeight: 600, textTransform: 'uppercase',
           }}>
@@ -1801,12 +1928,12 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
         background: "rgba(255,255,255,0.15)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
-        borderRadius: 30, padding: 3,
+        borderRadius: 999, padding: 3,
         border: "1px solid rgba(255,255,255,0.25)"
       }}>
         {["ru", "kg"].map(l => (
           <button key={l} onClick={() => setLang(l)} style={{
-            padding: "5px 14px", borderRadius: 26, border: "none", cursor: "pointer",
+            padding: "5px 14px", borderRadius: 999, border: "none", cursor: "pointer",
             fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
             background: lang === l ? "rgba(255,255,255,0.9)" : "transparent",
             color: lang === l ? "var(--ku-text, #111111)" : "rgba(255,255,255,0.7)",
@@ -1930,7 +2057,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             opacity: otpLoading ? 0.6 : 1,
           }}>
             {otpLoading
-              ? (lang === "ru" ? "ОТПРАВКА…" : "ЖӨНӨТҮҮ…")
+              ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === "ru" ? "ОТПРАВКА…" : "ЖӨНӨТҮҮ…"}</span>
               : (lang === "ru" ? "ПОЛУЧИТЬ КОД" : "КОДДУ АЛУУ")}
           </button>
         </>
@@ -1941,22 +2068,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginBottom: 6, letterSpacing: 1.5 }}>
               {lang === "ru" ? "КОД ИЗ SMS" : "SMS КОДУ"}
             </div>
-            <input
-              className="login-input"
-              type="tel" inputMode="numeric" maxLength={6} value={otpCode}
-              onChange={e => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setErr(""); }}
-              placeholder="••••••"
-              autoFocus
-              style={{
-                width: "100%", padding: "13px 16px", fontSize: 22,
-                background: "rgba(255,255,255,0.08)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: 14, color: "#fff", outline: "none",
-                letterSpacing: 8, textAlign: "center",
-                fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-                boxSizing: "border-box",
-              }}
-            />
+            <OtpBoxes value={otpCode} onChange={(v) => { setOtpCode(v); setErr(""); }} error={!!err} dark />
           </div>
 
           {err && (
@@ -1974,7 +2086,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             opacity: otpLoading ? 0.6 : 1,
           }}>
             {otpLoading
-              ? (lang === "ru" ? "ПРОВЕРКА…" : "ТЕКШЕРҮҮ…")
+              ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === "ru" ? "ПРОВЕРКА…" : "ТЕКШЕРҮҮ…"}</span>
               : (lang === "ru" ? "ВОЙТИ" : "КИРҮҮ")}
           </button>
 
@@ -2205,7 +2317,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
               </div>
               <div style={{
                 fontSize: isMobile ? 12 : 13,
-                color: "#8E8E93",
+                color: T.gray,
                 marginTop: 2,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -2223,7 +2335,7 @@ function SearchDropdown({ results, onSelect, lang, isMobile = true }) {
                       <div style={{ fontSize: 11, color: "var(--ku-text-3, #AEAEB2)", textDecoration: "line-through" }}>
                         {price.toLocaleString()} сом
                       </div>
-                      <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: "#E53935" }}>
+                      <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 700, color: T.danger }}>
                         {salePrice(price, si.percent).toLocaleString()} сом
                       </div>
                     </>
@@ -2311,7 +2423,7 @@ export function SaleCountdownBadge({ product, sale: saleProp = null }) {
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#E53935', animation: 'salePulse 1.5s infinite' }} />
+          <div style={{ width: 5, height: 5, borderRadius: '50%', background: T.danger, animation: 'salePulse 1.5s infinite' }} />
           <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.55)', letterSpacing: 1.2, textTransform: 'uppercase' }}>
             Скидка -{sale.percent}%
           </span>
@@ -2328,7 +2440,7 @@ export function SaleCountdownBadge({ product, sale: saleProp = null }) {
       <div style={{ width: '100%', height: 3, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
         <div style={{
           width: `${Math.max(2, sale.progress * 100)}%`, height: '100%', borderRadius: 2,
-          background: sale.progress < 0.15 ? '#E53935' : 'linear-gradient(90deg, #E53935, #FF8A80)',
+          background: sale.progress < 0.15 ? T.danger : 'linear-gradient(90deg, #E53935, #FF8A80)',
           transition: 'width 0.3s ease',
         }} />
       </div>
@@ -2347,7 +2459,7 @@ function SaleProgressBar({ product }) {
     <div style={{ marginTop: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
         <span style={{ fontSize: 10, color: '#FF3B30', fontWeight: 600 }}>−{sale.percent}%</span>
-        <span style={{ fontSize: 10, color: '#8E8E93' }}>{label}</span>
+        <span style={{ fontSize: 10, color: T.gray }}>{label}</span>
       </div>
       <div style={{ height: 3, background: "var(--ku-surface-2, #F5F5F5)", borderRadius: 2, overflow: 'hidden' }}>
         <motion.div
@@ -2465,14 +2577,14 @@ function AppDownloadBanner({ settings }) {
     <motion.div
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+      transition={{ duration: 0.3, ease: iosEase }}
       style={{
         margin: "0 16px 12px", padding: "10px 12px", borderRadius: 14,
         background: "var(--ku-accent, #111111)", display: "flex", alignItems: "center", gap: 10,
         boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
       }}
     >
-      <div style={{ width: 36, height: 36, borderRadius: 9, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📱</div>
+      <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📱</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: "#fff", fontSize: 13, fontWeight: 700, letterSpacing: -0.1 }}>Скачайте наше приложение</div>
         <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 11 }}>Удобнее, быстрее и с уведомлениями о заказе</div>
@@ -2609,7 +2721,7 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
               ) : minP > 0 ? (
                 <span style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(minP)}</span>
               ) : (
-                <span style={{ color: "#8E8E93", fontWeight: 600, fontSize: 13, letterSpacing: -0.2 }}>{lang === 'kg' ? 'Баасы такталууда' : 'Цена уточняется'}</span>
+                <span style={{ color: T.gray, fontWeight: 600, fontSize: 13, letterSpacing: -0.2 }}>{lang === 'kg' ? 'Баасы такталууда' : 'Цена уточняется'}</span>
               )
             ) : <span style={{ color: T.danger, fontSize: 11, fontWeight: 500 }}>{t.outOfStock}</span>}
           </div>
@@ -2897,25 +3009,17 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             }}
           >
             {allImages.length > 0 ? (
-              <>
-                {/* Blurred backdrop — hidden for portrait (white bg), visible for landscape */}
-                <img
-                  src={allImages[imgIndex]}
-                  alt=""
-                  aria-hidden
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    filter: imgIsLandscape ? "blur(0px)" : "blur(44px) saturate(140%) brightness(0.95)",
-                    transform: imgIsLandscape ? "scale(1)" : "scale(1.25)",
-                    opacity: 0,
-                    pointerEvents: "none",
-                    transition: "filter 0.3s, opacity 0.3s, transform 0.3s",
-                  }}
-                />
+              <motion.div
+                key={detail.id}
+                initial={{ scale: 1.05 }}
+                animate={{ scale: 1 }}
+                transition={{ ...iosSpring.smooth, delay: 0.22 }}
+                style={{ position: "absolute", inset: 0 }}
+              >
+                {/* PERF: the old blurred-backdrop <img> lived here with a
+                    permanent opacity:0 — invisible, yet its blur(44px) layer
+                    was rasterized by the GPU on every push/pop frame. Removed:
+                    zero visual change, big smoothness win on device. */}
                 {/* Foreground: cover for landscape, contain for portrait */}
                 <motion.img
                   src={allImages[imgIndex]}
@@ -2942,7 +3046,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                     transition: "padding 0.3s",
                   }}
                 />
-              </>
+              </motion.div>
             ) : (
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {React.cloneElement(IC.bottle, { style: { width: 72, height: 72, color: "#C7C7CC" } })}
@@ -2984,7 +3088,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: 0.35, delay: 0.1, ease: iosEase }}
             style={{
             background: "var(--ku-surface, #FFFFFF)",
             borderTopLeftRadius: 24,
@@ -3021,7 +3125,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       maskImage: descExpanded ? "none" : "linear-gradient(to bottom, #000 60%, transparent 100%)",
                     }}
                   >
-                    <DescRenderer text={pickDesc(detail, lang)} color="#6b6b70" iconColor="#8E8E93" />
+                    <DescRenderer text={pickDesc(detail, lang)} color="#6b6b70" iconColor={T.gray} />
                   </motion.div>
                   <button
                     onClick={() => { haptic('light'); setDescExpanded(v => !v); }}
@@ -3058,7 +3162,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       key={v.id}
                       initial={staggered ? { opacity: 0, y: 10 } : false}
                       animate={staggered ? { opacity: 1, y: 0 } : undefined}
-                      transition={staggered ? { duration: 0.28, delay: 0.2 + i * 0.06, ease: [0.22, 1, 0.36, 1] } : undefined}
+                      transition={staggered ? { duration: 0.28, delay: 0.2 + i * 0.06, ease: iosEase } : undefined}
                     >
                       <motion.button
                         onClick={() => setSelVariant(v)}
@@ -3093,7 +3197,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                               </div>
                             );
                           }
-                          return <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : "#8E8E93", marginTop: 4 }}>{formatSum(v.price)}</div>;
+                          return <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : T.gray, marginTop: 4 }}>{formatSum(v.price)}</div>;
                         })()}
                       </motion.button>
                     </motion.div>
@@ -3374,7 +3478,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                 key={p.id}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay, ease: [0.32, 0.72, 0, 1] }}
+                transition={{ duration: 0.28, delay, ease: iosEase }}
               >
                 <ProductCard
                   p={p}
@@ -3423,7 +3527,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                 >
                   <div style={{ display: "flex", gap: 2, marginBottom: 10 }}>
                     {[1,2,3,4,5].map(s => (
-                      <svg key={s} width="13" height="13" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? "#111" : "#E0E0E0"}>
+                      <svg key={s} width="13" height="13" viewBox="0 0 24 24" fill={s <= (r.rating || 5) ? "#111" : "var(--ku-border, #E0E0E0)"}>
                         <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                       </svg>
                     ))}
@@ -3680,7 +3784,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                 onClick={() => !editingAddress && setEditingAddress(true)}
                 style={{ flex: 1, minWidth: 0, cursor: editingAddress ? "default" : "pointer" }}
               >
-                <div style={{ fontSize: 11, color: "#8E8E93", fontWeight: 500, letterSpacing: 0.2, marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: T.gray, fontWeight: 500, letterSpacing: 0.2, marginBottom: 4 }}>
                   Адрес доставки
                 </div>
                 {editingAddress ? (
@@ -3881,7 +3985,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                 }}
               >
                 <motion.div
-                  animate={{ color: selected ? '#fff' : '#8E8E93' }}
+                  animate={{ color: selected ? '#fff' : T.gray }}
                   transition={{ duration: 0.2 }}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                 >
@@ -3927,7 +4031,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               <div style={{ color: T.bonus, fontWeight: 700, fontSize: 14 }}>{t.useBonus}</div>
               <div style={{ color: T.textMuted, fontSize: 12 }}>{formatSum(bonusBalance)} · {t.maxDiscount} {useBonusPercent}%</div>
             </div>
-            <div onClick={() => setUseBonus(v => !v)} style={{ width: 48, height: 28, borderRadius: 14, background: useBonus ? T.accent : T.border, cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
+            <div onClick={() => { haptic('medium'); setUseBonus(v => !v); }} style={{ width: 48, height: 28, borderRadius: 14, background: useBonus ? T.accent : T.border, cursor: "pointer", position: "relative", transition: "background 0.2s" }}>
               <div style={{ position: "absolute", top: 3, left: useBonus ? 23 : 3, width: 22, height: 22, borderRadius: "50%", background: "var(--ku-surface, #FFFFFF)", transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
             </div>
           </div>
@@ -3942,7 +4046,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
             useBonus && bonusDiscount > 0 && { label: t.bonusDiscount, val: `−${formatSum(bonusDiscount)}`, color: T.bonus },
           ].filter(Boolean).map(row => (
             <div key={row.label} style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <span style={{ color: "#8E8E93", fontSize: 13, fontWeight: 500, letterSpacing: -0.05 }}>{row.label}</span>
+              <span style={{ color: T.gray, fontSize: 13, fontWeight: 500, letterSpacing: -0.05 }}>{row.label}</span>
               <span style={{ color: row.color || "var(--ku-text-dim, #3A3A3C)", fontWeight: 500, fontSize: 13, letterSpacing: -0.05 }}>{row.val}</span>
             </div>
           ))}
@@ -3954,7 +4058,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               key={total}
               initial={{ y: -6, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+              transition={{ duration: 0.25, ease: iosEase }}
               style={{ color: T.text, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}
             >
               {formatSum(total)}
@@ -4039,7 +4143,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
               layout
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, delay: Math.min(i, 6) * 0.04, ease: [0.32, 0.72, 0, 1] }}
+              transition={{ duration: 0.32, delay: Math.min(i, 6) * 0.04, ease: iosEase }}
               style={{ ...card({ padding: "16px" }) }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
@@ -4128,7 +4232,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                     </div>
                     <div style={{ display: 'flex', gap: 4 }}>
                       {[1,2,3,4,5].map(s => (
-                        <svg key={s} onClick={() => setReviewRating(s)} width="24" height="24" viewBox="0 0 24 24" fill={s <= reviewRating ? '#111' : '#E0E0E0'} style={{ cursor: 'pointer' }}>
+                        <svg key={s} onClick={() => setReviewRating(s)} width="24" height="24" viewBox="0 0 24 24" fill={s <= reviewRating ? '#111' : 'var(--ku-border, #E0E0E0)'} style={{ cursor: 'pointer' }}>
                           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                         </svg>
                       ))}
@@ -4170,7 +4274,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
                         : (lang === 'kg' ? 'Жөнөтүү' : 'Отправить')}
                     </motion.button>
                     <button onClick={() => setReviewOrderId(null)}
-                      style={{ background: 'none', border: 'none', fontSize: 12, color: '#8E8E93', cursor: 'pointer', padding: '10px 14px' }}>
+                      style={{ background: 'none', border: 'none', fontSize: 12, color: T.gray, cursor: 'pointer', padding: '10px 14px' }}>
                       {lang === 'kg' ? 'Жокко чыгаруу' : 'Отмена'}
                     </button>
                   </div>
@@ -4221,7 +4325,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
       <div style={{ background: "linear-gradient(160deg, #111111 0%, #000000 100%)", padding: "calc(env(safe-area-inset-top, 44px) + 8px) 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
         {/* Language toggle moved to Settings — header stays clean & minimal. */}
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 18, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "#fff" } })}
           </div>
           <div style={{ flex: 1 }}>
@@ -4233,7 +4337,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
+          transition={{ delay: 0.1, duration: 0.4, ease: iosEase }}
           style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
         >
           <div>
@@ -4245,7 +4349,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
           </div>
           <motion.div
             animate={{ rotate: [0, -8, 8, -4, 0] }}
-            transition={{ duration: 1.4, delay: 0.6, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ duration: 1.4, delay: 0.6, ease: iosEase }}
           >
             {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
           </motion.div>
@@ -4324,7 +4428,7 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
                 key={i}
                 initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.32, delay: Math.min(i, 8) * 0.04, ease: [0.32, 0.72, 0, 1] }}
+                transition={{ duration: 0.32, delay: Math.min(i, 8) * 0.04, ease: iosEase }}
                 style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14 }}
               >
                 <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "rgba(224,85,85,0.10)" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -4764,7 +4868,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
               />
             </div>
             <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ku-text-dim, #3A3A3C)" }}>Создание счёта{dots}</div>
-            <div style={{ fontSize: 13, color: '#8E8E93', marginTop: 6 }}>Подождите немного</div>
+            <div style={{ fontSize: 13, color: T.gray, marginTop: 6 }}>Подождите немного</div>
           </motion.div>
         )}
 
@@ -4794,7 +4898,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                     borderRadius: 12, border: '1px solid var(--ku-border, #EEEEEE)',
                   }}
                 />
-                <div style={{ fontSize: 12, color: '#8E8E93', marginTop: 10, letterSpacing: 0.2 }}>
+                <div style={{ fontSize: 12, color: T.gray, marginTop: 10, letterSpacing: 0.2 }}>
                   Сканируйте QR-код для оплаты
                 </div>
               </motion.div>
@@ -4841,7 +4945,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
                   border: '2px solid #F2F2F7', borderTopColor: '#FF6B00',
                 }}
               />
-              <span style={{ fontSize: 13, color: '#8E8E93', fontWeight: 500 }}>
+              <span style={{ fontSize: 13, color: T.gray, fontWeight: 500 }}>
                 {statusText || 'Ожидание оплаты'}{dots}
               </span>
             </div>
@@ -4897,7 +5001,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
               transition={{ delay: 0.25 }}
             >
               <div style={{ fontSize: 20, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4 }}>Оплата прошла!</div>
-              <div style={{ fontSize: 14, color: '#8E8E93' }}>Заказ успешно оплачен</div>
+              <div style={{ fontSize: 14, color: T.gray }}>Заказ успешно оплачен</div>
             </motion.div>
           </motion.div>
         )}
@@ -4922,7 +5026,7 @@ function OdengiPayment({ total, pendingOrder, onConfirm, onCancel, showToast }) 
               </svg>
             </motion.div>
             <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ku-text, #111111)", marginBottom: 6 }}>Ошибка оплаты</div>
-            <div style={{ fontSize: 13, color: '#8E8E93', marginBottom: 24, lineHeight: 1.5, padding: '0 12px' }}>{error}</div>
+            <div style={{ fontSize: 13, color: T.gray, marginBottom: 24, lineHeight: 1.5, padding: '0 12px' }}>{error}</div>
             <motion.button
               whileTap={{ scale: 0.97 }}
               onClick={handleCancel}
@@ -5039,20 +5143,20 @@ function OrderReceipt({ order, settings, onClose }) {
             initial={{ scale: 0, rotate: -30 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 18, delay: 0.1 }}
-            style={{ width: 72, height: 72, margin: '0 auto 12px', borderRadius: '50%', background: '#E8F5E9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ width: 72, height: 72, margin: '0 auto 12px', borderRadius: '50%', background: 'rgba(67,160,71,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={T.successIOS} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </motion.div>
           <div style={{ fontSize: 20, fontWeight: 800, color: "var(--ku-text, #111111)", marginBottom: 4 }}>Заказ оформлен!</div>
-          <div style={{ fontSize: 13, color: '#8E8E93' }}>Заказ №{order.id}</div>
+          <div style={{ fontSize: 13, color: T.gray }}>Заказ №{order.id}</div>
         </div>
 
         {/* Receipt card */}
         <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 14, padding: '16px', marginBottom: 16, border: '1px solid #F2F2F7' }}>
           {/* Dashed top border for receipt feel */}
-          <div style={{ borderBottom: '1px dashed #E0E0E0', paddingBottom: 12, marginBottom: 12 }}>
+          <div style={{ borderBottom: '1px dashed var(--ku-border, #E0E0E0)', paddingBottom: 12, marginBottom: 12 }}>
             <div style={{ fontSize: 10, letterSpacing: 2, textTransform: 'uppercase', color: "var(--ku-text-3, #AEAEB2)", fontWeight: 700, textAlign: 'center' }}>Kemal Usman Parfum</div>
             <div style={{ fontSize: 10, color: '#CCC', textAlign: 'center', marginTop: 2 }}>{order.date}</div>
           </div>
@@ -5062,30 +5166,30 @@ function OrderReceipt({ order, settings, onClose }) {
             <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ku-text-dim, #3A3A3C)", lineHeight: 1.3 }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: '#8E8E93' }}>{item.qty} шт. × {item.price.toLocaleString()} сом</div>
+                <div style={{ fontSize: 11, color: T.gray }}>{item.qty} шт. × {item.price.toLocaleString()} сом</div>
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ku-text, #111111)", flexShrink: 0, marginLeft: 8 }}>{(item.price * item.qty).toLocaleString()} сом</div>
             </div>
           ))}
 
-          <div style={{ borderTop: '1px dashed #E0E0E0', paddingTop: 12, marginTop: 8 }}>
+          <div style={{ borderTop: '1px dashed var(--ku-border, #E0E0E0)', paddingTop: 12, marginTop: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: '#8E8E93' }}>Оплата</span>
+              <span style={{ fontSize: 12, color: T.gray }}>Оплата</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text-mid, #555555)" }}>{payLabel}</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: '#8E8E93' }}>Доставка</span>
+              <span style={{ fontSize: 12, color: T.gray }}>Доставка</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text-mid, #555555)" }}>{deliveryLabel}</span>
             </div>
             {order.bonusDiscount > 0 && (
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: '#C9A84C' }}>Бонус</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#C9A84C' }}>−{order.bonusDiscount.toLocaleString()} сом</span>
+                <span style={{ fontSize: 12, color: T.gold }}>Бонус</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.gold }}>−{order.bonusDiscount.toLocaleString()} сом</span>
               </div>
             )}
           </div>
 
-          <div style={{ borderTop: '1.5px solid #E0E0E0', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <div style={{ borderTop: '1.5px solid var(--ku-border, #E0E0E0)', paddingTop: 10, marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 16, fontWeight: 800, color: "var(--ku-text, #111111)" }}>Итого</span>
             <span style={{ fontSize: 18, fontWeight: 900, color: "var(--ku-text, #111111)" }}>{(order.total || 0).toLocaleString()} сом</span>
           </div>
@@ -5107,10 +5211,10 @@ function OrderReceipt({ order, settings, onClose }) {
             {selectedImage && (
               <div style={{ marginBottom: 10, position: 'relative' }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ku-text-mid, #555555)", marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#34C759" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.successIOS} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
                   Квитанция выбрана
                 </div>
-                <div style={{ borderRadius: 12, overflow: 'hidden', border: '2px solid #E8F5E9', position: 'relative' }}>
+                <div style={{ borderRadius: 12, overflow: 'hidden', border: '2px solid rgba(67,160,71,0.12)', position: 'relative' }}>
                   <img
                     src={URL.createObjectURL(selectedImage)}
                     alt="receipt"
@@ -5134,7 +5238,7 @@ function OrderReceipt({ order, settings, onClose }) {
                 onClick={() => fileInputRef.current?.click()}
                 style={{
                   flex: 1, padding: '13px 8px',
-                  background: selectedImage ? '#E8F5E9' : "var(--ku-surface-2, #F5F5F5)",
+                  background: selectedImage ? 'rgba(67,160,71,0.12)' : "var(--ku-surface-2, #F5F5F5)",
                   color: selectedImage ? '#2E7D32' : "var(--ku-text-dim, #3A3A3C)",
                   border: selectedImage ? '1.5px solid #A5D6A7' : '1.5px solid var(--ku-border, #EEEEEE)',
                   borderRadius: 14, fontSize: 12, fontWeight: 700, cursor: 'pointer',
@@ -5176,7 +5280,7 @@ function OrderReceipt({ order, settings, onClose }) {
                 animate={{ opacity: 1, y: 0 }}
                 style={{
                   width: '100%', padding: 15, marginBottom: 10,
-                  background: sending ? '#8E8E93' : "var(--ku-accent, #111111)", color: '#fff', border: 'none', borderRadius: 14,
+                  background: sending ? T.gray : "var(--ku-accent, #111111)", color: '#fff', border: 'none', borderRadius: 14,
                   fontSize: 14, fontWeight: 700, cursor: sending ? 'default' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                 }}
@@ -5354,11 +5458,11 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
       <motion.div
         animate={{
           boxShadow: expanded
-            ? "0 0 28px 4px rgba(255,107,0,0.18), 0 8px 32px rgba(0,0,0,0.35)"
-            : "0 0 16px 2px rgba(255,107,0,0.12), 0 4px 20px rgba(0,0,0,0.3)",
+            ? "0 12px 36px rgba(0,0,0,0.38), 0 2px 8px rgba(0,0,0,0.25)"
+            : "0 6px 20px rgba(0,0,0,0.30), 0 1px 4px rgba(0,0,0,0.20)",
         }}
         transition={{ duration: 0.4 }}
-        style={{ borderRadius: 50 }}
+        style={{ borderRadius: 999 }}
       >
         <motion.button
           onClick={() => {
@@ -5375,7 +5479,7 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
             background: "rgba(18,18,20,0.82)",
             backdropFilter: "blur(18px) saturate(180%)",
             WebkitBackdropFilter: "blur(18px) saturate(180%)",
-            borderRadius: 50,
+            borderRadius: 999,
             padding: expanded ? "8px 16px 8px 8px" : "8px",
             border: "0.5px solid rgba(255,255,255,0.12)",
             display: "flex", alignItems: "center", gap: expanded ? 10 : 0,
@@ -5398,7 +5502,7 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
             <motion.div
               animate={{
                 background: expanded
-                  ? "linear-gradient(135deg, #FF6B00 0%, #FF8C00 100%)"
+                  ? "#FFFFFF"
                   : "rgba(255,255,255,0.1)",
               }}
               transition={{ duration: 0.3 }}
@@ -5406,10 +5510,10 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
                 width: 38, height: 38, borderRadius: "50%",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 color: "#fff",
-                boxShadow: expanded ? "0 2px 12px rgba(255,107,0,0.3)" : "none",
+                boxShadow: expanded ? "0 2px 10px rgba(0,0,0,0.25)" : "none",
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={expanded ? "#111111" : "#fff"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
                 <line x1="3" y1="6" x2="21" y2="6"/>
                 <path d="M16 10a4 4 0 01-8 0"/>
@@ -5425,13 +5529,13 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
               style={{
                 position: 'absolute', top: -3, right: -3,
                 minWidth: 19, height: 19, borderRadius: 10,
-                background: '#FF3B30',
-                color: '#fff',
+                background: '#FFFFFF',
+                color: '#111111',
                 fontSize: 10, fontWeight: 800,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: '0 5px',
                 border: '2px solid rgba(18,18,20,0.9)',
-                boxShadow: '0 1px 6px rgba(255,59,48,0.4)',
+                boxShadow: '0 1px 6px rgba(0,0,0,0.30)',
               }}
             >
               {cartCount}
@@ -5452,12 +5556,11 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
                   <span style={{
                     color: '#fff', fontSize: 14, fontWeight: 700,
                     letterSpacing: -0.3,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                   }}>
                     {ctaLabel}
                   </span>
                   <span style={{
-                    color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 500,
+                    color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 500,
                     fontVariantNumeric: 'tabular-nums',
                   }}>
                     {cartCount} {itemsWord} · <AnimatedSum value={cartTotal} duration={0.55} />
@@ -5465,21 +5568,19 @@ function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
                 </div>
 
                 {/* Arrow button */}
-                <motion.div
-                  animate={{ x: [0, 3, 0] }}
-                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                <div
                   style={{
                     width: 28, height: 28, borderRadius: '50%',
-                    background: 'rgba(255,107,0,0.2)',
-                    border: '1px solid rgba(255,107,0,0.25)',
+                    background: 'rgba(255,255,255,0.14)',
+                    border: '1px solid rgba(255,255,255,0.18)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0,
                   }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FF6B00" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="9 6 15 12 9 18"/>
                   </svg>
-                </motion.div>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -5813,7 +5914,7 @@ export function ProductAudioRecorder({ productId, onAudioUploaded }) {
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: 3, background: '#34C759' }} />
+                  <div style={{ width: 6, height: 6, borderRadius: 3, background: T.successIOS }} />
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
                     {pbHasAudio ? (isRu ? 'Сохранено в облаке' : 'Булутта сакталды') : (isRu ? 'Аудио готово' : 'Аудио даяр')}
                   </span>
@@ -5999,7 +6100,7 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
         transition={{ type: 'spring', stiffness: 420, damping: 28 }}
         style={{
           background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)',
-          borderRadius: 18,
+          borderRadius: 16,
           padding: '14px 16px',
           cursor: 'pointer',
           userSelect: 'none',
@@ -6121,10 +6222,11 @@ export default function App() {
   const screenFxMounted = React.useRef(false);
   React.useEffect(() => {
     if (!screenFxMounted.current) { screenFxMounted.current = true; return; }
-    // opacity-only = compositor-cheap; scaling a subtree with backdrop-filter
-    // (glass header/chips) was the source of the lag. Light + fast.
-    screenFx.set({ opacity: 0.55 });
-    screenFx.start({ opacity: 1, transition: { duration: 0.15, ease: [0.25, 0.6, 0, 1] } });
+    // SOFT crossfade only. We tried a directional x-slide here — it re-samples
+    // every backdrop-filter (glass header/chips) each frame on device and
+    // feels strained. Opacity is pure compositor work: buttery on 120Hz.
+    screenFx.set({ opacity: 0.45 });
+    screenFx.start({ opacity: 1, transition: { duration: 0.22, ease: iosEase } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen]);
   const [adminScreen, setAdminScreen] = useState(() => {
@@ -6368,8 +6470,26 @@ export default function App() {
   // Sends "login" when the LoginScreen is up, "admin"/"admin-…" while in the
   // admin panel, or the actual screen name otherwise. Swift uses these
   // strings to hide/show the floating Liquid Glass bar.
+  // Branded intro gating — while the index.html intro overlay is up, keep
+  // the native bar hidden ('intro' => .hidden in Swift); when it ends, this
+  // re-runs and syncs the real screen so the bar springs in with the catalog.
+  const [introActive, setIntroActive] = useState(() => typeof window !== 'undefined' && !!window.__kuIntroActive);
+  useEffect(() => {
+    if (!introActive) return undefined;
+    const done = () => setIntroActive(false);
+    window.addEventListener('ku:intro-done', done);
+    return () => window.removeEventListener('ku:intro-done', done);
+  }, [introActive]);
+
   useEffect(() => {
     if (!isNative || !window.__syncTab) return;
+    if (introActive) {
+      window.__syncTab('intro');
+      // Intro bg is light (dark in dark scheme) — match the status bar text.
+      const darkScheme = typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches;
+      window.__setStatusBarStyle?.(darkScheme ? 'light' : 'dark');
+      return;
+    }
     const isLoggedOut = !user && !isAdmin && !guestMode;
     const tag = isLoggedOut ? 'login' : (isAdmin ? `admin-${adminScreen}` : screen);
     window.__syncTab(tag);
@@ -6382,7 +6502,7 @@ export default function App() {
       const screenHasDarkTop = isLoggedOut || isAdmin || screen === 'profile';
       window.__setStatusBarStyle(screenHasDarkTop ? 'light' : 'dark');
     }
-  }, [screen, adminScreen, user, isAdmin, guestMode, isNative]);
+  }, [screen, adminScreen, user, isAdmin, guestMode, isNative, introActive]);
 
   // Restore PB session on cold start. pb.authStore is hydrated from
   // localStorage by the SDK itself; we just need to mirror it into React
@@ -6705,6 +6825,7 @@ export default function App() {
   const showToast = (msg, type = "success") => {
     clearToastTimer();
     if (msg == null) { setToast(null); return; }
+    if (type === 'error') haptic('warning');
     setToast({ msg, type });
     const ttl = type === 'error' ? 2500 : 3000;
     toastTimerRef.current = setTimeout(() => { setToast(null); toastTimerRef.current = null; }, ttl);
@@ -7201,7 +7322,7 @@ export default function App() {
                     padding: '5px 12px', fontSize: 10, letterSpacing: 2,
                     textTransform: 'uppercase', cursor: 'pointer', fontWeight: 700,
                     background: lang === l ? "var(--ku-accent, #111111)" : "var(--ku-surface-2, #F5F5F5)",
-                    color: lang === l ? '#fff' : '#8E8E93',
+                    color: lang === l ? '#fff' : T.gray,
                   }}>
                   {l === 'ru' ? 'РУС' : 'КЫР'}
                 </div>
@@ -7307,11 +7428,13 @@ export default function App() {
         />
       )}
       {completedOrder && (
-        <OrderReceipt
-          order={completedOrder}
-          settings={settings}
-          onClose={() => { setCompletedOrder(null); setScreen('myorders'); }}
-        />
+        <OrderSuccessGate orderId={completedOrder.id} label={t.orderPlaced}>
+          <OrderReceipt
+            order={completedOrder}
+            settings={settings}
+            onClose={() => { setCompletedOrder(null); setScreen('myorders'); }}
+          />
+        </OrderSuccessGate>
       )}
       {isDesktop && !isAdmin ? (
         <DesktopLayout
@@ -7582,11 +7705,11 @@ export default function App() {
               </div>
               <div style={{ position: "relative", marginBottom: 8 }}>
                 <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
-                <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93", fontSize: 11, fontWeight: 600, letterSpacing: 0.2 }}>
+                <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: T.gray, fontSize: 11, fontWeight: 600, letterSpacing: 0.2 }}>
                   {adminShowPass ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.gray} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                   ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.gray} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                   )}
                 </button>
               </div>
@@ -7597,7 +7720,7 @@ export default function App() {
                 </div>
                 <span style={{ fontSize: 13, color: "var(--ku-text-mid, #555555)", fontWeight: 500 }}>{t.remember_me}</span>
               </label>
-              {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
+              {adminLoginErr && <div style={{ color: T.danger, fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "var(--ku-text-dim, #3A3A3C)" }}>{t.cancel}</button>
                 <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
@@ -7617,11 +7740,11 @@ export default function App() {
             </div>
             <div style={{ position: "relative", marginBottom: 8 }}>
               <input type={adminShowPass ? "text" : "password"} autoComplete="current-password" value={adminLoginPass} onChange={e => { setAdminLoginPass(e.target.value); setAdminLoginErr(""); }} placeholder={t.passwordLabel || "Пароль"} style={{ width: "100%", padding: "14px 48px 14px 16px", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 15, outline: "none", boxSizing: "border-box", transition: "border 0.2s" }} onKeyDown={e => { if (e.key === 'Enter') submitTopAdminLogin(); }} onFocus={e => e.target.style.borderColor = "#111"} onBlur={e => e.target.style.borderColor = "#eee"} />
-              <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: "#8E8E93" }}>
+              <button type="button" onClick={() => setAdminShowPass(v => !v)} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", padding: "6px 8px", color: T.gray }}>
                 {adminShowPass ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.gray} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
                 ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={T.gray} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 )}
               </button>
             </div>
@@ -7632,7 +7755,7 @@ export default function App() {
               </div>
               <span style={{ fontSize: 13, color: "var(--ku-text-mid, #555555)", fontWeight: 500 }}>{t.remember_me}</span>
             </label>
-            {adminLoginErr && <div style={{ color: "#E53935", fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
+            {adminLoginErr && <div style={{ color: T.danger, fontSize: 13, marginBottom: 10, textAlign: "center", fontWeight: 500 }}>{adminLoginErr}</div>}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setShowAdminLogin(false)} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "1.5px solid var(--ku-border, #EEEEEE)", background: "var(--ku-surface-2, #F5F5F5)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", color: "var(--ku-text-dim, #3A3A3C)" }}>{t.cancel}</button>
               <button onClick={submitTopAdminLogin} disabled={adminLoginLoading} style={{ flex: 1, padding: "13px 0", borderRadius: 14, border: "none", background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: adminLoginLoading ? "default" : "pointer", opacity: adminLoginLoading ? 0.6 : 1, fontFamily: "inherit" }}>{adminLoginLoading ? '...' : 'OK'}</button>
@@ -7641,24 +7764,16 @@ export default function App() {
         </div>
       )}
       {/* ── CLIENT NOTIFICATIONS SHEET ── */}
-      {showNotifSheet && createPortal(
-        <div style={{ position: "fixed", inset: 0, zIndex: 99998 }} onClick={() => setShowNotifSheet(false)}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }} />
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              position: "absolute", bottom: 0, left: 0, right: 0,
-              background: "var(--ku-surface, #FFFFFF)", borderRadius: "24px 24px 0 0",
-              maxHeight: "80vh", overflowY: "auto",
-              paddingBottom: "max(20px, env(safe-area-inset-bottom, 20px))",
-              boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
-              animation: "slideUp 0.3s ease-out",
-            }}
-          >
-            {/* Handle */}
-            <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
-              <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--ku-surface-2, #F5F5F5)" }} />
-            </div>
+      <BottomSheet
+        open={showNotifSheet}
+        onClose={() => setShowNotifSheet(false)}
+        dragMode="handle"
+        zIndex={99998}
+        label={t.notifications}
+        sheetStyle={{ maxHeight: "80vh" }}
+      >
+        {/* Body scrolls — that's why dragMode is 'handle' (grabber drags, list scrolls) */}
+        <div style={{ overflowY: "auto", WebkitOverflowScrolling: "touch", paddingBottom: 20 }}>
             {/* Header */}
             <div style={{ padding: "8px 20px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -7716,7 +7831,7 @@ export default function App() {
                               {n.promoTag && (
                                 <span style={{
                                   padding: "1px 6px", borderRadius: 4, fontSize: 9, fontWeight: 700, color: "#fff",
-                                  background: n.promoTag === 'sale' ? '#FF3B30' : n.promoTag === 'new' ? '#34C759' : n.promoTag === 'limited' ? '#FF9500' : '#007AFF',
+                                  background: n.promoTag === 'sale' ? '#FF3B30' : n.promoTag === 'new' ? T.successIOS : n.promoTag === 'limited' ? T.warning : '#007AFF',
                                 }}>
                                   {n.promoTag === 'sale' ? (lang === 'kg' ? 'ЧЕГИРМЕ' : 'СКИДКА') : n.promoTag === 'new' ? (lang === 'kg' ? 'ЖАҢЫ' : 'НОВИНКА') : n.promoTag === 'limited' ? (lang === 'kg' ? 'ЧЕКТЕЛГЕН' : 'ОГРАНИЧЕНО') : (lang === 'kg' ? 'БЕЛЕК' : 'ПОДАРОК')}
                                 </span>
@@ -7737,10 +7852,8 @@ export default function App() {
                   })
               )}
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+        </div>
+      </BottomSheet>
     </LangContext.Provider>
   );
 }

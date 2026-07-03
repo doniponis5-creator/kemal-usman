@@ -97,14 +97,6 @@ final class TabState: ObservableObject {
     @Published var cartBadge:     Int      = 0
 }
 
-// MARK: - Haptics
-
-enum Haptics {
-    static func tabTapped() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-    }
-}
-
 // MARK: - Root view
 
 @available(iOS 26.0, *)
@@ -208,7 +200,7 @@ struct LiquidGlassTabView: View {
             get: { state.selectedUser },
             set: { newTab in
                 guard newTab != state.selectedUser else { return }
-                Haptics.tabTapped()
+                // No haptic: Apple's own tab bars are silent on tab change.
                 state.selectedUser = newTab
                 SharedBridge.shared.dispatchUserTab(newTab)
             }
@@ -220,7 +212,6 @@ struct LiquidGlassTabView: View {
             get: { state.selectedAdmin },
             set: { newTab in
                 guard newTab != state.selectedAdmin else { return }
-                Haptics.tabTapped()
                 state.selectedAdmin = newTab
                 SharedBridge.shared.dispatchAdminTab(newTab)
             }
@@ -514,7 +505,7 @@ final class SharedBridge {
         case "syncTab":
             guard let s = msg.body as? String else { break }
 
-            if s == "login" || s == "register" {
+            if s == "login" || s == "register" || s == "intro" {
                 onModeChange?(.hidden)
                 return
             }

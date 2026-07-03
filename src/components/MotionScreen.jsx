@@ -12,6 +12,10 @@ export const iosSpring = {
 // iOS-canonical cubic-bezier for non-spring transitions (e.g. opacity/blur).
 export const iosEase = [0.32, 0.72, 0, 1];
 
+// Standard durations — use these instead of magic numbers.
+// fast: micro-feedback (chips, toggles) · base: most UI · slow: hero/entrances.
+export const DUR = { fast: 0.15, base: 0.25, slow: 0.35 };
+
 // Premium screen transitions — iOS 26 snappy spring + crossfade lift.
 // (No filter:blur — that caused the React content to stay invisible on
 // some iOS WKWebView builds, producing a blank white screen.)

@@ -1,11 +1,9 @@
 import { authedFetch } from './pb';
+import OneSignalPlugin from '@onesignal/capacitor-plugin';
 // ─── OneSignal remote push ───────────────────────────────────────────────────
 // Delivers notifications even when the app is closed / backgrounded / locked.
 //
-// No-ops on web, and on native until BOTH are true:
-//   1) the plugin is installed:  npm i onesignal-cordova-plugin && npx cap sync ios
-//   2) VITE_ONESIGNAL_APP_ID is set (.env) to your OneSignal App ID
-// So this is safe to ship now — it silently does nothing until configured.
+// No-ops on web, and on native until VITE_ONESIGNAL_APP_ID is set (.env).
 //
 // Setup checklist:
 //   • Create a free OneSignal app (iOS), upload your APNs .p8 key.
@@ -25,16 +23,14 @@ const isNative = () =>
 export async function initPush(onOpen) {
   if (inited || !isNative() || !APP_ID) return;
   try {
-    const pkg = 'onesignal-cordova-plugin';
-    const mod = await import(/* @vite-ignore */ pkg);
-    OneSignal = mod.default || mod.OneSignal || mod;
+    OneSignal = OneSignalPlugin;
     if (!OneSignal || !OneSignal.initialize) { OneSignal = null; return; }
     inited = true;
 
     OneSignal.initialize(APP_ID);
 
     // iOS system permission prompt (safe to call repeatedly).
-    try { OneSignal.Notifications.requestPermission(true); } catch { /* ignore */ }
+    try { await OneSignal.Notifications.requestPermission(true); } catch { /* ignore */ }
 
     // Tap on a notification → let the app navigate.
     try {
@@ -44,7 +40,7 @@ export async function initPush(onOpen) {
       });
     } catch { /* ignore */ }
   } catch {
-    // Plugin not installed yet — stay a no-op.
+    // Something went wrong initializing — stay a no-op.
     OneSignal = null;
   }
 }
