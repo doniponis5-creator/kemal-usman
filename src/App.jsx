@@ -172,14 +172,38 @@ function Spinner({ size = 14, color = "#fff" }) {
 // working exactly like a plain input. Cells are pure visuals. `dark` variant
 // matches the glassmorphism login screen.
 function OtpBoxes({ value, onChange, error = false, dark = false, autoFocus = true }) {
+  const { lang } = useLang();
   const inputRef = useRef(null);
   const [focused, setFocused] = useState(false);
+  const [pasteHint, setPasteHint] = useState(false);
   const digits = Array.from({ length: 6 }, (_, i) => value[i] || "");
   const activeIdx = Math.min(value.length, 5);
   const pal = dark
     ? { bg: "rgba(255,255,255,0.08)", border: "rgba(255,255,255,0.15)", borderFilled: "rgba(255,255,255,0.45)", borderActive: "rgba(255,255,255,0.75)", text: "#fff", err: "#ff7b7b" }
     : { bg: "var(--ku-surface-2, #F5F5F5)", border: "var(--ku-border, #EEEEEE)", borderFilled: "var(--ku-text-3, #AEAEB2)", borderActive: "var(--ku-accent, #111111)", text: "var(--ku-text, #111111)", err: T.danger };
+  // One-tap paste from clipboard — Telegram delivers the code outside the
+  // native SMS inbox, so iOS's built-in "code from Messages" autofill bar
+  // never appears. This button reads the clipboard directly (must run
+  // synchronously inside the click handler for Safari/WKWebView to allow
+  // it) and fills all 6 boxes at once. If the browser blocks/denies
+  // clipboard read (common in WKWebView / when permission wasn't granted),
+  // we surface a clear fallback hint instead of failing silently.
+  const handlePasteClick = async () => {
+    inputRef.current?.focus();
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) throw new Error('unsupported');
+      const text = await navigator.clipboard.readText();
+      const clean = (text || "").replace(/\D/g, "").slice(0, 6);
+      if (!clean) throw new Error('empty');
+      onChange(clean);
+      setPasteHint(false);
+    } catch (_) {
+      setPasteHint(true);
+      setTimeout(() => setPasteHint(false), 3500);
+    }
+  };
   return (
+    <div>
     <div style={{ position: "relative" }}>
       <input
         ref={inputRef}
@@ -221,6 +245,26 @@ function OtpBoxes({ value, onChange, error = false, dark = false, autoFocus = tr
           );
         })}
       </motion.div>
+    </div>
+      <button
+        type="button"
+        onClick={handlePasteClick}
+        style={{
+          display: "block", margin: "14px auto 0", background: "none",
+          border: "1.5px solid " + pal.border, borderRadius: 12,
+          color: pal.text, fontSize: 14, fontWeight: 600, cursor: "pointer",
+          padding: "10px 20px", letterSpacing: 0.3,
+        }}
+      >
+        {lang === "ru" ? "Вставить код" : "Кодду коюу"}
+      </button>
+      {pasteHint && (
+        <div style={{ fontSize: 11.5, color: pal.err, textAlign: "center", marginTop: 8, lineHeight: 1.4, padding: "0 8px" }}>
+          {lang === "ru"
+            ? "Не удалось вставить автоматически — нажмите на поле с кодом и удерживайте, затем выберите «Вставить»"
+            : "Автоматтык коюу иштебей койду — код талаасын басып кармап туруп, «Коюу» дегенди тандаңыз"}
+        </div>
+      )}
     </div>
   );
 }
@@ -1486,8 +1530,12 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
       const msg = String(e?.message || "");
       if (msg.includes("429") || msg.includes("too_many")) {
         setErr(lang === "ru" ? "Слишком много попыток, попробуйте позже" : "Көп аракет, кийинчерээк аракет кылыңыз");
+      } else if (msg.includes("telegram_cannot_send")) {
+        setErr(lang === "ru" ? "Этот номер не найден в Telegram. Проверьте, что Telegram установлен и привязан именно к этому номеру" : "Бул номер Telegram'да табылган жок. Telegram орнотулганын жана так ушул номерге байланганын текшериңиз");
+      } else if (msg.includes("telegram_not_configured")) {
+        setErr(lang === "ru" ? "Сервис отправки кода временно недоступен, попробуйте позже" : "Код жөнөтүү кызматы убактылуу жеткиликсиз, кийинчерээк аракет кылыңыз");
       } else {
-        setErr(lang === "ru" ? "Ошибка отправки SMS" : "SMS жөнөтүүдө ката");
+        setErr(lang === "ru" ? "Не удалось отправить код, попробуйте ещё раз" : "Код жөнөтүлбөй калды, кайра аракет кылыңыз");
       }
     } finally { setOtpLoading(false); }
   }
@@ -1556,6 +1604,14 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                 placeholder="+996 700 123 456"
                 style={{ ...inp, letterSpacing: 1, opacity: otpStep !== "idle" ? 0.7 : 1 }}
               />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#229ED9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {IC.telegram(12, "#fff")}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--ku-text-mid, #555555)", lineHeight: 1.4 }}>
+                  {lang === "ru" ? "Код придёт в Telegram — укажите номер, привязанный к вашему Telegram-аккаунту" : "Код Telegram аркылуу келет — Telegram аккаунтуңузга байланган номерди көрсөтүңүз"}
+                </div>
+              </div>
             </div>
 
             {otpStep === "idle" ? (
@@ -1729,8 +1785,12 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       // Server returns 429 too_many_requests when phone exceeds 5 reqs/hr.
       if (msg.includes('429') || msg.includes('too_many')) {
         setErr(lang === 'ru' ? 'Слишком много попыток, попробуйте позже' : 'Көп аракет, кийинчерээк аракет кылыңыз');
+      } else if (msg.includes('telegram_cannot_send')) {
+        setErr(lang === 'ru' ? 'Этот номер не найден в Telegram. Проверьте, что Telegram установлен и привязан именно к этому номеру' : "Бул номер Telegram'да табылган жок. Telegram орнотулганын жана так ушул номерге байланганын текшериңиз");
+      } else if (msg.includes('telegram_not_configured')) {
+        setErr(lang === 'ru' ? 'Сервис отправки кода временно недоступен, попробуйте позже' : 'Код жөнөтүү кызматы убактылуу жеткиликсиз, кийинчерээк аракет кылыңыз');
       } else {
-        setErr(lang === 'ru' ? 'Ошибка отправки SMS' : 'SMS жөнөтүүдө ката');
+        setErr(lang === 'ru' ? 'Не удалось отправить код, попробуйте ещё раз' : 'Код жөнөтүлбөй калды, кайра аракет кылыңыз');
       }
     } finally {
       setOtpLoading(false);
@@ -1784,6 +1844,14 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             placeholder="+996 700 123 456"
             style={{ ...inputDesktop, letterSpacing: 1, opacity: otpStep !== 'idle' ? 0.7 : 1 }}
           />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#229ED9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              {IC.telegram(12, '#fff')}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--ku-text-mid, #555555)', lineHeight: 1.4 }}>
+              {lang === 'ru' ? 'Код придёт в Telegram — укажите номер, привязанный к вашему Telegram-аккаунту' : 'Код Telegram аркылуу келет — Telegram аккаунтуңузга байланган номерди көрсөтүңүз'}
+            </div>
+          </div>
         </div>
 
         {otpStep === 'idle' ? (
@@ -2004,6 +2072,14 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             opacity: otpStep !== 'idle' ? 0.7 : 1,
           }}
         />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+          <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#229ED9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {IC.telegram(12, "#fff")}
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", lineHeight: 1.4 }}>
+            {lang === "ru" ? "Код придёт в Telegram — укажите номер, привязанный к вашему Telegram-аккаунту" : "Код Telegram аркылуу келет — Telegram аккаунтуңузга байланган номерди көрсөтүңүз"}
+          </div>
+        </div>
       </div>
 
       {otpStep === 'idle' ? (
@@ -7153,7 +7229,7 @@ export default function App() {
     const cName = newOrder.clientName || user?.name || 'Клиент';
     const cPhone = newOrder.clientPhone || user?.phone || '';
     const shopName = settings?.shopName || 'Kemal Usman';
-    const clientMsg = `Здравствуйте, ${cName}! 🌸\n\nВаш заказ №${newOrder.id} успешно оформлен ✅\n\n${itemsList}\n\n💳 Способ оплаты: наличные\n📦 Доставка: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом\n\nМы свяжемся с вами для подтверждения 🤝\nСпасибо за покупку! 🙏\n\n— ${shopName}`;
+    const clientMsg = `Здравствуйте, ${cName}!\n\nВаш заказ №${newOrder.id} успешно оформлен ✅\n\n${itemsList}\n\n💳 Способ оплаты: наличные\n📦 Доставка: ${deliveryLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом\n\nМы свяжемся с вами для подтверждения 🤝\nСпасибо за покупку! 🙏\n\n— ${shopName}`;
     const adminPhone = settings?.whatsappPhone || '';
     const commentLine = orderData.comment ? `\n💬 Комментарий: ${orderData.comment}` : '';
     const adminMsg = `🆕 Новый заказ №${newOrder.id}\n\n👤 Клиент: ${cName}\n📞 Телефон: ${cPhone}\n\n${itemsList}\n\n💵 Оплата: наличные\n📍 Адрес: ${deliveryLine}${commentLine}${bonusLine}\n💰 Итого: ${newOrder.total.toLocaleString()} сом`;
@@ -7211,8 +7287,8 @@ export default function App() {
         : `${name}, ваш заказ №${oid} в пути! 🚗\n\nКурьер скоро будет у вас. Держите телефон включённым 📱\n\n— ${shopName}`,
 
       delivered: lang === 'kg'
-        ? `${name}, заказыңыз №${oid} жеткирилди! 🎉\n\n💰 ${total} сом\n\nСатып алганыңыз үчүн рахмат! Жыттар сизге жагат деп үмүттөнөбүз 🌸\n\nБизди тандаганыңыз үчүн ыраазыбыз! 🤍\n\n— ${shopName}`
-        : `${name}, ваш заказ №${oid} доставлен! 🎉\n\n💰 ${total} сом\n\nСпасибо за покупку! Надеемся, ароматы вам понравятся 🌸\n\nБудем рады видеть вас снова! 🤍\n\n— ${shopName}`,
+        ? `${name}, заказыңыз №${oid} жеткирилди! 🎉\n\n💰 ${total} сом\n\nСатып алганыңыз үчүн рахмат! Жыттар сизге жагат деп үмүттөнөбүз\n\nБизди тандаганыңыз үчүн ыраазыбыз! 🤍\n\n— ${shopName}`
+        : `${name}, ваш заказ №${oid} доставлен! 🎉\n\n💰 ${total} сом\n\nСпасибо за покупку! Надеемся, ароматы вам понравятся\n\nБудем рады видеть вас снова! 🤍\n\n— ${shopName}`,
 
       cancelled: lang === 'kg'
         ? `${name}, тилекке каршы, заказыңыз №${oid} жокко чыгарылды 😔\n\nСуроолоруңуз болсо, бизге жазыңыз 💬\n\n— ${shopName}`
@@ -7231,7 +7307,7 @@ export default function App() {
     const name = order.clientName || '';
     const total = (order.total || 0).toLocaleString();
     const statusLabel = t["status_" + order.status] || order.status;
-    const msg = `Здравствуйте, ${name}! 🌸\n\n📋 Ваш заказ №${order.id}\n📌 Статус: ${statusLabel}\n💰 Итого: ${total} сом\n\nЕсли есть вопросы — напишите нам 💬\n\n— ${settings?.shopName || 'Kemal Usman'}`;
+    const msg = `Здравствуйте, ${name}!\n\n📋 Ваш заказ №${order.id}\n📌 Статус: ${statusLabel}\n💰 Итого: ${total} сом\n\nЕсли есть вопросы — напишите нам 💬\n\n— ${settings?.shopName || 'Kemal Usman'}`;
     window.open(`https://wa.me/${order.clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
@@ -7418,7 +7494,7 @@ export default function App() {
             const odName = pendingOrder.clientName || user?.name || 'Клиент';
             const odPhone = pendingOrder.clientPhone || user?.phone || '';
             const odShop = settings?.shopName || 'Kemal Usman';
-            const clientMsg4 = `Здравствуйте, ${odName}! 🌸\n\nВаш заказ №${finalOrder.id} оплачен через O!Деньги ✅\n\n${itemsList4}\n\n💳 Оплата: O!Деньги (подтверждена)\n📍 Адрес: ${deliveryLine4}${bonusLine4}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом\n\nСпасибо за покупку! 🤍\n\n— ${odShop}`;
+            const clientMsg4 = `Здравствуйте, ${odName}!\n\nВаш заказ №${finalOrder.id} оплачен через O!Деньги ✅\n\n${itemsList4}\n\n💳 Оплата: O!Деньги (подтверждена)\n📍 Адрес: ${deliveryLine4}${bonusLine4}\n💰 Итого: ${pendingOrder.total.toLocaleString()} сом\n\nСпасибо за покупку! 🤍\n\n— ${odShop}`;
             const commentLine4 = pendingOrder.comment ? `\n💬 Комментарий: ${pendingOrder.comment}` : '';
             const adminMsg4 = `🆕 Заказ №${finalOrder.id} ОПЛАЧЕН (O!Деньги)\n\n👤 ${odName}\n📞 ${odPhone}\n\n${itemsList4}\n\n💳 O!Деньги — оплачен ✅\n📍 ${deliveryLine4}${commentLine4}${bonusLine4}\n💰 ${pendingOrder.total.toLocaleString()} сом`;
             if (pendingOrder.clientPhone) sendWhatsApp({ phone: pendingOrder.clientPhone, message: clientMsg4, orderId: finalOrder.id }).catch(() => {});

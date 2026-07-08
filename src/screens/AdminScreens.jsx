@@ -858,6 +858,18 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
         // ever fails (corrupt blob, codec) we fall back to the original blob.
         const img = await createImageBitmap(blob);
         let { width, height } = img;
+        // ── SKIP redundant re-encode (quality-preserving, 2026-07) ─────────────
+        // Product images already pass through the crop modal, which outputs a
+        // JPEG (<=1800px @ 0.95). Re-encoding here would be a 2nd-generation
+        // JPEG — pure quality loss (visible banding on glass / liquid gradients)
+        // with no size benefit. If the blob is ALREADY a JPEG within the MAX
+        // dimension, upload it AS-IS. Only genuinely oversized raw camera photos
+        // fall through to the single downscale + encode below.
+        const _isJpeg = blob.type === "image/jpeg" || blob.type === "image/jpg";
+        if (_isJpeg && Math.max(width, height) <= MAX) {
+          if (typeof img.close === "function") img.close();
+          return blob;
+        }
         if (width > height) {
           if (width > MAX) { height = Math.round(height * (MAX / width)); width = MAX; }
         } else {
@@ -1002,6 +1014,45 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
       typeof prod.id === "string" &&
       prod.id.length === 15 &&
       /^[a-z0-9]+$/i.test(prod.id);
+
+    // ── IMAGE DELETION — diff locally-kept images against what PB still has
+    // stored, and tell PB to drop anything the admin removed in
+    // MultiImageUpload. PocketBase NEVER clears a multi-file field by
+    // omission — omitting `images` entirely means "keep everything as-is".
+    // Removal requires explicit `images-` deletion markers carrying the
+    // exact stored filename. Without this diff, deleting a photo in the
+    // editor and hitting Save silently no-ops server-side: the record keeps
+    // all original files, and the "removed" photo reappears next time the
+    // product list is (re)loaded from PB — even though it looked deleted
+    // locally right up until save.
+    if (isPBRecord) {
+      try {
+        const serverRec = await withTimeout(
+          pb.collection("products").getOne(prod.id, { requestKey: null }),
+          8000,
+        );
+        const serverFilenames = Array.isArray(serverRec?.images) ? serverRec.images : [];
+        const filenameOf = (url) => {
+          try { return decodeURIComponent(String(url).split("/").pop().split("?")[0]); }
+          catch { return null; }
+        };
+        const keptFilenames = new Set(
+          candidateUrls
+            .filter(u => typeof u === "string" && !u.startsWith("data:"))
+            .map(filenameOf)
+            .filter(Boolean)
+        );
+        const removedFilenames = serverFilenames.filter(f => f && !keptFilenames.has(f));
+        if (removedFilenames.length > 0) {
+          for (const f of removedFilenames) fd.append("images-", f);
+          logger.log("[saveProd] images marked for deletion:", removedFilenames);
+        }
+      } catch (diffErr) {
+        // Non-fatal — worst case a removed photo isn't purged server-side
+        // on this save; the save itself must still proceed.
+        logger.warn("[saveProd] image-deletion diff skipped:", diffErr);
+      }
+    }
 
     try {
       logger.step(2, "sending to PB", { mode: isPBRecord ? "update" : "create", id: prod.id });
@@ -3362,7 +3413,7 @@ export function AdminBonusScreen({ settings = {}, setSettings, showToast }) {
         <div style={{ padding: "12px 16px", background: SETTINGS_CARD_BG, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 500, color: "#000", letterSpacing: -0.2 }}>{t.welcomeBonusEnabled}</div>
-            <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>{lang === 'kg' ? 'Жаңы кардарга бонус' : 'Бонус при первом заказе'}</div>
+            <div style={{ fontSize: 11, color: "#8E8E93", marginTop: 2 }}>{lang === 'kg' ? 'Жаңы кардарга бонус' : 'Бонус при регистрации'}</div>
           </div>
           <div onClick={() => upd("welcomeBonusEnabled", !local.welcomeBonusEnabled)} style={{ width: 51, height: 31, borderRadius: 16, background: local.welcomeBonusEnabled ? '#34C759' : '#E9E9EA', cursor: "pointer", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
             <div style={{ position: "absolute", top: 2, left: local.welcomeBonusEnabled ? 22 : 2, width: 27, height: 27, borderRadius: "50%", background: "#fff", boxShadow: '0 3px 8px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.06)', transition: "left 0.2s" }} />

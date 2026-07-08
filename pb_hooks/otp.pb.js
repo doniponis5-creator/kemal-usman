@@ -60,7 +60,17 @@ routerAdd('POST', '/api/custom/otp/request', function(c) {
     sms.send(phone, code);
   } catch (err) {
     $app.logger().error('otp-send-failed', 'phone', phone, 'err', err.message);
-    return c.json(500, { error: 'whatsapp_failed' });
+    // Surface the SPECIFIC reason instead of one generic code, so the
+    // client can show something actionable (e.g. "this number has no
+    // Telegram") rather than a bare "SMS error". sms.js throws distinct
+    // messages: telegram_not_configured / telegram_cannot_send / telegram_send_failed / telegram_exception.
+    var reason = String((err && err.message) || '');
+    var code2 =
+      reason.indexOf('telegram_cannot_send')   === 0 ? 'telegram_cannot_send'   :
+      reason.indexOf('telegram_not_configured') === 0 ? 'telegram_not_configured' :
+      reason.indexOf('telegram_send_failed')   === 0 ? 'telegram_send_failed'   :
+      'telegram_exception';
+    return c.json(500, { error: code2 });
   }
 
   return c.json(200, { ok: true, ttl: TTL_SECONDS });
@@ -169,6 +179,49 @@ routerAdd('POST', '/api/custom/otp/verify', function(c) {
     if (referredBy) {
       $app.logger().info('otp: referral recorded — payout on first delivery',
         'phone', phone, 'referredBy', referredBy);
+    }
+
+    // ── WELCOME BONUS ON REGISTRATION (once per phone) ──────────────────────
+    // Credited HERE (not on first delivery) per product decision 2026-07-07.
+    // Safe because: (1) phone is OTP-verified at this exact point; (2) clients
+    // are unique by phone and never deleted → re-registering the same number
+    // hits the EXISTING-client branch, never this one → one bonus per number.
+    // Idempotent: guarded by a 'welcome' entry in bonus_history, so the
+    // first-delivery hook in main.pb.js (RULE 1) auto-skips → no double credit.
+    // Bonus lives in bonus_balance (server-side) → logout/login preserves it.
+    // Amount + on/off come from admin settings (welcomeBonus / welcomeBonusEnabled).
+    // The bonus is discount-only: the app has no cash-out path and RULE 2 caps
+    // it to a % discount on real, paid orders — so farming has no payout.
+    try {
+      var welcomeAmount = 0, welcomeOn = true;
+      var s = null;
+      try { s = $app.dao().findRecordById('settings', 'main'); } catch (_) {}
+      if (!s) {
+        var ss = $app.dao().findRecordsByFilter('settings', "id != ''", '-created', 1, 0);
+        if (ss && ss.length > 0) s = ss[0];
+      }
+      if (s) {
+        welcomeAmount = Number(s.get('welcomeBonus') || 0);
+        welcomeOn = s.get('welcomeBonusEnabled') !== false;
+      }
+      var wHist = [];
+      try {
+        var rawWH = client.get('bonus_history');
+        wHist = JSON.parse((typeof rawWH === 'string') ? (rawWH || '[]') : String(rawWH || '[]'));
+      } catch (_) { wHist = []; }
+      if (!Array.isArray(wHist)) wHist = [];
+      var alreadyWelcomed = wHist.some(function (h) { return h && h.type === 'welcome'; });
+      if (welcomeOn && welcomeAmount > 0 && !alreadyWelcomed) {
+        var newBal = Number(client.get('bonus_balance') || 0) + welcomeAmount;
+        wHist.push({ type: 'welcome', amount: welcomeAmount, label: 'Welcome bonus', date: new Date().toISOString() });
+        client.set('bonus_balance', newBal);
+        client.set('bonus_history', JSON.stringify(wHist));
+        $app.dao().saveRecord(client);
+        try { client = $app.dao().findRecordById('clients', client.id); } catch (_) {}
+        $app.logger().info('otp: welcome bonus credited at registration', 'phone', phone, 'amount', welcomeAmount);
+      }
+    } catch (wErr) {
+      $app.logger().error('otp: welcome credit failed', 'phone', phone, 'err', String(wErr));
     }
   }
 
