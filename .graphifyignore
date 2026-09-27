@@ -1,0 +1,17 @@
+# Apple namunalari — loyiha kodi emas
+LandmarksBuildingAnAppWithLiquidGlass/
+LiquidGlassDemo/
+landmarks.zip
+# Rasmlar (mahsulot suratlari, ikonkalar) — bilim qo'shmaydi
+public/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.heic
+*.gif
+# Mahsulot tavsifi ma'lumotlari va vaqtinchalik fayllar
+descriptions/batches/
+.claude/
+graphify-out/
+*.svg

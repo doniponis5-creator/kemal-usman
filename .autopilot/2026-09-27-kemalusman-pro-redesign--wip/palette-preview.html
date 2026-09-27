@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kemal Usman — rang variantlari</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,500&display=swap" rel="stylesheet">
+<style>
+  :root { --page: #2a2724; --page-ink: #efe9df; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--page); color: var(--page-ink); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; padding: 32px 16px 64px; }
+  h1 { font-weight: 600; font-size: 22px; text-align: center; margin-bottom: 6px; }
+  .lead { text-align: center; opacity: .7; margin-bottom: 32px; }
+  .row { display: flex; gap: 48px; justify-content: center; flex-wrap: wrap; }
+  .col { width: 360px; }
+  .tag { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; opacity: .75; margin-bottom: 10px; text-align: center; }
+  .tag b { opacity: 1; color: #fff; }
+
+  /* ── phone ── */
+  .phone { width: 360px; height: 760px; border-radius: 44px; overflow: hidden; position: relative; background: var(--bg); color: var(--ink); box-shadow: 0 30px 80px rgba(0,0,0,.45), 0 0 0 10px #111, 0 0 0 11px #3a3a3a; }
+  .noir  { --bg:#0E0C0B; --surface:#17140F; --plinth:#EFE9DF; --ink:#F3EEE6; --muted:#A39A8C; --accent:#C9A46A; --on-accent:#0E0C0B; --line:rgba(243,238,230,.10); --chip:#1F1B16; --tab:rgba(23,20,15,.86); }
+  .ivory { --bg:#F6F2EC; --surface:#FFFFFF; --plinth:#FFFFFF; --ink:#151311; --muted:#6F675E; --accent:#6B1E24; --on-accent:#F6F2EC; --line:rgba(21,19,17,.10); --chip:#EDE7DE; --tab:rgba(255,255,255,.88); }
+  .status { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 28px; font-size: 14px; font-weight: 600; }
+  .scroll { height: calc(100% - 44px); overflow: hidden; padding: 0 16px; }
+  .top { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 2px 14px; }
+  .word { font-family: "Playfair Display", serif; font-style: italic; font-weight: 500; font-size: 28px; letter-spacing: -.01em; }
+  .word small { display: block; font-family: -apple-system, sans-serif; font-style: normal; font-size: 9px; letter-spacing: .42em; color: var(--accent); margin-top: 2px; }
+  .bell { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+  .search { height: 44px; border-radius: 14px; background: var(--chip); color: var(--muted); display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 15px; margin-bottom: 14px; }
+  .banner { height: 132px; border-radius: 18px; background: url(/banner1.jpeg) center/cover; position: relative; overflow: hidden; margin-bottom: 16px; }
+  .banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.55), transparent 60%); }
+  .banner span { position: absolute; left: 16px; bottom: 14px; z-index: 1; color: #F3EEE6; font-size: 12px; letter-spacing: .08em; }
+  .banner span b { display: block; font-family: "Playfair Display", serif; font-style: italic; font-weight: 500; font-size: 20px; letter-spacing: 0; }
+  .chips { display: flex; gap: 8px; margin-bottom: 16px; }
+  .chip { height: 34px; padding: 0 14px; border-radius: 17px; display: flex; align-items: center; font-size: 14px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+  .chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .card { background: var(--surface); border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+  .img { aspect-ratio: 1; background: var(--plinth); display: grid; place-items: center; position: relative; }
+  .img img { width: 82%; height: 82%; object-fit: contain; mix-blend-mode: multiply; }
+  .flag { position: absolute; left: 8px; top: 8px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6B1E24; background: rgba(239,233,223,.92); padding: 3px 7px; border-radius: 6px; font-weight: 600; }
+  .ivory .flag { background: #F6F2EC; }
+  .note { position: absolute; right: 8px; bottom: 8px; width: 28px; height: 28px; border-radius: 50%; background: rgba(14,12,11,.72); color: #F3EEE6; display: grid; place-items: center; font-size: 11px; }
+  .meta { padding: 10px 12px 12px; }
+  .brand { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .name { font-size: 14px; font-weight: 600; margin: 3px 0 8px; line-height: 1.25; min-height: 35px; }
+  .buy { display: flex; justify-content: space-between; align-items: center; }
+  .price { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .price small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .add { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 20px; line-height: 1; }
+  .tabbar { position: absolute; left: 16px; right: 16px; bottom: 18px; height: 62px; border-radius: 31px; background: var(--tab); backdrop-filter: blur(18px); border: 1px solid var(--line); display: flex; justify-content: space-around; align-items: center; font-size: 10px; color: var(--muted); }
+  .tabbar div { display: grid; justify-items: center; gap: 3px; }
+  .tabbar .on { color: var(--accent); font-weight: 600; }
+  .tabbar i { width: 22px; height: 22px; border-radius: 6px; border: 1.6px solid currentColor; display: block; }
+
+  .swatches { margin-top: 26px; display: grid; gap: 8px; }
+  .sw { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .sw i { width: 34px; height: 22px; border-radius: 6px; border: 1px solid rgba(255,255,255,.15); flex: none; }
+  .sw code { opacity: .6; margin-left: auto; font-size: 12px; }
+  .verdict { margin-top: 16px; font-size: 13px; line-height: 1.5; opacity: .85; }
+  @media (max-width: 800px) { .row { gap: 56px; } }
+</style>
+</head>
+<body>
+  <h1>Kemal Usman — ikkita rang yo'nalishi</h1>
+  <p class="lead">Mahsulotlar, narxlar va banner — haqiqiy katalogingizdan. Shrift va joylashuv bir xil, farq faqat rangda.</p>
+
+  <div class="row">
+    <!-- A · NOIR -->
+    <div class="col">
+      <p class="tag"><b>A · Noir + oltin</b> — tavsiya</p>
+      <div class="phone noir">
+        <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="scroll">
+          <div class="top"><div class="word">Kemal Usman<small>PARFUM</small></div><div class="bell">♡</div></div>
+          <div class="search">⌕ &nbsp;Поиск аромата или бренда</div>
+          <div class="banner"><span>Новая коллекция<b>Вечера во Флоренции</b></span></div>
+          <div class="chips"><div class="chip on">Все</div><div class="chip">Женские</div><div class="chip">Мужские</div><div class="chip">Унисекс</div></div>
+          <div class="grid">
+            <div class="card"><div class="img"><span class="flag">Хит</span><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/nqgf7jcjptjmg9f/tobacco_vanille_uTC2ahPSLM.jpg" alt=""><span class="note">▶</span></div>
+              <div class="meta"><div class="brand">Tom Ford</div><div class="name">Tobacco Vanille</div><div class="buy"><div class="price">от 1 400 сом<small>5 мл · 280 сом/мл</small></div><div class="add">+</div></div></div></div>
+            <div class="card"><div class="img"><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/hr9e39chxgejnne/aventus_0X7VmnbGbF.jpg" alt=""><span class="note">▶</span></div>
+              <div class="meta"><div class="brand">Creed</div><div class="name">Aventus</div><div class="buy"><div class="price">от 1 200 сом<small>5 мл · 240 сом/мл</small></div><div class="add">+</div></div></div></div>
+            <div class="card"><div class="img"><span class="flag">Новинка</span><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/4c86px9vajw8cs5/l_immensit_FmR22IQ5W7.jpg" alt=""></div>
+              <div class="meta"><div class="brand">Louis Vuitton</div><div class="name">L'immensité</div><div class="buy"><div class="price">от 1 900 сом<small>5 мл · 380 сом/мл</small></div><div class="add">+</div></div></div></div>
+            <div class="card"><div class="img"><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/6pguouozvrcgoey/oud_for_greatness_0ykDRtACJ1.jpg" alt=""></div>
+              <div class="meta"><div class="brand">Initio</div><div class="name">Oud for Greatness</div><div class="buy"><div class="price">от 800 сом<small>5 мл · 160 сом/мл</small></div><div class="add">+</div></div></div></div>
+          </div>
+        </div>
+        <div class="tabbar"><div class="on"><i></i>Каталог</div><div><i></i>Корзина</div><div><i></i>Заказы</div><div><i></i>Профиль</div></div>
+      </div>
+      <div class="swatches">
+        <div class="sw"><i style="background:#0E0C0B"></i>Fon — iliq qora<code>#0E0C0B</code></div>
+        <div class="sw"><i style="background:#17140F"></i>Karta — ko'mir<code>#17140F</code></div>
+        <div class="sw"><i style="background:#EFE9DF"></i>Flakon poydevori — fil suyagi<code>#EFE9DF</code></div>
+        <div class="sw"><i style="background:#F3EEE6"></i>Matn<code>#F3EEE6</code></div>
+        <div class="sw"><i style="background:#C9A46A"></i>Urg'u — shampan-oltin<code>#C9A46A</code></div>
+        <div class="sw"><i style="background:#6B1E24"></i>Brend — bordo (kam)<code>#6B1E24</code></div>
+      </div>
+      <p class="verdict">Kirish ekranidagi Kemal surati va bannerlar bilan bir dunyo. Kechqurun va iPhone OLED ekranida eng boy ko'rinadi.</p>
+    </div>
+
+    <!-- B · IVORY -->
+    <div class="col">
+      <p class="tag"><b>B · Fil suyagi galereya</b></p>
+      <div class="phone ivory">
+        <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+        <div class="scroll">
+          <div class="top"><div class="word">Kemal Usman<small>PARFUM</small></div><div class="bell">♡</div></div>
+          <div class="search">⌕ &nbsp;Поиск аромата или бренда</div>
+          <div class="banner"><span>Новая коллекция<b>Вечера во Флоренции</b></span></div>
+          <div class="chips"><div class="chip on">Все</div><div class="chip">Женские</div><div class="chip">Мужские</div><div class="chip">Унисекс</div></div>
+          <div class="grid">
+            <div class="card"><div class="img"><span class="flag">Хит</span><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/nqgf7jcjptjmg9f/tobacco_vanille_uTC2ahPSLM.jpg" alt=""><span class="note">▶</span></div>
+              <div class="meta"><div class="brand">Tom Ford</div><div class="name">Tobacco Vanille</div><div class="buy"><div class="price">от 1 400 сом<small>5 мл · 280 сом/мл</small></div><div class="add">+</div></div></div></div>
+            <div class="card"><div class="img"><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/hr9e39chxgejnne/aventus_0X7VmnbGbF.jpg" alt=""><span class="note">▶</span></div>
+              <div class="meta"><div class="brand">Creed</div><div class="name">Aventus</div><div class="buy"><div class="price">от 1 200 сом<small>5 мл · 240 сом/мл</small></div><div class="add">+</div></div></div></div>
+            <div class="card"><div class="img"><span class="flag">Новинка</span><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/4c86px9vajw8cs5/l_immensit_FmR22IQ5W7.jpg" alt=""></div>
+              <div class="meta"><div class="brand">Louis Vuitton</div><div class="name">L'immensité</div><div class="buy"><div class="price">от 1 900 сом<small>5 мл · 380 сом/мл</small></div><div class="add">+</div></div></div></div>
+            <div class="card"><div class="img"><img src="https://api.kemalusman.kg/api/files/s96rxmorhbuls18/6pguouozvrcgoey/oud_for_greatness_0ykDRtACJ1.jpg" alt=""></div>
+              <div class="meta"><div class="brand">Initio</div><div class="name">Oud for Greatness</div><div class="buy"><div class="price">от 800 сом<small>5 мл · 160 сом/мл</small></div><div class="add">+</div></div></div></div>
+          </div>
+        </div>
+        <div class="tabbar"><div class="on"><i></i>Каталог</div><div><i></i>Корзина</div><div><i></i>Заказы</div><div><i></i>Профиль</div></div>
+      </div>
+      <div class="swatches">
+        <div class="sw"><i style="background:#F6F2EC"></i>Fon — qog'oz-oq<code>#F6F2EC</code></div>
+        <div class="sw"><i style="background:#FFFFFF"></i>Karta — oq<code>#FFFFFF</code></div>
+        <div class="sw"><i style="background:#151311"></i>Matn — siyoh-qora<code>#151311</code></div>
+        <div class="sw"><i style="background:#6F675E"></i>Ikkinchi matn<code>#6F675E</code></div>
+        <div class="sw"><i style="background:#6B1E24"></i>Urg'u — to'q bordo<code>#6B1E24</code></div>
+      </div>
+      <p class="verdict">Yorug' va toza, kunduzi o'qish oson. Lekin kirish ekrani (qorong'i surat) bilan kontrast saqlanib qoladi.</p>
+    </div>
+  </div>
+<script>
+  // Tor ekranda telefonlarni sig'diradi (panel, telefon)
+  function fit() {
+    var z = Math.min(1, (window.innerWidth - 32) / 372);
+    document.querySelectorAll('.col').forEach(function (c) { c.style.zoom = z; });
+  }
+  fit(); window.addEventListener('resize', fit);
+</script>
+</body>
+</html>

@@ -215,3 +215,29 @@ Avoid:
 - visually cheap solutions
 
 Think like a senior product engineer building a premium mobile app in 2026.
+<!-- autopilot:start -->
+# Kemal Usman — Parfum Shop
+
+Премиальный магазин парфюма (распив и флаконы) для Бишкека: веб + iOS-приложение (Capacitor).
+
+## Команды
+
+| Команда | Что делает |
+|---------|------------|
+| `npm install` | Установить зависимости |
+| `npm run dev` | Запустить локально (Vite) |
+| `npm run build` | Собрать веб-версию в `dist/` |
+| `npm run lint` | Проверить код ESLint |
+| `npm run test:money` | Тесты денежной логики (бонусы) |
+| `npm run test:security` | Тесты безопасности PocketBase |
+| `npm run check:secrets` | Проверить, не утекли ли пароли и совпадают ли с сервером |
+
+## Как здесь работает Autopilot
+
+Сборка ведётся навыком `/autopilot`. Требования, спецификация и таски — в `.autopilot/`.
+Прогресс — `.autopilot/dashboard.html`. Правило: требование из `manifest.md`
+может снять только пользователь.
+
+Если работа продолжается — скажи «продолжи автопилот»: состояние поднимется
+из `.autopilot/state.js`, переспрашивать ничего не нужно.
+<!-- autopilot:end -->
