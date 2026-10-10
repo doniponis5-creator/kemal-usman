@@ -13,6 +13,21 @@ VPS="145.223.100.16"
 PB_DIR="/root/parfum-backend"            # PocketBase katalogi serverda
 ENV_FILE="/etc/pocketbase/env"  # systemd EnvironmentFile (yo'q bo'lsa skript ogohlantiradi)
 
+# Papkani serverga ko'chirish (rsync --delete kabi, *.bak fayllar serverda qoladi).
+# Mac'da rsync bor; Windows Git Bash'da yo'q — u holda tar + ssh: avval serverda
+# vaqtinchalik papkaga ochiladi, keyin bir zumda almashtiriladi.
+sync_dir() {
+  local src="$1" dest="$2"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -avz --delete --exclude='*.bak' "$src/" root@$VPS:"$dest/"
+  else
+    tar -C "$src" -czf - . | ssh root@$VPS "set -e; rm -rf '$dest.incoming'; mkdir -p '$dest.incoming' '$dest'; \
+      tar --no-same-owner -xzf - -C '$dest.incoming'; \
+      find '$dest' -mindepth 1 -maxdepth 1 ! -name '*.bak' -exec rm -rf {} +; \
+      cp -a '$dest.incoming/.' '$dest/'; rm -rf '$dest.incoming'"
+  fi
+}
+
 echo "=== Kemal Usman — secure deploy ==="
 
 # 0. Kredensial faylni serverga yaratish (PB 0.22 — env o'rniga pb_data fayl).
@@ -47,7 +62,7 @@ fi
 
 # 1. Upload ALL PocketBase hooks (old debug hooks removed locally — clean dir sync)
 echo "1) Uploading PocketBase hooks..."
-rsync -avz --delete --exclude='*.bak' pb_hooks/ root@$VPS:$PB_DIR/pb_hooks/
+sync_dir pb_hooks "$PB_DIR/pb_hooks"
 echo "   Done."
 
 # 2. Build frontend
@@ -57,7 +72,7 @@ echo "   Done."
 
 # 3. Upload dist
 echo "3) Uploading dist..."
-rsync -avz --delete dist/ root@$VPS:/var/www/parfum/
+sync_dir dist /var/www/parfum
 echo "   Done."
 
 # 4. Restart PocketBase to pick up new hooks + env
