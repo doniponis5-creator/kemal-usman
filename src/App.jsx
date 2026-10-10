@@ -43,32 +43,19 @@ import AudioHintTooltip, { shouldShowAudioHint } from "./components/AudioHintToo
 import { normalizePhone } from "./utils/phone";
 // PRO: Native haptic feedback on cart / buttons (no-op on web).
 import { haptic } from "./utils/haptics";
+import { useFavorites, useIsFavorite, toggleFavorite } from "./utils/favorites";
+import { getTrim, measureTrim } from "./utils/trim";
 import { initPush, setPushUser, clearPushUser } from "./api/onesignal";
 // PRO: screen transitions + button micro-animations
 import { MotionScreen, iosEase, iosSpring } from "./components/MotionScreen";
 import { BottomSheet } from "./components/BottomSheet";
 import { OrderSuccessGate } from "./components/OrderSuccess";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { AssistantChat } from "./components/AssistantChat";
 // PRO: shimmering placeholder while PocketBase loads
 import { CatalogGridSkeleton } from "./components/Skeleton";
 import { motion, AnimatePresence, animate as fmAnimate, useMotionValue, useTransform, useAnimationControls } from "framer-motion";
 
-// Smoothly counts between previous and new value when `value` changes —
-// used by the floating checkout bar's price label so it doesn't snap.
-function AnimatedSum({ value, duration = 0.5 }) {
-  const [display, setDisplay] = React.useState(value);
-  const prevRef = React.useRef(value);
-  React.useEffect(() => {
-    const controls = fmAnimate(prevRef.current, value, {
-      duration,
-      ease: iosEase,
-      onUpdate: (v) => setDisplay(Math.round(v)),
-    });
-    prevRef.current = value;
-    return () => controls.stop();
-  }, [value, duration]);
-  return <>{Number(display).toLocaleString()} сом</>;
-}
 // PRO: iOS-style edge swipe-to-dismiss for product detail
 import { EdgeSwipeBack } from "./components/EdgeSwipeBack";
 // PRO: Domino's-style live order tracker timeline
@@ -365,6 +352,43 @@ const DESC_SECTIONS = [
   { kw: "Базовые", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22L6.66 19.7C7.14 19.87 7.64 20 8 20C19 20 22 3 22 3C21 5 14 5.25 9 6.25C4 7.25 2 11.5 2 13.5C2 15.5 3.75 17.25 3.75 17.25C7 8 17 8 17 8Z" fill={c || T.successIOS}/></svg> },
   { kw: "Тип", svg: (c) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><rect x="5" y="2" width="14" height="20" rx="2" stroke={c || T.gray} strokeWidth="1.5" fill="none"/><path d="M9 2V4H15V2" stroke={c || T.gray} strokeWidth="1.5"/><line x1="9" y1="9" x2="15" y2="9" stroke={c || T.gray} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="13" x2="15" y2="13" stroke={c || T.gray} strokeWidth="1.5" strokeLinecap="round"/><line x1="9" y1="17" x2="12" y2="17" stroke={c || T.gray} strokeWidth="1.5" strokeLinecap="round"/></svg> },
 ];
+
+// Описание → пирамида нот (верх / сердце / база) + остальной текст.
+// Строки вида «⬆ Верхние: …» (разделены \r\n или \n). Нет нот — has=false, показываем как раньше.
+function splitNotes(text) {
+  const out = { top: "", heart: "", base: "", rest: "", has: false };
+  const rest = [];
+  for (const raw of String(text || "").split(/\r?\n/)) {
+    const line = raw.replace(/^[^A-Za-zА-Яа-яЁё]+/, "").trim();
+    const m = line.match(/^(Верхние|Средние|Базовые)[^:]*:\s*(.+)$/i);
+    if (m) {
+      const k = /^верх/i.test(m[1]) ? "top" : /^сред/i.test(m[1]) ? "heart" : "base";
+      out[k] = m[2].trim().replace(/\.$/, "");
+      out.has = true;
+    } else if (raw.trim()) rest.push(raw);
+  }
+  out.rest = rest.join("\n");
+  return out;
+}
+
+function NotesPyramid({ dp, lang }) {
+  const kg = lang === "kg";
+  const rows = [
+    { label: kg ? "Үстү" : "Верх", text: dp.top },
+    { label: kg ? "Жүрөк" : "Сердце", text: dp.heart },
+    { label: kg ? "Негиз" : "База", text: dp.base },
+  ].filter(r => r.text);
+  return (
+    <div style={{ marginTop: 6 }}>
+      {rows.map((r, i) => (
+        <div key={r.label} style={{ display: "grid", gridTemplateColumns: "64px 1fr", gap: 12, padding: "11px 0", borderTop: i ? "1px solid var(--ku-border, #EEEEEE)" : "none" }}>
+          <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 10.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", paddingTop: 3 }}>{r.label}</div>
+          <div style={{ color: "var(--ku-text, #111111)", fontSize: 14.5, lineHeight: 1.45 }}>{r.text}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function DescRenderer({ text, color, iconColor }) {
   if (!text) return null;
@@ -2030,7 +2054,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       {/* Branding — sits right above the inputs, centred */}
       <div style={{ width: "100%", textAlign: "center", marginBottom: 22 }}>
         <div style={{
-          fontFamily: "'Playfair Display', serif",
+          fontFamily: "var(--ku-font-display)",
           fontStyle: "italic",
           fontWeight: 400,
           fontSize: "clamp(24px, 7vw, 28px)",
@@ -2549,91 +2573,6 @@ function SaleProgressBar({ product }) {
   );
 }
 
-// ─── ProductImage — single source of truth for image rendering ───────────────
-// One component covers every product image surface in the app:
-//
-//   size="card"   → catalog grid + admin preview + admin list thumbnail
-//                   200px, object-fit: contain (full bottle visible, 8px padding)
-//   size="detail" → product modal hero + any future "fit to box" surface
-//                   260px, object-fit: contain on light gray (no crop, full
-//                   bottle visible end-to-end).
-//
-// Renders:
-//   • <img> with onError that swaps in the neutral fallback
-//   • a "no image" / "load failed" placeholder (bottle icon + label)
-// Caller wraps with badges, gradients, parallax, swipe — anything overlay-style
-// goes around this component, not inside.
-function ProductImage({ src, size = "card", alt = "", lang: langProp }) {
-  // Gracefully read lang from context but fall back to prop or 'ru' if a caller
-  // renders this outside <LangContext> (e.g. a future static export).
-  let langCtx = "ru";
-  try { langCtx = useLang().lang; } catch { /* outside provider */ }
-  const lang = langProp || langCtx;
-
-  const isCard = size === "card";
-  const pad = isCard ? 10 : 14;
-  const containerStyle = {
-    width: "100%",
-    height: isCard ? 200 : 260,
-    background: "#FFFFFF", // image surroundings stay white in dark so product photos (white bg) blend fully
-    position: "relative",
-    overflow: "hidden",
-  };
-  const imgStyle = {
-    position: "absolute",
-    top: pad,
-    left: pad,
-    right: pad,
-    bottom: pad,
-    width: `calc(100% - ${pad * 2}px)`,
-    height: `calc(100% - ${pad * 2}px)`,
-    objectFit: "contain",
-    objectPosition: "center center",
-    display: "block",
-  };
-
-  return (
-    <div style={containerStyle}>
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          style={imgStyle}
-          onError={(e) => {
-            // 404 / blocked / corrupt → reveal the fallback sibling.
-            e.currentTarget.style.display = "none";
-            const ph = e.currentTarget.parentElement?.querySelector("[data-img-fallback]");
-            if (ph) ph.style.display = "flex";
-          }}
-        />
-      ) : null}
-      <div
-        data-img-fallback
-        style={{
-          display: src ? "none" : "flex",
-          position: "absolute", inset: 0,
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 6,
-          background: containerStyle.background,
-        }}
-      >
-        {React.cloneElement(IC.bottle, { style: { width: isCard ? 44 : 56, height: isCard ? 44 : 56, color: "#D1D1D6" } })}
-        <span style={{ fontSize: isCard ? 10 : 12, fontWeight: 500, color: "var(--ku-text-3, #AEAEB2)", letterSpacing: 0.3 }}>
-          {lang === 'kg' ? 'Сүрөт жок' : 'Нет фото'}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ─── PRODUCT CARD — single source of truth used by both catalog and admin ────
-// Admin preview passes `preview` to disable click + add-to-cart visuals so the
-// admin sees the EXACT same card the client sees, edited live as form state
-// changes. Image rendering is delegated to <ProductImage size="card" />.
 // ─── APP DOWNLOAD BANNER (faqat mobil brauzerda, native ilovada EMAS) ───────
 // settings.appStoreUrl to'ldirilganda avtomatik paydo bo'ladi (App Store
 // approval'dan keyin admin "О магазине"da linkni kiritadi). Yopish 14 kunga
@@ -2677,147 +2616,307 @@ function AppDownloadBanner({ settings }) {
   );
 }
 
-function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, onAudioHintDismiss }) {
+// ─── Карточка аромата «Бутик» ────────────────────────────────────────────────────
+// Флакон без коробки на фоне страницы, тень «на полу»; ниже бренд, название, цена с объёмом.
+// Сделано по образцу сильных парфюмерных сайтов (см. review/design/reference-sites.png).
+
+// «5мл», «5  мл», «Упаковка 50 мл» → «5 · 10 · 20 мл · флакон 50 мл» (только то, что есть в наличии).
+function cardVolumes(p, full = false) {
+  const vars = (p?.variants || []).filter(v => v.inStock);
+  const ml = [];
+  let pkg = null;
+  for (const v of vars) {
+    const n = String(v.label || '').match(/(\d+(?:[.,]\d+)?)/);
+    if (v.type === 'pkg') { if (n && !pkg) pkg = n[1]; continue; }
+    if (n && !ml.includes(n[1])) ml.push(n[1]);
+  }
+  ml.sort((a, b) => parseFloat(a) - parseFloat(b));
+  const parts = [];
+  if (ml.length) parts.push(ml.join(' · ') + ' мл');
+  if (pkg) parts.push(full ? 'флакон ' + pkg + ' мл' : 'флакон');
+  return parts.join(' · ');
+}
+
+// Главные ноты для большой карточки: по одной-две из верхних, средних и базовых.
+function cardNotes(p) {
+  const tiers = [];
+  for (const line of String(p?.desc || '').split(/\r?\n/)) {
+    const m = line.replace(/^[^A-Za-zА-Яа-яЁё]+/, '').match(/^(Верхние|Средние|Базовые)[^:]*:\s*(.+)$/i);
+    if (m) tiers.push(m[2].split(',').map(x => x.trim()).filter(Boolean));
+  }
+  const out = [];
+  for (let i = 0; out.length < 5 && i < 2; i++) for (const t of tiers) if (t[i] && out.length < 5) out.push(t[i]);
+  return out.join(', ').toLowerCase();
+}
+
+// Объём самого дешёвого варианта в наличии — к цене «от 1 500 сом · 10 мл».
+function cardMinVolume(p) {
+  const vars = (p?.variants || []).filter(v => v.inStock && Number(v.price) > 0);
+  if (!vars.length) return '';
+  const v = vars.reduce((a, b) => (Number(b.price) < Number(a.price) ? b : a));
+  const n = String(v.label || '').match(/(\d+(?:[.,]\d+)?)/);
+  return n ? (v.type === 'pkg' ? 'флакон ' : '') + n[1] + ' мл' : '';
+}
+
+// Наклейки, «нет в наличии» и скидка поверх фото — общие для обоих вариантов (вид наклеек прежний).
+function CardOverlays({ p, t, stk, saleInfo, preview }) {
+  return (
+    <>
+      {!preview && <SaleCountdownBadge product={p} sale={saleInfo} />}
+      {saleInfo && (
+        <div style={{ position: 'absolute', top: 10, left: 10, background: '#FF3B30', color: '#fff', fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 8, zIndex: 4 }}>
+          −{saleInfo.percent}%
+        </div>
+      )}
+      {stk && !saleInfo && <CardTag p={p} t={t} />}
+      {!stk && (
+        <div style={{ position: "absolute", top: 10, left: 10, background: "rgba(17,17,17,0.72)", color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 10, fontWeight: 600, letterSpacing: 0.3 }}>
+          {t.outOfStock}
+        </div>
+      )}
+      {!preview && p?.id && <AudioPlayerOverlay product={p} />}
+    </>
+  );
+}
+
+// Тихая метка в левом верхнем углу фото: «● Новинка» / «● Хит» / «● Популярно».
+// Раньше это были цветные плашки поверх флакона; теперь только кружок и слово,
+// а флакон в карточке опущен ниже, чтобы метка его не задевала.
+// Цвета тёмные, чтобы мелкий текст читался (контраст ≥ 4.5:1).
+function CardTag({ p, t }) {
+  const tag = p?.isNew ? { text: t.badge_new, color: "#1F7A3F" }
+    : p?.isHit ? { text: "Хит", color: "#B54708" }
+    : p?.isPopular ? { text: t.badge_popular, color: "#B54708" }
+    : null;
+  if (!tag) return null;
+  return (
+    <span style={{ position: "absolute", top: 11, left: 12, zIndex: 3, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 600, letterSpacing: "0.01em", color: tag.color, whiteSpace: "nowrap" }}>
+      <span style={{ width: 5, height: 5, borderRadius: "50%", background: tag.color }} />
+      {tag.text}
+    </span>
+  );
+}
+
+// «Chanel Allure» у бренда Chanel → «Allure»; «Yves Saint Laurent Y Yves Saint Laurent» → «Y».
+// Бренд и так стоит строкой выше — повтор в названии выглядит неряшливо. Данные в базе не меняем.
+function cardName(p, lang) {
+  const name = String(pickName(p, lang) || '').trim();
+  const brand = String(p?.brand || '').trim();
+  if (!brand || !name) return name;
+  const b = brand.toLowerCase();
+  let cut = name;
+  if (cut.toLowerCase().startsWith(b + ' ')) cut = cut.slice(brand.length).trim();
+  if (cut.toLowerCase().endsWith(' ' + b)) cut = cut.slice(0, cut.length - brand.length).trim();
+  return cut || name;
+}
+
+function CardPrice({ p, t, lang, minP, saleMinP, stk, size = 15 }) {
+  const vol = cardMinVolume(p);
+  if (!stk || minP === null) return <span style={{ color: "var(--ku-text-2, #666666)", fontSize: 13, fontWeight: 500 }}>{t.outOfStock}</span>;
+  if (!(minP > 0)) return <span style={{ color: "var(--ku-text-2, #666666)", fontSize: 13, fontWeight: 500 }}>{lang === 'kg' ? 'Баасы такталууда' : 'Цена уточняется'}</span>;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "baseline", gap: 6, flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
+      <span style={{ color: saleMinP !== null ? "#C62828" : "var(--ku-text, #111111)", fontSize: size, fontWeight: 500, letterSpacing: -0.1 }}>
+        <span style={{ fontSize: 12, fontWeight: 400, color: saleMinP !== null ? "#C62828" : "var(--ku-text-2, #6E6E73)" }}>{t.fromPrice} </span>
+        {formatSum(saleMinP !== null ? saleMinP : minP)}
+      </span>
+      {saleMinP !== null && <span style={{ color: "var(--ku-text-3, #8E8E93)", fontSize: 12, textDecoration: "line-through" }}>{formatSum(minP)}</span>}
+      {vol && <span style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}>{lang === 'kg' ? `${vol} үчүн` : `за ${vol}`}</span>}
+    </span>
+  );
+}
+
+// Карточка «Витрина» — без белой коробки и тени: флакон стоит прямо на фоне страницы.
+// Белый фон фото растворяется через mix-blend-mode: multiply. Карточка красит себя
+// цветом фона (--ku-tile-bg, по умолчанию фон страницы): обёртки с анимацией
+// изолируют смешивание, и без своего фона белый квадрат снова был бы виден.
+// Где фон белый (страница аромата), задайте --ku-tile-bg: #FFFFFF на обёртке.
+const KU_TILE_BG = "var(--ku-tile-bg, var(--ku-bg, #F5F5F5))";
+
+// Флакон одного размера во всех карточках: по замеру (utils/trim) обрезаем пустые
+// белые поля фото и вписываем сам флакон в коробку (fillW × fillH), прижимая к низу
+// или по центру. Пока замера нет — обычное «contain», как раньше.
+function BottleImg({ src, alt, box, anchor = "bottom", fillW = 0.86, fillH = 0.96, blend = true }) {
+  const boxRef = useRef(null);
+  const [size, setSize] = useState(null);
+  const [nat, setNat] = useState(null);
+  const [trim, setTrim] = useState(() => getTrim(src));
+  const [cors, setCors] = useState(true);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Новое фото в той же карточке — сбрасываем замер прямо при отрисовке (рекомендация React).
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) { setPrevSrc(src); setTrim(getTrim(src)); setNat(null); }
+
+  let imgStyle = { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: anchor === "bottom" ? "center bottom" : "center center" };
+  if (trim && nat && size && size.w > 0 && size.h > 0) {
+    const cw = trim.w * nat.w, ch = trim.h * nat.h;
+    const k = Math.min((size.w * fillW) / cw, (size.h * fillH) / ch);
+    const iw = nat.w * k, ih = nat.h * k;
+    const left = size.w / 2 - (trim.x + trim.w / 2) * iw;
+    const top = anchor === "bottom" ? size.h - (trim.y + trim.h) * ih : size.h / 2 - (trim.y + trim.h / 2) * ih;
+    imgStyle = { position: "absolute", left, top, width: iw, height: ih, maxWidth: "none" };
+  }
+  return (
+    <div ref={boxRef} style={{ position: "absolute", ...box }}>
+      <img key={cors ? "c" : "n"} src={src} alt={alt} loading="lazy" decoding="async" draggable={false}
+        crossOrigin={cors ? "anonymous" : undefined}
+        onLoad={(e) => {
+          const im = e.currentTarget;
+          setNat({ w: im.naturalWidth, h: im.naturalHeight });
+          if (cors && !getTrim(src)) { const t = measureTrim(im); if (t) setTrim(t); }
+        }}
+        onError={() => { if (cors) setCors(false); }}
+        style={{ ...imgStyle, ...(blend ? { mixBlendMode: "multiply" } : null) }} />
+    </div>
+  );
+}
+
+function TileFloor({ inset = "20%", bottom = 10 }) {
+  return <div style={{ position: "absolute", left: inset, right: inset, bottom, height: 16, borderRadius: "50%",
+    background: "radial-gradient(ellipse at center, rgba(40,30,15,0.22) 0%, rgba(40,30,15,0) 70%)" }} />;
+}
+
+function ProductCardBoutique({ p, onClick, preview, hintVisible, onAudioHintDismiss }) {
   const { lang, t } = useLang();
   const stk = productHasStock(p);
   const minP = productMinPrice(p);
   const saleInfo = useSaleCountdown(p);
   const saleMinP = saleInfo && minP !== null ? salePrice(minP, saleInfo.percent) : null;
-  // Tooltip is only meaningful when this card actually has audio.
-  const audioForHint = audioUrl(p) || (typeof window !== 'undefined' && p?.id ? localStorage.getItem('parfum_audio_' + p.id) : null);
-  const hintVisible = !preview && showAudioHint && !!audioForHint;
+  const vols = cardVolumes(p);
   return (
-    <div
-      onClick={onClick ? () => { haptic('light'); onClick(); } : undefined}
-      style={{ ...card({ borderRadius: 16, overflow: "hidden", cursor: onClick ? "pointer" : "default" }), WebkitTransform: 'translateZ(0)', ...(IS_NATIVE ? { boxShadow: '0 2px 6px rgba(20,16,8,0.05), 0 14px 30px rgba(20,16,8,0.10)' } : {}) }}
-    >
-      {/* Image area — delegates rendering to <ProductImage>. Overlays
-          (gradient, badges, audio button, out-of-stock chip) sit on top
-          of this wrapper, not inside the image component. */}
-      <div style={{ position: "relative", borderRadius: "16px 16px 0 0", overflow: "hidden" }}>
-        <ProductImage src={p?.img || null} size="card" />
-        {/* Bottom gradient overlay — premium read-on-photo look (only with image) */}
-        {p?.img && (
-          <div style={{
-            position: "absolute", inset: 0,
-            pointerEvents: "none",
-            background: "linear-gradient(to bottom, rgba(0,0,0,0) 60%, rgba(0,0,0,0.35))",
-          }} />
+    <div onClick={onClick ? () => { haptic('light'); onClick(); } : undefined}
+      style={{ background: KU_TILE_BG, cursor: onClick ? "pointer" : "default", textAlign: "center" }}>
+      <div style={{ position: "relative", height: 218 }}>
+        <TileFloor />
+        {p?.img ? (
+          <BottleImg src={p.img} alt={`${p?.brand || ''} ${p?.name || ''}`.trim()}
+            box={{ top: 30, left: "8%", width: "84%", height: "calc(100% - 46px)" }} />
+        ) : (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#D1D1D6" }}>{IC.bottle}</div>
         )}
-        {!preview && <SaleCountdownBadge product={p} sale={saleInfo} />}
-        {saleInfo && (
-          <div style={{ position: 'absolute', bottom: 8, left: 8, background: '#FF3B30', color: '#fff', fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 8, zIndex: 4 }}>
-            −{saleInfo.percent}%
-          </div>
-        )}
-        {!stk && (
-          <div style={{ position: "absolute", top: saleInfo ? 46 : 8, left: 8, background: "rgba(0,0,0,0.7)", color: "#fff", borderRadius: 8, padding: "3px 10px", fontSize: 10, fontWeight: 700, letterSpacing: 0.3, backdropFilter: "blur(8px)" }}>
-            {t.outOfStock}
-          </div>
-        )}
-        {/* ── Stacked badges (top-left) ── */}
-        {stk && !saleInfo && (() => {
-          const badges = [];
-          if (p?.isPopular) badges.push({ icon: IC.flame(10, "#fff"), text: t.badge_popular, bg: "linear-gradient(135deg, #FF6A00 0%, #FF3B30 100%)", shadow: "rgba(255,59,48,0.25)" });
-          if (p?.isHit) badges.push({ icon: IC.bolt(10, "#fff"), text: t.badge_hit, bg: "linear-gradient(135deg, #FF9500 0%, #FF6B00 100%)", shadow: "rgba(255,149,0,0.25)" });
-          if (p?.isNew) badges.push({ icon: IC.sparkle(10, "#fff"), text: t.badge_new, bg: "linear-gradient(135deg, #34C759 0%, #30D158 100%)", shadow: "rgba(52,199,89,0.25)" });
-          return badges.slice(0, 2).map((b, bi) => (
-            <div key={bi}
-              style={{
-                position: "absolute", top: 8 + bi * 26, left: 8,
-                display: "inline-flex", alignItems: "center", gap: 4,
-                background: b.bg, color: "#fff", borderRadius: 20,
-                padding: "3px 9px 3px 6px", fontSize: 10, fontWeight: 600,
-                letterSpacing: 0.1, lineHeight: 1,
-                boxShadow: `0 2px 6px ${b.shadow}`,
-                backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
-              }}>
-              <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{b.icon}</span>
-              <span>{b.text}</span>
-            </div>
-          ));
-        })()}
-        {/* Audio preview overlay — only renders if product has recorded audio.
-            In preview mode we skip it so the admin doesn't accidentally play
-            the client-side preview while editing. */}
-        {!preview && p?.id && <AudioPlayerOverlay product={p} />}
-        <AudioHintTooltip
-          visible={hintVisible}
-          text={t.hint_audio}
-          onDismiss={onAudioHintDismiss}
-        />
+        <CardOverlays p={p} t={t} stk={stk} saleInfo={saleInfo} preview={preview} />
+        {!preview && <FavButton p={p} bare />}
+        <AudioHintTooltip visible={hintVisible} text={t.hint_audio} onDismiss={onAudioHintDismiss} />
       </div>
-      {/* Content — brand · name · variant chips · price */}
-      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ color: T.textMuted, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 400, lineHeight: 1, flex: 1 }}>
-            {p?.brand || ""}
-          </div>
-          {p?.isAuthor && (
-            <div style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              background: "var(--ku-accent, #111111)", color: "#fff", borderRadius: 8,
-              padding: "3px 9px 3px 6px", fontSize: 10, fontWeight: 700,
-              letterSpacing: 0.6, lineHeight: 1, textTransform: "uppercase",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
-            }}>
-              <span style={{ display: "flex", alignItems: "center", lineHeight: 0 }}>{IC.crown(11, "#FFD700")}</span>
-              {t.badge_author}
-            </div>
-          )}
+      <div style={{ padding: "10px 6px 4px", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        <div style={{ maxWidth: "100%", color: "var(--ku-text-2, #6E6E73)", fontSize: 10.5, fontWeight: 500, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {p?.brand || ""}
         </div>
-        <div style={{ color: T.text, fontSize: 14, fontWeight: 700, lineHeight: 1.25, letterSpacing: -0.2 }}>
-          {pickName(p, lang) || (lang === 'kg' ? 'Жаңы продукт' : 'Новый товар')}
+        <div style={{ maxWidth: "100%", color: "var(--ku-text, #111111)", fontSize: 15.5, fontWeight: 500, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {cardName(p, lang) || (lang === 'kg' ? 'Жаңы продукт' : 'Новый товар')}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-          {(() => {
-            const sizes = (p?.sizes || p?.variants || []).slice(0, 2);
-            const extra = (p?.sizes || p?.variants || []).length - 2;
-            return <>
-              {sizes.map((v, idx) => (
-                <span key={v.id || v.label || idx} style={{ fontSize: 10, padding: "3px 9px", background: T.accentPale, color: T.text, borderRadius: 20, fontWeight: 500 }}>
-                  {v.label}
-                </span>
-              ))}
-              {extra > 0 && (
-                <span style={{ fontSize: 11, color: T.textMuted, padding: "3px 9px", border: `1px solid ${T.border}`, borderRadius: 20 }}>+{extra}</span>
-              )}
-            </>;
-          })()}
+        <div style={{ marginTop: 2, display: "flex", justifyContent: "center" }}>
+          <CardPrice p={p} t={t} lang={lang} minP={minP} saleMinP={saleMinP} stk={stk} />
         </div>
-        {/* SaleProgressBar removed — progress bar is now inside SaleCountdownBadge (Variant C) */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-          <div style={{ lineHeight: 1.1 }}>
-            {minP !== null ? (
-              saleMinP !== null ? (
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                  <span style={{ color: '#FF3B30', fontWeight: 800, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(saleMinP)}</span>
-                  <span style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 12, textDecoration: 'line-through' }}>{formatSum(minP)}</span>
-                </div>
-              ) : minP > 0 ? (
-                <span style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 16, letterSpacing: -0.3 }}>{t.fromPrice} {formatSum(minP)}</span>
-              ) : (
-                <span style={{ color: T.gray, fontWeight: 600, fontSize: 13, letterSpacing: -0.2 }}>{lang === 'kg' ? 'Баасы такталууда' : 'Цена уточняется'}</span>
-              )
-            ) : <span style={{ color: T.danger, fontSize: 11, fontWeight: 500 }}>{t.outOfStock}</span>}
-          </div>
-          <div
-            style={{
-              width: 36, height: 36, borderRadius: 18,
-              background: stk ? "var(--ku-accent, #111111)" : T.border,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontWeight: 700, fontSize: 20,
-              boxShadow: stk ? "0 4px 10px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08)" : "none",
-              flexShrink: 0,
-              opacity: preview ? 0.6 : 1,
-            }}
-          >
-            {React.cloneElement(IC.plus, { style: { width: 16, height: 16 } })}
-          </div>
-        </div>
+        {vols && stk && (
+          <div style={{ maxWidth: "100%", color: "var(--ku-text-3, #8E8E93)", fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{vols}</div>
+        )}
       </div>
     </div>
   );
+}
+
+// Рукописная подсказка у кнопки ▶: «Послушайте, как он пахнет» + рисованная стрелка.
+// На каждой большой карточке с голосом (в узкие обычные карточки не помещается).
+// Стрелка «рисуется», текст проявляется — когда карточка доходит до экрана.
+// Шрифт Caveat грузится только с нужными буквами.
+const AUDIO_NOTE_TEXT = { ru: "Послушайте, как он пахнет", kg: "Жытын угуп көрүңүз" };
+function useNoteFont() {
+  useEffect(() => {
+    if (document.querySelector("link[data-ku-note-font]")) return;
+    const chars = [...new Set(Object.values(AUDIO_NOTE_TEXT).join(""))].join("");
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@500&display=swap&text=" + encodeURIComponent(chars);
+    link.dataset.kuNoteFont = "1";
+    document.head.appendChild(link);
+  }, []);
+}
+function AudioNote({ lang }) {
+  useNoteFont();
+  const ink = "#8C6E3A";
+  const ref = useRef(null);
+  const [on, setOn] = useState(() => typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.6 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} aria-hidden="true" className={on ? "ku-note-on" : undefined} style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 64, pointerEvents: "none", zIndex: 6 }}>
+      <svg width="96" height="56" viewBox="0 0 96 56" fill="none" style={{ position: "absolute", left: 6, top: -14, overflow: "visible" }}>
+        <path className="ku-note-draw" d="M90 52 C 68 60, 44 58, 34 50 C 26 44, 28 36, 35 38 C 41 40, 37 48, 29 46 C 23 44, 21 38, 22 31"
+          stroke={ink} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+        <path className="ku-note-head" d="M16 37 L22 30 L28 36" stroke={ink} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="ku-note-text" style={{ position: "absolute", left: 96, bottom: 10, fontFamily: "\"Caveat\", cursive", fontWeight: 500, fontSize: 21, lineHeight: 1, color: ink, whiteSpace: "nowrap", transform: "rotate(-3deg)", transformOrigin: "left center" }}>
+        {AUDIO_NOTE_TEXT[lang === "kg" ? "kg" : "ru"]}
+      </span>
+    </div>
+  );
+}
+
+// Большая — на всю ширину после каждых двух обычных: флакон крупно слева на «полу»,
+// справа бренд, название, главные ноты, цена и все объёмы. Тоже без коробки.
+function ProductCardWide({ p, onClick, preview, hintVisible, onAudioHintDismiss, audioNote = false }) {
+  const { lang, t } = useLang();
+  const stk = productHasStock(p);
+  const minP = productMinPrice(p);
+  const saleInfo = useSaleCountdown(p);
+  const saleMinP = saleInfo && minP !== null ? salePrice(minP, saleInfo.percent) : null;
+  const vols = cardVolumes(p, true);
+  const notes = cardNotes(p);
+  return (
+    <div onClick={onClick ? () => { haptic('light'); onClick(); } : undefined}
+      style={{ position: "relative", display: "flex", alignItems: "center", background: KU_TILE_BG, cursor: onClick ? "pointer" : "default", padding: audioNote ? "6px 0 46px" : "6px 0" }}>
+      {audioNote && <AudioNote lang={lang} />}
+      <div style={{ position: "relative", width: "50%", flexShrink: 0, height: 270 }}>
+        <TileFloor inset="22%" bottom={12} />
+        {p?.img ? (
+          <BottleImg src={p.img} alt={`${p?.brand || ''} ${p?.name || ''}`.trim()}
+            box={{ top: 26, left: "4%", width: "92%", height: "calc(100% - 46px)" }} fillW={0.8} />
+        ) : (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#D1D1D6" }}>{IC.bottle}</div>
+        )}
+        <CardOverlays p={p} t={t} stk={stk} saleInfo={saleInfo} preview={preview} />
+        <AudioHintTooltip visible={hintVisible} text={t.hint_audio} onDismiss={onAudioHintDismiss} />
+      </div>
+      {!preview && <FavButton p={p} bare style={{ top: 4, right: 0 }} />}
+      <div style={{ flex: 1, minWidth: 0, padding: "18px 4px 12px 8px", display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 10.5, fontWeight: 500, letterSpacing: "0.12em", textTransform: "uppercase", lineHeight: 1.35 }}>
+          {p?.brand || ""}
+        </div>
+        <div style={{ color: "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontSize: 24, fontWeight: 400, lineHeight: 1.15, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          {cardName(p, lang) || (lang === 'kg' ? 'Жаңы продукт' : 'Новый товар')}
+        </div>
+        {notes && (
+          <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 12.5, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {notes}
+          </div>
+        )}
+        <div style={{ marginTop: 4 }}>
+          <CardPrice p={p} t={t} lang={lang} minP={minP} saleMinP={saleMinP} stk={stk} size={17} />
+        </div>
+        {vols && stk && (
+          <div style={{ color: "var(--ku-text-3, #8E8E93)", fontSize: 11.5, lineHeight: 1.35 }}>{vols}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, onAudioHintDismiss, wide = false, audioNote = false }) {
+  const hasAudio = audioUrl(p) || (typeof window !== 'undefined' && p?.id ? localStorage.getItem('parfum_audio_' + p.id) : null);
+  const Card = wide ? ProductCardWide : ProductCardBoutique;
+  return <Card p={p} onClick={onClick} preview={preview} hintVisible={!preview && showAudioHint && !!hasAudio} onAudioHintDismiss={onAudioHintDismiss} audioNote={wide && audioNote && !!hasAudio} />;
 }
 
 // P2.1: memoized — katalog 100+ karta render qiladi. p/preview/showAudioHint
@@ -2825,14 +2924,588 @@ function ProductCardBase({ p, onClick, preview = false, showAudioHint = false, o
 // renderda yangi identity oladi, lekin faqat `p` va stabil setterlardan
 // foydalanadi — shuning uchun taqqoslashdan ataylab chiqarilgan.
 export const ProductCard = React.memo(ProductCardBase, (prev, next) =>
-  prev.p === next.p && prev.preview === next.preview && prev.showAudioHint === next.showAudioHint
+  prev.p === next.p && prev.preview === next.preview && prev.showAudioHint === next.showAudioHint && prev.wide === next.wide && prev.audioNote === next.audioNote
 );
+
+// ─── Блоки главной по образцу smarket.kg ─────────────────────────────────────────
+// Бренды, полки «Новинки»/«Популярное», бонусы и сервис — встают между карточками
+// каталога, только когда не выбран фильтр и нет поиска. Стиль — бутик: без эмодзи,
+// тонкие линии, заголовки без надзаголовков, золото только в свечении бонусов.
+
+
+// «Dolce&Gabbana» и «Dolce & Gabbana» — один бренд.
+const brandKey = (b) => String(b || '').toLowerCase().replace(/[^a-z0-9а-яё]/gi, '');
+
+function topBrands(products, limit = 16) {
+  const map = new Map();
+  for (const p of products) {
+    const k = brandKey(p.brand);
+    if (!k || !productHasStock(p)) continue;
+    const cur = map.get(k) || { key: k, name: String(p.brand).trim(), count: 0 };
+    cur.count += 1;
+    map.set(k, cur);
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count).slice(0, limit);
+}
+
+// Тонкие линейные иконки 1.5px — вместо эмодзи.
+const KU_ICONS = {
+  truck: <><path d="M3 6.5h10.5v9H3z" /><path d="M13.5 9.5h4l3 3.2v2.8h-7" /><circle cx="7" cy="17" r="1.8" /><circle cx="17" cy="17" r="1.8" /></>,
+  card: <><rect x="3" y="5.5" width="18" height="13" rx="2" /><path d="M3 9.5h18M7 14.5h4" /></>,
+  drop: <><path d="M12 3.5c3 3.6 5.5 6.6 5.5 10a5.5 5.5 0 0 1-11 0c0-3.4 2.5-6.4 5.5-10z" /><path d="M9.5 14.5a2.5 2.5 0 0 0 2.5 2.5" /></>,
+  chat: <><path d="M20 11.5a7.5 7.5 0 0 1-11.2 6.5L4 19.5l1.5-4.3A7.5 7.5 0 1 1 20 11.5z" /></>,
+  share: <><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8" /><path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></>,
+  arrow: <><path d="M5 12h14M13.5 6.5 19 12l-5.5 5.5" /></>,
+  close: <><path d="M6 6l12 12M18 6 6 18" /></>,
+  pin: <><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></>,
+  alert: <><path d="M12 4 2.8 19.5h18.4z" /><path d="M12 10v4.2M12 16.9v.1" /></>,
+  minus: <><path d="M6 12h12" /></>,
+  plus: <><path d="M12 6v12M6 12h12" /></>,
+  heart: <><path d="M12 20.5s-7.5-4.6-9.2-9.3C1.6 7.9 3.8 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.8 1.2-1.7 2.8-2.8 4.8-2.8 3.4 0 5.6 3.4 4.4 6.7-1.7 4.7-9.2 9.3-9.2 9.3z" /></>,
+};
+function KuIcon({ name, size = 20, color = "currentColor", stroke = 1.5, fill = "none" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ display: "block", flexShrink: 0 }}>
+      {KU_ICONS[name]}
+    </svg>
+  );
+}
+
+// Заголовки разделов: шрифт интерфейса Onest, плотный и чистый (владелец выбрал вариант A).
+const kuTitle = { fontFamily: "var(--ku-font)", fontSize: 21, fontWeight: 600, letterSpacing: "-0.025em", lineHeight: 1.2, color: "var(--ku-text, #111111)" };
+
+// Заголовок раздела: заголовок, справа «Все →».
+function KuSectionHead({ title, action, onAction, dark = false, style }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, ...style }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ ...kuTitle, color: dark ? "#fff" : kuTitle.color }}>{title}</div>
+      </div>
+      {action && (
+        <button onClick={() => { haptic('light'); onAction?.(); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", padding: "4px 0", cursor: "pointer", flexShrink: 0,
+            fontSize: 12.5, fontWeight: 600, color: dark ? "#fff" : "var(--ku-text, #111111)", borderBottom: "1px solid currentColor" }}>
+          {action}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Бренды — раздел внутри каталога: две строки табличек, листаются вбок.
+// Каждый бренд написан так, как выглядит его логотип: похожий шрифт, заглавные,
+// разрядка. Оригинальные шрифты брендов закрытые — берём близкие из Google Fonts.
+const BRAND_MARKS = {
+  louisvuitton:       { t: "LOUIS VUITTON", f: "Jost", w: 500, s: 13, ls: "0.24em" },
+  chanel:             { t: "CHANEL", f: "Jost", w: 600, s: 18, ls: "0.3em" },
+  tomford:            { t: "TOM FORD", f: "Jost", w: 600, s: 16, ls: "0.16em" },
+  kilian:             { t: "KILIAN", sub: "PARIS", f: "Jost", w: 300, s: 18, ls: "0.34em" },
+  armani:             { t: "GIORGIO ARMANI", f: "Jost", w: 400, s: 12, ls: "0.26em" },
+  ortoparisi:         { t: "ORTO PARISI", f: "Jost", w: 500, s: 14, ls: "0.22em" },
+  nasomatto:          { t: "nasomatto", f: "Jost", w: 500, s: 17, ls: "0.04em" },
+  escentricmolecules: { t: "escentric molecules", f: "Jost", w: 400, s: 14, ls: "0.02em" },
+  creed:              { t: "CREED", f: "Cinzel", w: 600, s: 20, ls: "0.26em" },
+  bvlgari:            { t: "BVLGARI", f: "Cinzel", w: 600, s: 18, ls: "0.18em" },
+  xerjoff:            { t: "XERJOFF", f: "Cinzel", w: 600, s: 17, ls: "0.2em" },
+  initio:             { t: "INITIO", sub: "PARFUMS PRIVÉS", f: "Cinzel", w: 500, s: 18, ls: "0.22em" },
+  dior:               { t: "Dior", f: "Bodoni Moda", w: 500, s: 28, ls: "0" },
+  chopard:            { t: "Chopard", f: "Bodoni Moda", w: 500, s: 22, ls: "0.01em" },
+  rojaparfums:        { t: "ROJA", sub: "PARFUMS", f: "Bodoni Moda", w: 500, s: 22, ls: "0.26em" },
+  parfumsdemarly:     { t: "PARFUMS DE MARLY", sub: "PARIS", f: "Bodoni Moda", w: 500, s: 13, ls: "0.16em" },
+  dolcegabbana:       { t: "DOLCE & GABBANA", f: "Bodoni Moda", w: 500, s: 13, ls: "0.14em" },
+  boadiceathevictorious: { t: "BOADICEA", sub: "THE VICTORIOUS", f: "Cormorant Garamond", w: 600, s: 19, ls: "0.18em" },
+  clivechristian:     { t: "CLIVE CHRISTIAN", f: "Cormorant Garamond", w: 600, s: 15, ls: "0.14em" },
+  marcantoinebarrois: { t: "MARC-ANTOINE", sub: "BARROIS", f: "Cormorant Garamond", w: 600, s: 14, ls: "0.16em" },
+  maisoncrivelli:     { t: "MAISON CRIVELLI", f: "Cormorant Garamond", w: 600, s: 14, ls: "0.16em" },
+  stefanoricci:       { t: "STEFANO RICCI", f: "Cormorant Garamond", w: 600, s: 15, ls: "0.16em" },
+  lelabo:             { t: "LE LABO", f: "Courier Prime", w: 400, s: 17, ls: "0.14em" },
+};
+// Остальные бренды — строгие римские заглавные; длинные названия мельче.
+function brandMark(b) {
+  const m = BRAND_MARKS[b.key];
+  if (m) return m;
+  const t = b.name.toUpperCase();
+  return { t, f: "Cormorant Garamond", w: 600, s: t.length > 14 ? 14 : 17, ls: "0.14em" };
+}
+const BRAND_FONT_AXES = {
+  "Jost": "wght@300;400;500;600",
+  "Cinzel": "wght@500;600",
+  "Bodoni Moda": "wght@500",
+  "Cormorant Garamond": "wght@600",
+  "Courier Prime": "wght@400",
+};
+
+// Шрифты логотипов грузятся только когда раздел на экране, и только нужные буквы (text=…).
+function useBrandFonts(marks) {
+  const sig = marks.map(m => m.f + (m.t || "") + (m.sub || "")).join("|");
+  useEffect(() => {
+    if (!marks.length) return;
+    const fams = [...new Set(marks.map(m => m.f))].filter(f => BRAND_FONT_AXES[f]);
+    const chars = [...new Set(marks.map(m => (m.t || "") + (m.sub || "")).join(""))].join("");
+    const href = "https://fonts.googleapis.com/css2?" + fams.map(f => `family=${f.replace(/ /g, "+")}:${BRAND_FONT_AXES[f]}`).join("&")
+      + "&display=swap&text=" + encodeURIComponent(chars);
+    if (document.querySelector(`link[data-ku-brand-fonts="${sig}"]`)) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    link.dataset.kuBrandFonts = sig;
+    document.head.appendChild(link);
+  }, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+function BrandWordmark({ m }) {
+  const fam = `"${m.f}", var(--ku-font-display), serif`;
+  return (
+    <span style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1 }}>
+      <span style={{ fontFamily: fam, fontWeight: m.w, fontSize: m.s, letterSpacing: m.ls, marginRight: `-${m.ls}`, color: "#111111", whiteSpace: "nowrap" }}>{m.t}</span>
+      {m.sub && <span style={{ fontFamily: fam, fontWeight: m.w, fontSize: 8.5, letterSpacing: "0.32em", marginRight: "-0.32em", color: "#111111", marginTop: 6, whiteSpace: "nowrap" }}>{m.sub}</span>}
+    </span>
+  );
+}
+
+function BrandShelf({ brands, onPick, lang }) {
+  const kg = lang === "kg";
+  const marks = brands.map(brandMark);
+  useBrandFonts(marks);
+  if (!brands.length) return null;
+  return (
+    <div style={{ gridColumn: "1 / -1", margin: "18px -16px 10px" }}>
+      <KuSectionHead title={kg ? "Бренддер" : "Бренды"} style={{ padding: "0 16px 14px" }} />
+      {/* Бегущая строка: два ряда едут навстречу; палец/мышь на ряду — остановка. */}
+      <div className="ku-marquee" style={{ display: "flex", flexDirection: "column", gap: 8, paddingBottom: 16 }}>
+        {[0, 1].map(row => {
+          const items = brands.map((b, i) => ({ b, m: marks[i], i })).filter(x => x.i % 2 === row);
+          // Копия ряда идёт следом — без неё в конце был бы разрыв.
+          return (
+            <div key={row} className="ku-marquee-row">
+              <div className={"ku-marquee-track" + (row ? " ku-marquee-rev" : "")} style={{ animationDuration: `${Math.max(24, items.length * 6)}s` }}>
+                {[0, 1].map(copy => items.map(({ b, m }) => (
+                  <button key={copy + b.key} onClick={() => { haptic("light"); onPick(b.key); }}
+                    aria-label={b.name} aria-hidden={copy ? "true" : undefined} tabIndex={copy ? -1 : 0}
+                    style={{ height: 76, minWidth: 148, padding: "0 22px", marginRight: 8, borderRadius: 14, cursor: "pointer", background: "#FFFFFF", border: "1px solid var(--ku-border, #E8E6E1)",
+                      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <BrandWordmark m={m} />
+                  </button>
+                )))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Полка-витрина без карточек: только флакон (белый фон фото растворяется в фоне
+// через mix-blend-mode: multiply), под ним тень «на полу», бренд, название и цена.
+// Одна вещь крупно в центре под мягким светом; соседние меньше, развёрнуты к центру,
+// бледнее и размыты; подписи видны только у центральной. Всё считается от расстояния
+// до центра при каждой прокрутке (rAF, без перерисовки React).
+// Нажатие на боковую — подвинуть её в центр, на центральную — открыть аромат.
+const SHELF_ITEM_W = 190;
+const SHELF_GAP = 6;
+// Размытие — самый тяжёлый эффект (браузер перерисовывает картинку каждый кадр).
+// На слабых Android (≤2 ГБ памяти или ≤4 ядра; Chrome сообщает это) и при
+// «уменьшить движение» оставляем только масштаб и прозрачность — они почти бесплатные.
+// Safari память не сообщает — iPhone считаем сильным.
+const SHELF_LITE = typeof window !== "undefined" && (
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
+  (navigator.deviceMemory !== undefined && (navigator.deviceMemory <= 2 || (navigator.hardwareConcurrency || 8) <= 4))
+);
+
+function ShelfItem({ p, onTap, itemRef }) {
+  const { lang, t } = useLang();
+  const stk = productHasStock(p);
+  const minP = productMinPrice(p);
+  const saleInfo = useSaleCountdown(p);
+  const saleMinP = saleInfo && minP !== null ? salePrice(minP, saleInfo.percent) : null;
+  return (
+    <div ref={itemRef} onClick={onTap} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter") onTap(e); }}
+      aria-label={`${p?.brand || ""} ${cardName(p, lang)}`.trim()}
+      style={{ width: SHELF_ITEM_W, flexShrink: 0, scrollSnapAlign: "center", cursor: "pointer", textAlign: "center",
+        transformOrigin: "center 40%", willChange: SHELF_LITE ? "transform" : "transform, filter", mixBlendMode: "multiply" }}>
+      <div style={{ position: "relative", height: 236 }}>
+        <span data-floor style={{ position: "absolute", left: "22%", right: "22%", bottom: 4, height: 16, borderRadius: "50%",
+          background: "radial-gradient(ellipse at center, rgba(40,30,15,0.28) 0%, rgba(40,30,15,0) 70%)" }} />
+        {p?.img
+          ? <BottleImg src={p.img} alt="" box={{ top: 6, left: 0, right: 0, bottom: 14 }} fillW={0.8} blend={false} />
+          : <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#D1D1D6" }}>{IC.bottle}</span>}
+      </div>
+      <div data-caption style={{ paddingTop: 10 }}>
+        <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 10.5, fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {p?.brand || ""}
+        </div>
+        <div style={{ marginTop: 5, color: "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontSize: 21, fontWeight: 400, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {cardName(p, lang)}
+        </div>
+        <div style={{ marginTop: 7, display: "flex", justifyContent: "center" }}>
+          <CardPrice p={p} t={t} lang={lang} minP={minP} saleMinP={saleMinP} stk={stk} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShelfRow({ title, items, onOpen, action, onAction }) {
+  const scRef = useRef(null);
+  const itemRefs = useRef([]);
+  const dotRefs = useRef([]);
+
+  useEffect(() => {
+    const sc = scRef.current;
+    if (!sc) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const center = sc.scrollLeft + sc.clientWidth / 2;
+      let best = 0, bestD = Infinity;
+      itemRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const mid = el.offsetLeft + el.offsetWidth / 2;
+        const signed = (mid - center) / (el.offsetWidth + SHELF_GAP);
+        const d = Math.min(1, Math.abs(signed));
+        if (Math.abs(signed) < bestD) { bestD = Math.abs(signed); best = i; }
+        // Далеко за экраном — стиль уже выставлен, не трогаем (меньше работы на кадр).
+        if (Math.abs(signed) > 2.5) {
+          if (el.dataset.far === "1") return;
+          el.dataset.far = "1";
+        } else if (el.dataset.far) delete el.dataset.far;
+        const rot = Math.max(-1, Math.min(1, signed)) * -16;
+        el.style.transform = `perspective(900px) rotateY(${rot.toFixed(1)}deg) scale(${(1 - 0.24 * d).toFixed(3)})`;
+        // Радиус с шагом 0.25px — браузер реже перерисовывает размытие.
+        el.style.filter = !SHELF_LITE && d > 0.03 ? `blur(${(Math.round(8.8 * d) / 4).toFixed(2)}px)` : "none";
+        el.style.opacity = (1 - 0.32 * d).toFixed(3);
+        const cap = el.querySelector("[data-caption]");
+        if (cap) {
+          const k = Math.max(0, 1 - d * 1.8);
+          cap.style.opacity = k.toFixed(3);
+          cap.style.transform = `translateY(${((1 - k) * 8).toFixed(1)}px)`;
+        }
+        const floor = el.querySelector("[data-floor]");
+        if (floor) floor.style.opacity = (1 - 0.7 * d).toFixed(3);
+      });
+      dotRefs.current.forEach((dot, i) => {
+        if (!dot) return;
+        const on = i === best;
+        dot.style.transform = on ? "scaleX(1.8)" : "scaleX(0.5)";
+        dot.style.background = on ? "#111111" : "rgba(17,17,17,0.22)";
+      });
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    // Сразу в центре вторая вещь — соседи видны с обеих сторон.
+    const second = itemRefs.current[1];
+    if (second && items.length >= 3 && sc.scrollLeft === 0) {
+      sc.scrollLeft = second.offsetLeft + second.offsetWidth / 2 - sc.clientWidth / 2;
+    }
+    update();
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      sc.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [items.length]);
+
+  if (!items.length) return null;
+
+  const scrollToItem = (i) => {
+    const sc = scRef.current;
+    const el = itemRefs.current[i];
+    if (sc && el) sc.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - sc.clientWidth / 2, behavior: "smooth" });
+  };
+
+  const tap = (p, i) => {
+    const sc = scRef.current;
+    const el = itemRefs.current[i];
+    haptic("light");
+    if (sc && el && Math.abs(el.offsetLeft + el.offsetWidth / 2 - (sc.scrollLeft + sc.clientWidth / 2)) > el.offsetWidth / 3) {
+      scrollToItem(i);
+      return;
+    }
+    onOpen(p);
+  };
+
+  return (
+    <div style={{ gridColumn: "1 / -1", margin: "22px -16px 14px", paddingTop: 22, paddingBottom: 18,
+      background: "radial-gradient(70% 62% at 50% 42%, #FFFFFF 0%, #FFFFFF 38%, rgba(255,255,255,0) 100%), #F1EFEA" }}>
+      <KuSectionHead title={title} action={action} onAction={onAction} style={{ padding: "0 16px 4px" }} />
+      <div ref={scRef} className="no-scrollbar"
+        style={{ position: "relative", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory",
+          padding: `10px calc(50% - ${SHELF_ITEM_W / 2}px) 6px` }}>
+        <div style={{ display: "flex", gap: SHELF_GAP, width: "max-content" }}>
+          {items.map((p, i) => (
+            <ShelfItem key={p.id} p={p} onTap={() => tap(p, i)} itemRef={el => { itemRefs.current[i] = el; }} />
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", gap: 8, paddingTop: 12 }} aria-hidden="true">
+        {items.map((p, i) => (
+          <span key={p.id} ref={el => { dotRefs.current[i] = el; }} onClick={() => scrollToItem(i)}
+            style={{ height: 3, width: 10, borderRadius: 2, background: "rgba(17,17,17,0.22)", cursor: "pointer", transform: "scaleX(0.5)",
+              transition: "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s" }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Бонусы — «клубная карта Kemal Usman»: настоящая на вид пластиковая карта (чёрная,
+// золотой отлив, монограмма), по ней один раз пробегает блик, когда блок
+// появляется на экране. Ниже — короткие условия строками и одна кнопка.
+// Все суммы — из настроек магазина, ничего не выдумываем.
+// Суммы в условиях клуба — полужирные: глаз сразу находит цифры.
+function KuNum({ children }) {
+  return <b style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{children}</b>;
+}
+
+function InfoBonusCard({ settings, lang }) {
+  const kg = lang === 'kg';
+  const ref = useRef(null);
+  const [shine, setShine] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setShine(true); io.disconnect(); } }, { threshold: 0.5 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const welcome = settings?.welcomeBonusEnabled !== false && settings?.welcomeBonus > 0 ? settings.welcomeBonus : 0;
+  const friend = settings?.referralFriendBonus > 0 ? formatSum(settings.referralFriendBonus) : null;
+  const rows = [
+    settings?.useBonusPercent > 0 && (kg
+      ? <>Заказдын <KuNum>{settings.useBonusPercent}%</KuNum> чейин бонус менен төлөңүз</>
+      : <>До <KuNum>{settings.useBonusPercent}%</KuNum> заказа можно оплатить бонусами</>),
+    settings?.referralBonus > 0 && (kg
+      ? <>Досуңузду чакырыңыз — сизге <KuNum>{formatSum(settings.referralBonus)}</KuNum>{friend && <>, ага <KuNum>{friend}</KuNum></>}</>
+      : <>Пригласите друга — вам <KuNum>{formatSum(settings.referralBonus)}</KuNum>{friend && <>, ему <KuNum>{friend}</KuNum></>}</>),
+    kg ? "Бонустар заказ жеткирилгенден кийин түшөт" : "Бонусы приходят после доставки заказа",
+  ].filter(Boolean);
+  // «Выдавленный» текст на пластике: тёмная тень снизу, светлая кромка сверху.
+  const emboss = "0 1px 0 rgba(0,0,0,0.65), 0 -0.5px 0 rgba(255,255,255,0.14)";
+  if (!welcome && rows.length < 2) return null;
+
+  return (
+    <div ref={ref} style={{ gridColumn: "1 / -1", margin: "22px -16px 14px", padding: "26px 16px 22px", background: "#F1EFEA" }}>
+      <KuSectionHead title={kg
+        ? <><span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: "1.12em", letterSpacing: "0.005em" }}>Kemal Usman</span> клубу</>
+        : <>Клуб <span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: "1.12em", letterSpacing: "0.005em" }}>Kemal Usman</span></>} />
+      <div style={{ fontSize: 14, color: "var(--ku-text-2, #6E6E73)", marginTop: 8, lineHeight: 1.45, textWrap: "balance" }}>
+        {kg ? "Ар бир сатып алуудан бонус — кийинки жыпарга." : "Бонусы с каждой покупки — на следующий аромат."}
+      </div>
+
+      {/* Карта */}
+      <div style={{ display: "flex", justifyContent: "center", padding: "26px 0 30px" }}>
+        <div style={{ position: "relative", width: "min(100%, 316px)", aspectRatio: "1.586", borderRadius: 18, overflow: "hidden", transform: "rotate(-3deg)",
+          background: "radial-gradient(120% 90% at 85% 0%, rgba(201,168,106,0.35) 0%, rgba(201,168,106,0) 50%), linear-gradient(160deg, #1E1E1E 0%, #0C0C0C 60%, #151515 100%)",
+          boxShadow: "0 24px 40px -18px rgba(20,14,4,0.55), 0 8px 16px -8px rgba(20,14,4,0.35), inset 0 0 0 1px rgba(255,255,255,0.06)", color: "#fff" }}>
+          {/* золотая кромка */}
+          <div style={{ position: "absolute", inset: 0, borderRadius: 18, boxShadow: "inset 0 1px 0 rgba(232,206,150,0.35)" }} />
+          {/* блик */}
+          <div className={shine ? "ku-card-shine" : undefined} style={{ position: "absolute", top: "-40%", bottom: "-40%", width: "38%", left: "-60%",
+            background: "linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 100%)", transform: "rotate(18deg)" }} />
+          <div style={{ position: "absolute", inset: 0, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: 22, letterSpacing: "0.01em", color: "#F4EEE2", textShadow: emboss }}>Kemal Usman</span>
+              <span style={{ width: 34, height: 26, borderRadius: 6, background: "linear-gradient(135deg, #E8CE96 0%, #B8975A 55%, #8C6E3A 100%)", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)" }} />
+            </div>
+            <div>
+              {welcome > 0 && (
+                <>
+                  <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.26em", textTransform: "uppercase", color: "#D9BE85" }}>{kg ? "Белек бонус" : "Приветственный бонус"}</div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 1 }}>
+                    <span style={{ fontFamily: "var(--ku-font-display)", fontWeight: 400, fontSize: 42, lineHeight: 1, letterSpacing: "-0.01em", color: "#F4EEE2", fontVariantNumeric: "lining-nums", textShadow: emboss }}>{Number(welcome).toLocaleString("ru-RU")}</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "#D9BE85" }}>{kg ? "сом" : "сом"}</span>
+                  </div>
+                </>
+              )}
+              <div style={{ marginTop: 8, fontSize: 9, fontWeight: 500, letterSpacing: "0.34em", color: "rgba(244,238,226,0.5)" }}>CLUB</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Условия */}
+      <div style={{ borderTop: "1px solid rgba(17,17,17,0.10)" }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{ display: "flex", gap: 12, alignItems: "baseline", padding: "12px 0", borderBottom: "1px solid rgba(17,17,17,0.10)" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#B8975A", flexShrink: 0, transform: "translateY(-2px)" }} />
+            <span style={{ fontSize: 14.5, color: "var(--ku-text, #111111)", lineHeight: 1.45 }}>{r}</span>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={() => { haptic('light'); window.dispatchEvent(new CustomEvent('nav:screen', { detail: 'profile' })); }}
+        style={{ marginTop: 18, width: "100%", height: 50, borderRadius: 14, border: "none", background: "#111111", color: "#fff",
+          fontSize: 14, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+        {kg ? 'Менин бонустарым' : 'Мои бонусы'}
+        <KuIcon name="arrow" size={16} stroke={1.8} />
+      </button>
+    </div>
+  );
+}
+
+function waLink(settings, text) {
+  const num = String(settings?.whatsappPhone || settings?.supportPhone || '').replace(/\D/g, '');
+  return num ? `https://wa.me/${num}?text=${encodeURIComponent(text)}` : null;
+}
+
+function InfoWhyUsCard({ settings, lang }) {
+  const kg = lang === 'kg';
+  const free = settings?.minOrderForFreeDelivery || 0;
+  const cost = settings?.deliveryCost || 0;
+  const cash = settings?.cashPaymentEnabled === true;
+  const items = [
+    { icon: "truck", title: kg ? 'Жеткирүү' : 'Доставка', text: free ? (kg ? `${formatSum(free)} дан бекер, андан аз — ${formatSum(cost)}` : `Бесплатно от ${formatSum(free)}, иначе ${formatSum(cost)}`) : (kg ? 'Шаар ичинде' : 'По городу') },
+    settings?.onlinePaymentEnabled !== false && { icon: "card", title: kg ? 'Онлайн төлөм' : 'Оплата онлайн', text: cash ? (kg ? 'O!⁠Деңги аркылуу каалаган карта же накталай' : 'Картой любого банка через O!⁠Деньги или наличными') : (kg ? 'O!⁠Деңги аркылуу каалаган банктын картасы' : 'Картой любого банка через O!⁠Деньги') },
+    { icon: "drop", title: kg ? '5 мл дан баштап' : 'От 5 мл', text: kg ? 'Флаконду дароо алуунун кереги жок — алгач сынап көрүңүз' : 'Не нужно сразу брать флакон — сначала попробуйте' },
+    { icon: "chat", title: kg ? 'Жеке тандоо' : 'Личный подбор', text: kg ? 'Жыпарды ноталары жана маанайы боюнча табабыз' : 'Подберём аромат по нотам и настроению' },
+  ].filter(Boolean);
+  const wa = waLink(settings, kg ? 'Саламатсызбы! Жыпар тандоого жардам бериңизчи.' : 'Здравствуйте! Помогите подобрать аромат.');
+  const hair = "1px solid var(--ku-border, #E8E6E1)";
+  return (
+    <div style={{ gridColumn: "1 / -1", margin: "14px 0", borderRadius: 24, padding: "26px 20px 20px", background: "#F7F5F1" }}>
+      <KuSectionHead title={kg ? 'Бизден сатып алуу оңой' : 'Покупать у нас спокойно'} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", marginTop: 20, borderTop: hair }}>
+        {items.map((r, i) => (
+          <div key={i} style={{ padding: "16px 12px 16px 0", paddingLeft: i % 2 ? 14 : 0, borderLeft: i % 2 ? hair : "none", borderBottom: i < items.length - 2 ? hair : "none" }}>
+            <KuIcon name={r.icon} size={22} color="#111111" />
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ku-text, #111111)", marginTop: 12 }}>{r.title}</div>
+            <div style={{ fontSize: 12.5, color: "var(--ku-text-2, #6E6E73)", marginTop: 4, lineHeight: 1.4 }}>{r.text}</div>
+          </div>
+        ))}
+      </div>
+      {wa && (
+        <a href={wa} target="_blank" rel="noopener noreferrer"
+          style={{ marginTop: 18, height: 50, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 14, background: "#111111", color: "#fff", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+          <KuIcon name="chat" size={18} color="#fff" stroke={1.7} />
+          {kg ? 'WhatsApp аркылуу тандоо' : 'Подобрать аромат в WhatsApp'}
+        </a>
+      )}
+    </div>
+  );
+}
+
+// ─── Избранное ──────────────────────────────────────────────────────────────────
+// Сердечко: на карточках — «голое» (bare), тонкая линия без кружка в правом верхнем углу;
+// на странице аромата — квадратная кнопка рядом с «Поделиться».
+// Сохранённое — красное (тот же красный, что у цены со скидкой), пустое — чёрный контур.
+const KU_HEART_RED = "#C62828";
+function FavButton({ p, size = 34, style, bare = false }) {
+  const { lang } = useLang();
+  const on = useIsFavorite(p?.id);
+  if (!p?.id) return null;
+  const label = on ? (lang === "kg" ? "Тандалгандардан алып салуу" : "Убрать из избранного") : (lang === "kg" ? "Тандалгандарга кошуу" : "В избранное");
+  return (
+    <motion.button
+      whileTap={{ scale: 0.86 }}
+      onClick={(e) => { e.stopPropagation(); haptic(on ? "light" : "success"); toggleFavorite(p.id); }}
+      aria-label={label} aria-pressed={on}
+      style={bare
+        ? { position: "absolute", top: 2, right: 0, zIndex: 5, width: 38, height: 38, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, background: "none", color: "#111111", ...style }
+        : { position: "absolute", right: 10, bottom: 10, zIndex: 5, width: size, height: size, borderRadius: "50%", border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+          background: "rgba(255,255,255,0.92)", boxShadow: "0 2px 8px rgba(20,16,8,0.12)", color: "#111111", ...style }}>
+      <motion.span key={on ? "on" : "off"} initial={{ scale: on ? 0.6 : 1 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 520, damping: 18 }} style={{ display: "flex" }}>
+        <KuIcon name="heart" size={bare ? 21 : Math.round(size * 0.53)} stroke={bare ? 1.5 : 1.7} color={on ? KU_HEART_RED : "#111111"} fill={on ? KU_HEART_RED : "none"} />
+      </motion.span>
+    </motion.button>
+  );
+}
+
+function FavoritesScreen({ products, goToCatalog }) {
+  const { lang } = useLang();
+  const kg = lang === "kg";
+  const ids = useFavorites();
+  const list = ids.map(id => products.find(p => String(p.id) === id)).filter(Boolean);
+  const open = (p) => {
+    goToCatalog();
+    // Карточка аромата живёт в каталоге — открываем её после переключения вкладки.
+    setTimeout(() => window.dispatchEvent(new CustomEvent("open:product", { detail: p.id })), 60);
+  };
+  return (
+    <div style={{ paddingBottom: 120 }}>
+      <div style={{ padding: "52px 16px 4px", fontFamily: "var(--ku-font-display)", fontSize: 30, fontWeight: 400, color: "var(--ku-text, #111111)" }}>{kg ? "Тандалгандар" : "Избранное"}</div>
+      {list.length === 0 ? (
+        <EmptyState
+          icon={IC.heart}
+          title={kg ? "Азырынча бош" : "Здесь пока пусто"}
+          hint={kg ? "Жыпардын сүрөтүндөгү жүрөкчөнү басыңыз — ал ушул жерде сакталат." : "Нажмите на сердечко на фото аромата — он сохранится здесь."}
+          action={<button onClick={() => { haptic("light"); goToCatalog(); }} style={{ height: 48, padding: "0 24px", borderRadius: 14, border: "none", background: "#111111", color: "#fff", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>{kg ? "Каталогго өтүү" : "Перейти в каталог"}</button>}
+        />
+      ) : (
+        <>
+          <div style={{ padding: "0 16px 6px", fontSize: 13, color: "var(--ku-text-2, #6E6E73)" }}>{kg ? `${list.length} жыпар` : `${list.length} ${list.length % 10 === 1 && list.length % 100 !== 11 ? "аромат" : (list.length % 10 >= 2 && list.length % 10 <= 4 && (list.length % 100 < 12 || list.length % 100 > 14)) ? "аромата" : "ароматов"}`}</div>
+          <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "26px 12px" }}>
+            {list.map(p => (
+              <div key={p.id} className="product-card-wrap"><ProductCard p={p} onClick={() => open(p)} /></div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Похожие: сначала тот же бренд, потом та же категория с близкой ценой.
+function similarProducts(products, p, limit = 8) {
+  if (!p) return [];
+  const pool = products.filter(x => x.id !== p.id && productHasStock(x));
+  const ids = Array.isArray(p.relatedIds) ? p.relatedIds : [];
+  const picked = ids.map(id => pool.find(x => x.id === id)).filter(Boolean);
+  const price = productMinPrice(p) || 0;
+  const near = (x) => Math.abs((productMinPrice(x) || 0) - price);
+  const sameBrand = pool.filter(x => brandKey(x.brand) && brandKey(x.brand) === brandKey(p.brand)).sort((a, b) => near(a) - near(b));
+  const sameCat = pool.filter(x => (x.category || '').trim() === (p.category || '').trim()).sort((a, b) => near(a) - near(b));
+  const out = [];
+  for (const x of [...picked, ...sameBrand.slice(0, 4), ...sameCat]) {
+    if (out.length >= limit) break;
+    if (!out.includes(x)) out.push(x);
+  }
+  return out;
+}
+
+function DetailAskShare({ p, settings, lang, showToast }) {
+  const kg = lang === 'kg';
+  const name = `${p?.brand || ''} ${cardName(p, lang)}`.trim();
+  const link = `https://kemalusman.kg/?product=${p?.id}`;
+  const wa = waLink(settings, (kg ? `Саламатсызбы! «${name}» жөнүндө суроом бар: ` : `Здравствуйте! Вопрос про «${name}»: `) + link);
+  const share = async () => {
+    haptic('light');
+    try {
+      if (navigator.share) { await navigator.share({ title: name, url: link }); return; }
+      await navigator.clipboard.writeText(link);
+      showToast?.(kg ? 'Шилтеме көчүрүлдү' : 'Ссылка скопирована');
+    } catch { /* пользователь закрыл окно */ }
+  };
+  const base = { height: 48, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, borderRadius: 14, fontSize: 13.5, fontWeight: 600, cursor: "pointer", textDecoration: "none", whiteSpace: "nowrap",
+    background: "var(--ku-surface, #FFFFFF)", color: "var(--ku-text, #111111)", border: "1px solid var(--ku-border, #E2E0DB)" };
+  return (
+    <div style={{ display: "flex", gap: 10, margin: "4px 0 28px" }}>
+      {wa && (
+        <a href={wa} target="_blank" rel="noopener noreferrer" style={{ ...base, flex: 1 }}>
+          <KuIcon name="chat" size={18} stroke={1.6} />
+          {kg ? 'Консультанттан суроо' : 'Спросить консультанта'}
+        </a>
+      )}
+      <FavButton p={p} size={48} style={{ position: "relative", right: "auto", bottom: "auto", borderRadius: 14, boxShadow: "none", background: "var(--ku-surface, #FFFFFF)", border: "1px solid var(--ku-border, #E2E0DB)", flexShrink: 0 }} />
+      <button onClick={share} aria-label={kg ? 'Бөлүшүү' : 'Поделиться'} style={{ ...base, width: 48, padding: 0, flexShrink: 0 }}>
+        <KuIcon name="share" size={18} stroke={1.6} />
+      </button>
+    </div>
+  );
+}
 
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
 function CatalogScreen({ products, settings, addToCart, banners, showToast, onAdminLogin, onRefresh, setIsDetailOpen, reviews = [] }) {
   const { lang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
+  const [brand, setBrand] = useState(null);
+  const [flag, setFlag] = useState(null); // 'new' | 'popular' — «Смотреть все» у полок
+  const gridTopRef = useRef(null);
   const glass = useGlass(); // Liquid Glass (native-only); web => no-op
   const edgeRef = React.useRef(null);
   const [detail, setDetail] = useState(null);
@@ -2917,7 +3590,9 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
         (p.shortDesc || "").toLowerCase().includes(q) ||
         (p.tags || "").toLowerCase().includes(q) ||
         (p.desc || "").toLowerCase().includes(q);
-      return matchCat && matchSearch;
+      const matchBrand = !brand || brandKey(p.brand) === brand;
+      const matchFlag = !flag || (flag === 'new' ? p.isNew : (p.isPopular || p.isHit));
+      return matchCat && matchSearch && matchBrand && matchFlag;
     });
     // Apply sort
     const minPriceFor = (p) => {
@@ -2939,7 +3614,64 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
       });
     }
     return list;
-  }, [products, cat, search, sort, lang]);
+  }, [products, cat, search, sort, lang, brand, flag]);
+
+  // Блоки smarket между карточками — только на «чистой» главной.
+  const plainHome = cat === "all" && !search && !brand && !flag && sort === 'default';
+  const brands = useMemo(() => topBrands(products), [products]);
+  const shelfNew = useMemo(() => products.filter(p => p.isNew && productHasStock(p)).slice(0, 12), [products]);
+  const shelfPopular = useMemo(() => products.filter(p => (p.isPopular || p.isHit) && productHasStock(p)).slice(0, 12), [products]);
+  const kg = lang === 'kg';
+  const flagTitle = { new: kg ? 'Жаңы келгендер' : 'Новинки', popular: kg ? 'Кардарлардын тандоосу' : 'Выбор покупателей' };
+  const showAll = (f) => { setFlag(f); requestAnimationFrame(() => gridTopRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })); };
+  const activeLabel = flag ? flagTitle[flag] : brand ? (brands.find(b => b.key === brand)?.name || "") : null;
+  const pickBrand = (k) => { setBrand(k); requestAnimationFrame(() => gridTopRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })); };
+  const homeInserts = {
+    2: <BrandShelf key="ins-brands" brands={brands} onPick={pickBrand} lang={lang} />,
+    5: <ShelfRow key="ins-new" title={flagTitle.new} items={shelfNew} onOpen={(p) => openDetail(p)} action={kg ? 'Баары' : 'Смотреть все'} onAction={() => showAll('new')} />,
+    11: <InfoBonusCard key="ins-bonus" settings={settings} lang={lang} />,
+    17: <ShelfRow key="ins-pop" title={flagTitle.popular} items={shelfPopular} onOpen={(p) => openDetail(p)} action={kg ? 'Баары' : 'Смотреть все'} onAction={() => showAll('popular')} />,
+    23: <InfoWhyUsCard key="ins-why" settings={settings} lang={lang} />,
+  };
+
+  const renderGridCard = (p, idx) => {
+    // Ритм каталога: две обычные карточки, потом одна большая на всю ширину.
+    const wide = idx % 3 === 2;
+    const span = wide ? { gridColumn: "1 / -1" } : undefined;
+    // PRO: only animate first 8 cards for smooth initial load;
+    // remaining cards render instantly to avoid 500+ motion.div jank.
+    if (idx < 8) {
+      const delay = idx * 0.035;
+      return (
+        <motion.div
+          key={p.id}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.28, delay, ease: iosEase }}
+          style={span}
+        >
+          <ProductCard
+            p={p}
+            wide={wide}
+            audioNote
+            onClick={() => openDetail(p)}
+            showAudioHint={idx === 0 && audioHintVisible}
+            onAudioHintDismiss={() => setAudioHintVisible(false)}
+          />
+        </motion.div>
+      );
+    }
+    return (
+      <div key={p.id} className="product-card-wrap" style={span}>
+        <ProductCard
+          p={p}
+          wide={wide}
+          audioNote
+          onClick={() => openDetail(p)}
+        />
+      </div>
+    );
+  };
 
   const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setImgIsLandscape(false); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
 
@@ -3183,15 +3915,17 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
 
             <div style={{ marginBottom: 20 }}>
               <div style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
-              <div style={{ color: "var(--ku-text, #111111)", fontSize: 26, fontWeight: 800, lineHeight: 1.2, letterSpacing: -0.5, marginBottom: 8 }}>{pickName(detail, lang)}</div>
+              <div style={{ color: "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontSize: 30, fontWeight: 400, lineHeight: 1.15, letterSpacing: -0.3, marginBottom: 8 }}>{pickName(detail, lang)}</div>
               {/* Sale badge + countdown in detail */}
               {(() => {
                 const si = getSaleInfo(detail);
                 if (!si) return null;
                 return <SaleCountdownBadge product={detail} />;
               })()}
-              {pickDesc(detail, lang) && (
-                <div>
+              {(() => { const dp = splitNotes(pickDesc(detail, lang)); const restText = dp.has ? dp.rest : pickDesc(detail, lang); return (<>
+              {dp.has && <NotesPyramid dp={dp} lang={lang} />}
+              {restText && (
+                <div style={dp.has ? { marginTop: 8 } : undefined}>
                   <motion.div
                     animate={{ height: descExpanded ? "auto" : 60 }}
                     transition={{ type: "spring", stiffness: 360, damping: 32 }}
@@ -3201,7 +3935,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                       maskImage: descExpanded ? "none" : "linear-gradient(to bottom, #000 60%, transparent 100%)",
                     }}
                   >
-                    <DescRenderer text={pickDesc(detail, lang)} color="#6b6b70" iconColor={T.gray} />
+                    <DescRenderer text={restText} color="#6b6b70" iconColor={T.gray} />
                   </motion.div>
                   <button
                     onClick={() => { haptic('light'); setDescExpanded(v => !v); }}
@@ -3223,6 +3957,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   </button>
                 </div>
               )}
+              </>); })()}
             </div>
 
             <div style={{ height: 1, background: "var(--ku-surface-2, #F5F5F5)", marginBottom: 20 }} />
@@ -3284,6 +4019,27 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
 
             <ClientAudioBtn product={detail} />
 
+            <DetailAskShare p={detail} settings={settings} lang={lang} showToast={showToast} />
+
+            {(() => {
+              const sim = similarProducts(products, detail);
+              if (!sim.length) return null;
+              return (
+                <div style={{ margin: "4px -20px 24px", "--ku-tile-bg": "#FFFFFF" }}>
+                  <KuSectionHead title={lang === 'kg' ? 'Окшош жыпарлар' : 'Похожие ароматы'} style={{ padding: "0 20px 14px" }} />
+                  <div className="no-scrollbar" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 20px 8px" }}>
+                    <div style={{ display: "flex", gap: 12 }}>
+                      {sim.map(x => (
+                        <div key={x.id} style={{ width: 150, flexShrink: 0 }}>
+                          <ProductCard p={x} preview onClick={() => { openDetail(x); detailScrollRef.current?.scrollTo?.({ top: 0 }); }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
           </motion.div>
         </div>
 
@@ -3318,7 +4074,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                   if (si) {
                     return (
                       <>
-                        <span style={{ color: "#FF3B30", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
+                        <span style={{ color: "#FF3B30", fontSize: 26, fontWeight: 600, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
                           {formatSum(salePrice(selVariant.price, si.percent))}
                         </span>
                         <span style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
@@ -3328,7 +4084,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                     );
                   }
                   return (
-                    <span style={{ color: "var(--ku-text, #111111)", fontSize: 28, fontWeight: 800, letterSpacing: -0.8, lineHeight: 1 }}>
+                    <span style={{ color: "var(--ku-text, #111111)", fontSize: 26, fontWeight: 600, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
                       {formatSum(selVariant.price)}
                     </span>
                   );
@@ -3411,7 +4167,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               style={{ overflow: "hidden", display: "flex", alignItems: "center", padding: "6px 16px 10px" }}
             >
               <div>
-                <div onClick={handleSecretTap} style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", fontFamily: "'Playfair Display', 'Georgia', serif", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
+                <div onClick={handleSecretTap} style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
               </div>
             </motion.div>
           )}
@@ -3535,8 +4291,20 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
         onSortChange={setSort}
         lang={lang}
       />
+      {/* Бренды — как полоса брендов на smarket.kg */}
+      <div ref={gridTopRef} style={{ scrollMarginTop: 120 }} />
+      {activeLabel && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 16px 0" }}>
+          <div style={kuTitle}>{activeLabel}</div>
+          <button onClick={() => { haptic('light'); setFlag(null); setBrand(null); }}
+            style={{ display: "flex", alignItems: "center", gap: 6, height: 34, padding: "0 12px", borderRadius: 999, border: "1px solid var(--ku-border, #E2E0DB)", background: "var(--ku-surface, #FFFFFF)", color: "var(--ku-text, #111111)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            {kg ? 'Тазалоо' : 'Сбросить'}
+            <KuIcon name="close" size={13} stroke={1.8} />
+          </button>
+        </div>
+      )}
       {/* Products grid */}
-      <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 12 }}>
+      <div style={{ padding: "12px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "26px 12px" }}>
         {filteredProducts.length === 0 && (
           <div style={{ gridColumn: "1/-1", textAlign: 'center', padding: '60px 20px', color: T.textMuted }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
@@ -3545,34 +4313,9 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           </div>
         )}
         {filteredProducts.map((p, idx) => {
-          // PRO: only animate first 8 cards for smooth initial load;
-          // remaining cards render instantly to avoid 500+ motion.div jank.
-          if (idx < 8) {
-            const delay = idx * 0.035;
-            return (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay, ease: iosEase }}
-              >
-                <ProductCard
-                  p={p}
-                  onClick={() => openDetail(p)}
-                  showAudioHint={idx === 0 && audioHintVisible}
-                  onAudioHintDismiss={() => setAudioHintVisible(false)}
-                />
-              </motion.div>
-            );
-          }
-          return (
-            <div key={p.id} className="product-card-wrap">
-              <ProductCard
-                p={p}
-                onClick={() => openDetail(p)}
-              />
-            </div>
-          );
+          const card = renderGridCard(p, idx);
+          const ins = plainHome ? homeInserts[idx] : null;
+          return ins ? <React.Fragment key={p.id}>{card}{ins}</React.Fragment> : card;
         })}
       </div>
 
@@ -3585,7 +4328,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             <div style={{ fontSize: 9, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(0,0,0,0.3)", marginBottom: 6, fontWeight: 600 }}>
               {lang === 'kg' ? 'Кардарлардын пикири' : 'Отзывы клиентов'}
             </div>
-            <div style={{ fontSize: 20, fontWeight: 400, color: "var(--ku-text, #111111)", marginBottom: 20, fontFamily: "'Georgia', serif", fontStyle: "italic" }}>
+            <div style={{ fontSize: 20, fontWeight: 400, color: "var(--ku-text, #111111)", marginBottom: 20, fontFamily: "var(--ku-font-display)", fontStyle: "italic" }}>
               {lang === 'kg' ? 'Алар биз жөнүндө эмне дейт' : 'Что говорят о нас'}
             </div>
             <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
@@ -3741,7 +4484,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
 
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "calc(var(--nav-height) + 100px)" /* navbar + sticky checkout button + breathing room */ }}>
-      <div style={{ padding: "52px 16px 12px", fontSize: 26, fontWeight: 800, color: "var(--ku-text, #111111)", background: "var(--ku-bg, #F5F5F5)" }}>{t.cart}</div>
+      <div style={{ padding: "52px 16px 12px", fontFamily: "var(--ku-font-display)", fontSize: 30, fontWeight: 400, color: "var(--ku-text, #111111)", background: "var(--ku-bg, #F5F5F5)" }}>{t.cart}</div>
       {/* Items — PRO: AnimatePresence makes adds spring in, removes swipe out */}
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
         <AnimatePresence initial={false}>
@@ -3755,34 +4498,36 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 120, scale: 0.85, transition: { duration: 0.22 } }}
               transition={{ type: 'spring', stiffness: 380, damping: 28 }}
-              style={{ ...card({ padding: "14px 16px" }), display: "flex", gap: 12, alignItems: "center", ...(isOOS ? { border: '2px solid #FF3B30', opacity: 0.7 } : {}) }}
+              style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: "12px 14px 12px 8px", display: "flex", gap: 12, alignItems: "center", ...(isOOS ? { boxShadow: "inset 0 0 0 1.5px #C62828", opacity: 0.75 } : {}) }}
             >
-              <div style={{ width: 60, height: 60, borderRadius: 14, background: T.accentPale, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-                {item.prod.img ? <img src={item.prod.img} style={{ width: "100%", height: "100%", objectFit: "cover", ...(isOOS ? { filter: 'grayscale(1)' } : {}) }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.text, opacity: 0.5 } })}
+              {/* Флакон без белого квадрата: белый фон фото сливается с белой строкой */}
+              <div style={{ width: 72, height: 84, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {item.prod.img ? <img src={item.prod.img} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", ...(isOOS ? { filter: 'grayscale(1)' } : {}) }} /> : React.cloneElement(IC.bottle, { style: { width: 28, height: 28, color: T.text, opacity: 0.5 } })}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ color: T.textMuted, fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>{item.prod.brand}</div>
-                <div style={{ color: T.text, fontWeight: 700, fontSize: 13, lineHeight: 1.3 }}>{item.prod.name}</div>
-                <div style={{ color: T.text, fontSize: 12, fontWeight: 600 }}>{item.variant.label}</div>
-                {isOOS && <div style={{ color: '#FF3B30', fontSize: 11, fontWeight: 700, marginTop: 2 }}>{lang === 'kg' ? 'Кампада жок' : 'Нет в наличии'}</div>}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                <button onClick={() => remove(item)} style={{ background: "none", border: "none", cursor: "pointer", color: T.textMuted, padding: 2 }}>{IC.close}</button>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => { haptic('light'); updateQty(item, -1); }} style={{ width: 36, height: 36, borderRadius: 10, background: T.bg, border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 18, fontWeight: 700, color: T.text, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>−</button>
-                  <motion.span key={item.qty} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 460, damping: 22 }} style={{ fontWeight: 700, minWidth: 16, textAlign: "center", color: T.text, display: 'inline-block' }}>{item.qty}</motion.span>
-                  <button onClick={() => { haptic('light'); updateQty(item, 1); }} style={{ width: 36, height: 36, borderRadius: 10, background: T.accent, border: "none", cursor: "pointer", fontSize: 18, fontWeight: 700, color: "#fff", display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 10.5, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.12em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.prod.brand}</div>
+                <div style={{ color: "var(--ku-text, #111111)", fontWeight: 500, fontSize: 15, lineHeight: 1.3, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cardName(item.prod, lang)}</div>
+                <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 12.5, marginTop: 2 }}>{item.variant.label}</div>
+                {isOOS && <div style={{ color: '#C62828', fontSize: 11.5, fontWeight: 600, marginTop: 3 }}>{lang === 'kg' ? 'Кампада жок' : 'Нет в наличии'}</div>}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10 }}>
+                  {/* Счётчик: одна тонкая капсула «− 1 +» */}
+                  <div style={{ display: "inline-flex", alignItems: "center", height: 34, borderRadius: 17, border: "1px solid var(--ku-border, #E2E0DB)" }}>
+                    <button onClick={() => { haptic('light'); updateQty(item, -1); }} aria-label={lang === 'kg' ? 'Азайтуу' : 'Меньше'} style={{ width: 34, height: 32, background: "none", border: "none", cursor: "pointer", color: "#111", display: 'flex', alignItems: 'center', justifyContent: 'center' }}><KuIcon name="minus" size={16} stroke={1.8} /></button>
+                    <motion.span key={item.qty} initial={{ scale: 0.7, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 460, damping: 22 }} style={{ fontWeight: 600, fontSize: 14, minWidth: 18, textAlign: "center", color: "#111", display: 'inline-block', fontVariantNumeric: "tabular-nums" }}>{item.qty}</motion.span>
+                    <button onClick={() => { haptic('light'); updateQty(item, 1); }} aria-label={lang === 'kg' ? 'Көбөйтүү' : 'Больше'} style={{ width: 34, height: 32, background: "none", border: "none", cursor: "pointer", color: "#111", display: 'flex', alignItems: 'center', justifyContent: 'center' }}><KuIcon name="plus" size={16} stroke={1.8} /></button>
+                  </div>
+                  <motion.div key={(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return fp * item.qty; })()} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: "#111", fontWeight: 600, fontSize: 15, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return formatSum(fp * item.qty); })()}</motion.div>
                 </div>
-                <motion.div key={(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return fp * item.qty; })()} initial={{ y: -4, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.2 }} style={{ color: T.text, fontWeight: 800, fontSize: 14 }}>{(() => { const si = getSaleInfo(item.prod); const fp = si ? salePrice(item.variant.price, si.percent) : item.variant.price; return formatSum(fp * item.qty); })()}</motion.div>
               </div>
+              <button onClick={() => remove(item)} aria-label={lang === 'kg' ? 'Өчүрүү' : 'Удалить'} style={{ alignSelf: "flex-start", background: "none", border: "none", cursor: "pointer", color: "var(--ku-text-3, #8E8E93)", padding: 4, margin: "-2px -4px 0 0" }}><KuIcon name="close" size={16} stroke={1.7} /></button>
             </motion.div>
           ); })}
         </AnimatePresence>
       </div>
       {/* Delivery — Apple Pay-style segmented control + address card */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.deliveryType}</div>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: 16 }}>
+          <div style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 15, marginBottom: 12 }}>{t.deliveryType}</div>
 
           {/* iOS segmented control — gray track, white active pill that slides */}
           <div
@@ -3912,16 +4657,16 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                     style={{
                       background: "none",
                       border: "none",
-                      color: "#0A84FF",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      opacity: 0.7,
+                      color: "var(--ku-text, #111111)",
+                      fontSize: 12.5,
+                      fontWeight: 600,
                       cursor: "pointer",
                       padding: "6px 8px",
-                      letterSpacing: -0.1,
+                      textDecoration: "underline",
+                      textUnderlineOffset: 3,
                     }}
                   >
-                    Изменить
+                    {lang === 'kg' ? 'Өзгөртүү' : 'Изменить'}
                   </motion.button>
                   <motion.button
                     type="button"
@@ -3931,19 +4676,18 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                     style={{
                       background: "none",
                       border: "none",
-                      color: "#0A84FF",
-                      fontSize: 12,
-                      fontWeight: 500,
-                      opacity: 0.7,
+                      color: "var(--ku-text, #111111)",
+                      fontSize: 12.5,
+                      fontWeight: 600,
                       cursor: "pointer",
                       padding: "6px 8px",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: 4,
-                      letterSpacing: -0.1,
                     }}
                   >
-                    📍 Локация
+                    <KuIcon name="pin" size={15} stroke={1.7} />
+                    {lang === 'kg' ? 'Жайгашкан жер' : 'Где я'}
                   </motion.button>
                 </div>
               )}
@@ -3953,14 +4697,14 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       </div>
       {/* Comment */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ background: "var(--ku-surface, #FFFFFF)", border: "0.5px solid var(--ku-border, #EEEEEE)", borderRadius: 16, padding: 14, marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "var(--ku-text-3, #AEAEB2)", marginBottom: 10 }}>Комментарий к заказу</div>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: 16 }}>
+          <div style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 15, marginBottom: 12 }}>{lang === 'kg' ? 'Заказга комментарий' : 'Комментарий к заказу'}</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
             {[
-              { icon: "📞", text: "Позвоните перед доставкой", value: "Позвоните перед доставкой" },
-              { icon: "🚪", text: "Оставьте у двери",          value: "Оставьте у двери" },
-              { icon: "💬", text: "Пишите в WhatsApp",         value: "Не звоните, пишите в WhatsApp" },
-              { icon: "⚡", text: "Побыстрее",                  value: "Побыстрее пожалуйста" },
+              { text: "Позвоните перед доставкой", value: "Позвоните перед доставкой" },
+              { text: "Оставьте у двери",          value: "Оставьте у двери" },
+              { text: "Пишите в WhatsApp",         value: "Не звоните, пишите в WhatsApp" },
+              { text: "Побыстрее",                  value: "Побыстрее пожалуйста" },
             ].map(chip => {
               // Multi-select: each chip toggles independently in the comment string.
               const active = comment.includes(chip.value);
@@ -3979,13 +4723,14 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                     }
                   }}
                   animate={{
-                    backgroundColor: active ? "var(--ku-accent, #111111)" : "var(--ku-surface-2, #F5F5F5)",
-                    color: active ? "#FFFFFF" : "var(--ku-text-dim, #3A3A3C)",
+                    backgroundColor: active ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)",
+                    color: active ? "#FFFFFF" : "var(--ku-text, #111111)",
+                    borderColor: active ? "rgba(17,17,17,1)" : "rgba(17,17,17,0.14)",
                   }}
                   style={{
-                    padding: "8px 12px",
+                    padding: "8px 13px",
                     borderRadius: 20,
-                    border: "none",
+                    border: "1px solid",
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: "pointer",
@@ -3996,7 +4741,6 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                     lineHeight: 1,
                   }}
                 >
-                  <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{chip.icon}</span>
                   <span style={{ fontSize: 13, lineHeight: 1.1 }}>{chip.text}</span>
                 </motion.button>
               );
@@ -4008,7 +4752,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
             onChange={e => setComment(e.target.value)}
             initial={false}
             whileFocus={{
-              boxShadow: "0 0 0 3px rgba(10, 132, 255, 0.20)",
+              boxShadow: "0 0 0 1.5px rgba(17, 17, 17, 0.9)",
               backgroundColor: "var(--ku-surface, #FFFFFF)",
             }}
             transition={{ duration: 0.18 }}
@@ -4034,8 +4778,8 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       </div>
       {/* Payment — PRO: spring tap, animated check icon, smooth border morph */}
       <div style={{ padding: "0 16px", marginBottom: 12 }}>
-        <div style={{ ...card({ padding: "16px" }) }}>
-          <div style={{ color: T.text, fontWeight: 700, fontSize: 14, marginBottom: 12 }}>{t.paymentMethod}</div>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: 16 }}>
+          <div style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 15, marginBottom: 12 }}>{t.paymentMethod}</div>
           {[
             { id: 'odengi', label: 'Онлайн оплата', logo: <svg style={{width:24,height:24,flexShrink:0,display:'block'}} viewBox="0 0 24 24" fill="none"><rect x="2" y="4" width="20" height="16" rx="3" stroke="currentColor" strokeWidth="1.8" fill="none"/><path d="M2 10h20" stroke="currentColor" strokeWidth="1.8"/><rect x="5" y="14" width="4" height="2" rx="1" fill="currentColor"/></svg> },
             { id: 'cash',  label: 'Наличные / Нак. акча', logo: <CashLogo size={24} /> },
@@ -4102,7 +4846,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       {/* Bonus */}
       {bonusBalance > 0 && (
         <div style={{ padding: "0 16px", marginBottom: 12 }}>
-          <div style={{ ...card({ padding: "14px 16px" }), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ color: T.bonus, fontWeight: 700, fontSize: 14 }}>{t.useBonus}</div>
               <div style={{ color: T.textMuted, fontSize: 12 }}>{formatSum(bonusBalance)} · {t.maxDiscount} {useBonusPercent}%</div>
@@ -4115,7 +4859,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
       )}
       {/* Summary — clear hierarchy: secondary rows lighter, "Итого" 20/700 */}
       <div style={{ padding: "0 16px", marginBottom: 16 }}>
-        <div style={{ ...card({ padding: "16px" }) }}>
+        <div style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 20, padding: 16 }}>
           {[
             { label: t.subtotal, val: formatSum(subtotal) },
             deliveryType === "delivery" && { label: t.delivery, val: deliveryCost > 0 ? formatSum(deliveryCost) : t.free },
@@ -4128,14 +4872,14 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
           ))}
           <div style={{ height: 1, background: T.border, margin: "10px 0 14px" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ color: T.text, fontSize: 20, fontWeight: 700, letterSpacing: -0.4 }}>{t.total}</span>
+            <span style={{ color: "var(--ku-text, #111111)", fontSize: 18, fontWeight: 600 }}>{t.total}</span>
             {/* Total morphs in fresh on every change */}
             <motion.span
               key={total}
               initial={{ y: -6, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.25, ease: iosEase }}
-              style={{ color: T.text, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}
+              style={{ color: "var(--ku-text, #111111)", fontSize: 24, fontWeight: 600, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}
             >
               {formatSum(total)}
             </motion.span>
@@ -4146,7 +4890,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
         {/* Out-of-stock warning banner */}
         {hasOutOfStock && (
           <div style={{ background: '#FFF8E1', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>⚠️</span>
+            <KuIcon name="alert" size={18} color="#8A5A00" stroke={1.7} />
             <span style={{ fontSize: 13, color: '#664D03', fontWeight: 500 }}>
               {lang === 'kg' ? 'Себетте кампада жок товарлар бар. Аларды өчүрүңүз.' : 'В корзине есть товары, которых нет в наличии. Удалите их для оформления.'}
             </span>
@@ -4154,7 +4898,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
         )}
         {total <= 0 && items.length > 0 && !hasOutOfStock && (
           <div style={{ background: '#FFF8E1', border: '1px solid #FFECB5', borderRadius: 12, padding: '10px 14px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 18 }}>⚠️</span>
+            <KuIcon name="alert" size={18} color="#8A5A00" stroke={1.7} />
             <span style={{ fontSize: 13, color: '#664D03', fontWeight: 500 }}>
               {lang === 'kg' ? 'Заказдын суммасы 0 болушу мүмкүн эмес' : 'Сумма заказа не может быть 0 сом'}
             </span>
@@ -4210,7 +4954,7 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
   }
   return (
     <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      <div style={{ padding: "52px 16px 14px", fontSize: 26, fontWeight: 800, color: "var(--ku-text, #111111)" }}>{t.myOrders}</div>
+      <div style={{ padding: "52px 16px 14px", fontFamily: "var(--ku-font-display)", fontSize: 30, fontWeight: 400, color: "var(--ku-text, #111111)" }}>{t.myOrders}</div>
       <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 12 }}>
         <AnimatePresence initial={false}>
           {orders.slice().reverse().map((order, i) => (
@@ -5403,269 +6147,6 @@ function pickAudioMime() {
   return '';
 }
 
-// ─── FLOATING DRAGGABLE CART PILL ──────────────────────────────────────────
-// Extracted as a proper component so React hooks run stably (no IIFE).
-function FloatingCartPill({ cartCount, cartTotal, lang, screen, onGoToCart }) {
-  const STORAGE_KEY = 'parfum_cart_pill_pos';
-  const pillRef = React.useRef(null);
-  const dragState = React.useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0, moved: false });
-  const [expanded, setExpanded] = React.useState(false);
-
-  const getDefaultPos = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const p = JSON.parse(saved);
-        if (p.x >= 0 && p.y >= 0 && p.x < window.innerWidth - 40 && p.y < window.innerHeight - 20) return p;
-      }
-    } catch {}
-    return { x: window.innerWidth - 220, y: window.innerHeight - 160 };
-  };
-  const [pillPos, setPillPos] = React.useState(getDefaultPos);
-
-  const clamp = React.useCallback((pos) => {
-    const el = pillRef.current;
-    const w = el ? el.offsetWidth : 200;
-    const h = el ? el.offsetHeight : 52;
-    return {
-      x: Math.max(8, Math.min(pos.x, window.innerWidth - w - 8)),
-      y: Math.max(8, Math.min(pos.y, window.innerHeight - h - 8)),
-    };
-  }, []);
-
-  const onPointerDown = (e) => {
-    if (e.button && e.button !== 0) return;
-    const touch = e.touches ? e.touches[0] : e;
-    dragState.current = { dragging: true, startX: touch.clientX, startY: touch.clientY, origX: pillPos.x, origY: pillPos.y, moved: false };
-    e.preventDefault();
-  };
-
-  const onPointerMove = React.useCallback((e) => {
-    const ds = dragState.current;
-    if (!ds.dragging) return;
-    const touch = e.touches ? e.touches[0] : e;
-    const dx = touch.clientX - ds.startX;
-    const dy = touch.clientY - ds.startY;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) ds.moved = true;
-    if (!ds.moved) return;
-    setPillPos(clamp({ x: ds.origX + dx, y: ds.origY + dy }));
-  }, [clamp]);
-
-  const onPointerUp = React.useCallback(() => {
-    const ds = dragState.current;
-    if (!ds.dragging) return;
-    ds.dragging = false;
-    setPillPos(prev => {
-      const pillW = pillRef.current?.offsetWidth || 200;
-      const midX = window.innerWidth / 2;
-      const snapX = prev.x + pillW / 2 < midX ? 12 : window.innerWidth - pillW - 12;
-      const snapped = clamp({ x: snapX, y: prev.y });
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(snapped)); } catch {}
-      return snapped;
-    });
-  }, [clamp]);
-
-  React.useEffect(() => {
-    window.addEventListener('mousemove', onPointerMove);
-    window.addEventListener('mouseup', onPointerUp);
-    window.addEventListener('touchmove', onPointerMove, { passive: false });
-    window.addEventListener('touchend', onPointerUp);
-    return () => {
-      window.removeEventListener('mousemove', onPointerMove);
-      window.removeEventListener('mouseup', onPointerUp);
-      window.removeEventListener('touchmove', onPointerMove);
-      window.removeEventListener('touchend', onPointerUp);
-    };
-  }, [onPointerMove, onPointerUp]);
-
-  React.useEffect(() => {
-    const onResize = () => setPillPos(prev => clamp(prev));
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, [clamp]);
-
-  const ruPlural = (n) => {
-    const m100 = n % 100;
-    if (m100 >= 11 && m100 <= 14) return 'товаров';
-    const m10 = n % 10;
-    if (m10 === 1) return 'товар';
-    if (m10 >= 2 && m10 <= 4) return 'товара';
-    return 'товаров';
-  };
-  const itemsWord = lang === 'kg' ? 'товар' : ruPlural(cartCount);
-  const onCart = screen === 'cart';
-  const ctaLabel = onCart
-    ? (lang === 'kg' ? 'Заказ берүү' : 'Оформить заказ')
-    : (lang === 'kg' ? 'Заказга өтүү' : 'Перейти к оформлению');
-
-  const handleTap = () => {
-    haptic('medium');
-    if (onCart) {
-      window.dispatchEvent(new CustomEvent('cart:checkout'));
-    } else {
-      onGoToCart();
-    }
-  };
-
-  return (
-    <motion.div
-      ref={pillRef}
-      key="floating-cart-pill"
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1, x: pillPos.x, y: pillPos.y }}
-      exit={{ scale: 0, opacity: 0 }}
-      transition={{
-        x: { type: 'spring', stiffness: 300, damping: 28 },
-        y: { type: 'spring', stiffness: 300, damping: 28 },
-        scale: { type: 'spring', stiffness: 500, damping: 25 },
-      }}
-      onMouseDown={onPointerDown}
-      onTouchStart={onPointerDown}
-      style={{
-        position: "fixed", top: 0, left: 0,
-        zIndex: 9999,
-        touchAction: "none",
-        userSelect: "none",
-        WebkitUserSelect: "none",
-        cursor: dragState.current.dragging ? "grabbing" : "grab",
-      }}
-    >
-      {/* Outer glow layer */}
-      <motion.div
-        animate={{
-          boxShadow: expanded
-            ? "0 12px 36px rgba(0,0,0,0.38), 0 2px 8px rgba(0,0,0,0.25)"
-            : "0 6px 20px rgba(0,0,0,0.30), 0 1px 4px rgba(0,0,0,0.20)",
-        }}
-        transition={{ duration: 0.4 }}
-        style={{ borderRadius: 999 }}
-      >
-        <motion.button
-          onClick={() => {
-            if (dragState.current.moved) { dragState.current.moved = false; return; }
-            if (expanded) {
-              handleTap();
-            } else {
-              setExpanded(true);
-              setTimeout(() => setExpanded(false), 4000);
-            }
-          }}
-          whileTap={!dragState.current.moved ? { scale: 0.93 } : {}}
-          style={{
-            background: "rgba(18,18,20,0.82)",
-            backdropFilter: "blur(18px) saturate(180%)",
-            WebkitBackdropFilter: "blur(18px) saturate(180%)",
-            borderRadius: 999,
-            padding: expanded ? "8px 16px 8px 8px" : "8px",
-            border: "0.5px solid rgba(255,255,255,0.12)",
-            display: "flex", alignItems: "center", gap: expanded ? 10 : 0,
-            cursor: dragState.current.dragging ? "grabbing" : "pointer",
-            whiteSpace: "nowrap",
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Subtle inner highlight */}
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, transparent 100%)',
-            borderRadius: '50px 50px 0 0',
-            pointerEvents: 'none',
-          }} />
-
-          {/* Cart icon circle */}
-          <div style={{ position: 'relative', flexShrink: 0, zIndex: 1 }}>
-            <motion.div
-              animate={{
-                background: expanded
-                  ? "#FFFFFF"
-                  : "rgba(255,255,255,0.1)",
-              }}
-              transition={{ duration: 0.3 }}
-              style={{
-                width: 38, height: 38, borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff",
-                boxShadow: expanded ? "0 2px 10px rgba(0,0,0,0.25)" : "none",
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={expanded ? "#111111" : "#fff"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                <line x1="3" y1="6" x2="21" y2="6"/>
-                <path d="M16 10a4 4 0 01-8 0"/>
-              </svg>
-            </motion.div>
-
-            {/* Badge */}
-            <motion.div
-              key={`badge-${cartCount}`}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 16 }}
-              style={{
-                position: 'absolute', top: -3, right: -3,
-                minWidth: 19, height: 19, borderRadius: 10,
-                background: '#FFFFFF',
-                color: '#111111',
-                fontSize: 10, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: '0 5px',
-                border: '2px solid rgba(18,18,20,0.9)',
-                boxShadow: '0 1px 6px rgba(0,0,0,0.30)',
-              }}
-            >
-              {cartCount}
-            </motion.div>
-          </div>
-
-          {/* Expanded content */}
-          <AnimatePresence>
-            {expanded && (
-              <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: 'auto', opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 26 }}
-                style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 10, zIndex: 1 }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{
-                    color: '#fff', fontSize: 14, fontWeight: 700,
-                    letterSpacing: -0.3,
-                  }}>
-                    {ctaLabel}
-                  </span>
-                  <span style={{
-                    color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: 500,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}>
-                    {cartCount} {itemsWord} · <AnimatedSum value={cartTotal} duration={0.55} />
-                  </span>
-                </div>
-
-                {/* Arrow button */}
-                <div
-                  style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.14)',
-                    border: '1px solid rgba(255,255,255,0.18)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 6 15 12 9 18"/>
-                  </svg>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.button>
-      </motion.div>
-    </motion.div>
-  );
-}
-
 export function ProductAudioRecorder({ productId, onAudioUploaded }) {
   const { lang } = useLang();
   const key = 'parfum_audio_' + productId;
@@ -6175,8 +6656,8 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
         whileTap={{ scale: 0.98 }}
         transition={{ type: 'spring', stiffness: 420, damping: 28 }}
         style={{
-          background: 'linear-gradient(135deg, #1C1C1E 0%, #2C2C2E 100%)',
-          borderRadius: 16,
+          background: '#F7F5F1',
+          borderRadius: 18,
           padding: '14px 16px',
           cursor: 'pointer',
           userSelect: 'none',
@@ -6190,14 +6671,13 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
             transition={isPlaying ? { duration: 2, repeat: Infinity, ease: 'easeInOut' } : {}}
             style={{
               width: 42, height: 42, borderRadius: 21, flexShrink: 0,
-              background: isError ? 'rgba(255,59,48,0.2)' : isPlaying ? 'rgba(255,59,48,0.15)' : 'rgba(255,255,255,0.1)',
-              border: isPlaying ? '1px solid rgba(255,59,48,0.25)' : '1px solid rgba(255,255,255,0.1)',
+              background: isError ? 'rgba(198,40,40,0.12)' : '#111111',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isError ? '#FF3B30' : isPlaying ? '#FF3B30' : '#fff',
+              color: isError ? '#C62828' : '#fff',
             }}>
             {isLoading ? (
               <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
-                style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.2)', borderTopColor: '#fff', borderRadius: '50%', display: 'block' }} />
+                style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', display: 'block' }} />
             ) : isError ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M1 1l22 22"/><path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V5a3 3 0 00-5.94-.6"/><path d="M17 16.95A7 7 0 015 12v-2m14 0v2c0 .76-.12 1.5-.35 2.18"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
             ) : isPlaying ? (
@@ -6209,11 +6689,11 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
 
           {/* Title + subtitle */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', letterSpacing: -0.2, marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 14.5, fontWeight: 600, color: '#111111', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {titleText}
             </div>
             {subtitleText && (
-              <div style={{ fontSize: 11, color: isPlaying ? '#FF3B30' : 'rgba(255,255,255,0.4)', fontWeight: 500, letterSpacing: -0.1 }}>
+              <div style={{ fontSize: 11.5, color: '#6E6E73', fontWeight: 500 }}>
                 {subtitleText}
               </div>
             )}
@@ -6225,14 +6705,14 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
               <style>{`@keyframes clWave{0%,100%{height:4px}50%{height:16px}}`}</style>
               {[0,1,2,3,4].map(i => (
                 <div key={i} style={{
-                  width: 2.5, borderRadius: 2, background: '#FF3B30',
+                  width: 2.5, borderRadius: 2, background: '#111111',
                   animation: 'clWave 0.6s ease-in-out infinite',
                   animationDelay: `${i * 0.08}s`, height: 4,
                 }} />
               ))}
             </div>
           ) : !isLoading && !isError && (
-            <div style={{ color: 'rgba(255,255,255,0.25)', flexShrink: 0 }}>
+            <div style={{ color: 'rgba(17,17,17,0.35)', flexShrink: 0 }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M12 2a3 3 0 013 3v7a3 3 0 01-6 0V5a3 3 0 013-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/>
               </svg>
@@ -6250,19 +6730,19 @@ export function ClientAudioBtn({ product, productId, compact = false }) {
               const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
               player.seek(ratio * totalDur);
             }}>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0, width: 28 }}>
+            <span style={{ fontSize: 10, color: '#8E8E93', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0, width: 28 }}>
               {fmt(currentTime)}
             </span>
-            <div data-track style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
+            <div data-track style={{ flex: 1, height: 3, background: 'rgba(17,17,17,0.12)', borderRadius: 3, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
               <motion.div
                 animate={{ width: `${progressVal * 100}%` }}
                 transition={{ ease: 'linear', duration: 0.08 }}
-                style={{ height: '100%', background: '#FF3B30', borderRadius: 3, position: 'relative' }}>
+                style={{ height: '100%', background: '#111111', borderRadius: 3, position: 'relative' }}>
                 {/* Scrubber dot */}
-                <div style={{ position: 'absolute', right: -4, top: -3, width: 9, height: 9, borderRadius: '50%', background: '#FF3B30', boxShadow: '0 0 6px rgba(255,59,48,0.4)' }} />
+                <div style={{ position: 'absolute', right: -4, top: -3, width: 9, height: 9, borderRadius: '50%', background: '#111111' }} />
               </motion.div>
             </div>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0, width: 28, textAlign: 'right' }}>
+            <span style={{ fontSize: 10, color: '#8E8E93', fontVariantNumeric: 'tabular-nums', fontWeight: 600, flexShrink: 0, width: 28, textAlign: 'right' }}>
               {fmt(totalDur)}
             </span>
           </div>
@@ -6292,6 +6772,12 @@ export default function App() {
     try { localStorage.setItem('parfum_lang', lang); } catch { /* ignore */ }
   }, [lang]);
   const [screen, setScreen] = useState("catalog");
+  // Кнопки внутри каталога (например «Мои бонусы») переключают вкладку через событие.
+  useEffect(() => {
+    const onNav = (e) => { if (e.detail) setScreen(e.detail); };
+    window.addEventListener('nav:screen', onNav);
+    return () => window.removeEventListener('nav:screen', onNav);
+  }, []);
   // iOS tab-switch crossfade — quick fade+scale on the active screen. Keeps all
   // screens mounted (state preserved, no white flash); only the visible one shows.
   const screenFx = useAnimationControls();
@@ -6480,15 +6966,6 @@ export default function App() {
 
   const t = TRANSLATIONS[lang];
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
-  // Cart subtotal — used by the floating checkout bar to show live total.
-  const cartTotal = cart.reduce((sum, i) => {
-    const prod = products.find(p => String(p.id) === String(i.productId));
-    const v = prod?.variants?.find(vv => String(vv.id) === String(i.variantId));
-    const baseP = v?.price || 0;
-    const si = getSaleInfo(prod);
-    const fp = si ? salePrice(baseP, si.percent) : baseP;
-    return sum + (fp * i.qty);
-  }, 0);
 
   // Detect native iOS (Capacitor) — hides web tab bar, uses native glass bar instead
   const isNative = typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.();
@@ -7318,6 +7795,7 @@ export default function App() {
   const USER_NAV = [
     { id: "catalog", icon: IC.home, label: t.catalog },
     { id: "cart", icon: IC.cart, label: t.cart, badge: cartCount },
+    { id: "favorites", icon: IC.heart, label: lang === "kg" ? "Тандалгандар" : "Избранное" },
     { id: "myorders", icon: IC.orders, label: t.myOrders },
     { id: "profile", icon: IC.profile, label: t.profile },
   ];
@@ -7346,7 +7824,7 @@ export default function App() {
         /* ── DESKTOP LOGIN — split layout ── */
         <div style={{
           display: 'flex', width: '100vw', height: '100vh',
-          fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif",
+          fontFamily: "var(--ku-font)",
           overflow: 'hidden',
         }}>
           {/* Left — full-bleed photo + branding */}
@@ -7371,7 +7849,7 @@ export default function App() {
               <div style={{ fontSize: 11, letterSpacing: 5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', marginBottom: 12, fontWeight: 500 }}>
                 Бишкек · Парфюм на разлив
               </div>
-              <div style={{ fontFamily: "'Georgia', serif", fontStyle: 'italic', fontSize: 48, fontWeight: 400, color: '#fff', letterSpacing: -1, lineHeight: 1.1 }}>
+              <div style={{ fontFamily: "var(--ku-font-display)", fontStyle: 'italic', fontSize: 48, fontWeight: 400, color: '#fff', letterSpacing: -1, lineHeight: 1.1 }}>
                 Kemal Usman
               </div>
               <div style={{ fontSize: 10, letterSpacing: 6, textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginTop: 10, fontWeight: 500 }}>
@@ -7432,7 +7910,7 @@ export default function App() {
         </div>
       ) : (
         /* ── MOBILE LOGIN — unchanged ── */
-        <div style={{ width: "100vw", maxWidth: "100vw", minHeight: "100dvh", overflow: "hidden", background: T.bg, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
+        <div style={{ width: "100vw", maxWidth: "100vw", minHeight: "100dvh", overflow: "hidden", background: T.bg, fontFamily: "var(--ku-font)" }}>
           <LoginScreen
             onLogin={handleLogin}
             welcomeConfig={{ enabled: settings.welcomeBonusEnabled, amount: settings.welcomeBonus, expireDays: 30 }}
@@ -7512,6 +7990,23 @@ export default function App() {
           />
         </OrderSuccessGate>
       )}
+      {/* Консультант «Спросить» — на телефоне только в каталоге (в карточке товара своя кнопка внизу), на компьютере везде. */}
+      {!isAdmin && !pbLoading && (isDesktop || (screen === "catalog" && !isDetailOpen)) && (
+        <AssistantChat
+          products={products}
+          cart={cart}
+          addToCart={addToCart}
+          settings={settings}
+          lang={lang}
+          t={t}
+          desktop={isDesktop}
+          bottomOffset={80}
+          onOpenProduct={(id) => {
+            if (!isDesktop) setScreen("catalog");
+            setTimeout(() => window.dispatchEvent(new CustomEvent("open:product", { detail: id })), isDesktop ? 0 : 150);
+          }}
+        />
+      )}
       {isDesktop && !isAdmin ? (
         <DesktopLayout
           products={products}
@@ -7551,7 +8046,7 @@ export default function App() {
         /* ── DESKTOP ADMIN WRAPPER — no mobile CSS vars, no NavBar ── */
         <div style={{
           width: '100%', minHeight: '100vh', background: "var(--ku-surface, #FFFFFF)",
-          fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif",
+          fontFamily: "var(--ku-font)",
           color: "var(--ku-text, #111111)",
         }}>
           {/* Sticky black top bar */}
@@ -7662,7 +8157,7 @@ export default function App() {
           </div>
         </div>
       ) : (
-      <div style={{ width: "100%", minHeight: "100vh", background: T.bg, position: "relative", overflowX: "hidden", color: T.text, fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" }}>
+      <div style={{ width: "100%", minHeight: "100vh", background: T.bg, position: "relative", overflowX: "hidden", color: T.text, fontFamily: "var(--ku-font)" }}>
         <div style={{ paddingBottom: 'calc(var(--nav-height) + 16px)', background: T.bg }}>
           {isAdmin ? (
             <>
@@ -7727,6 +8222,13 @@ export default function App() {
                     <ErrorBoundary><CartScreen cart={cart} setCart={setCart} products={products} onOrder={handleOrder} bonusBalance={bonusBalance} useBonusPercent={settings.useBonusPercent || 30} settings={settings} showToast={showToast} goToCatalog={() => setScreen("catalog")} /></ErrorBoundary>
                   </div>
                   <div
+                    style={{ display: screen === 'favorites' ? 'block' : 'none' }}
+                    aria-hidden={screen !== 'favorites'}
+                    inert={screen !== 'favorites' ? '' : undefined}
+                  >
+                    <ErrorBoundary><FavoritesScreen products={products} goToCatalog={() => setScreen("catalog")} /></ErrorBoundary>
+                  </div>
+                  <div
                     style={{ display: screen === 'myorders' ? 'block' : 'none' }}
                     aria-hidden={screen !== 'myorders'}
                     inert={screen !== 'myorders' ? '' : undefined}
@@ -7746,23 +8248,7 @@ export default function App() {
             </MotionScreen>
           )}
         </div>
-        {/* ── DRAGGABLE FLOATING CART PILL ──────────────────────────
-             Proper component so hooks run stably. Portal → document.body. */}
-        {createPortal(
-        <AnimatePresence>
-          {!isAdmin && !isDetailOpen && cartCount > 0 && screen === "catalog" && (
-            <FloatingCartPill
-              key="floating-cart-pill"
-              cartCount={cartCount}
-              cartTotal={cartTotal}
-              lang={lang}
-              screen={screen}
-              onGoToCart={() => setScreen('cart')}
-            />
-          )}
-        </AnimatePresence>,
-        document.body
-        )}
+        {/* Плавающая круглая кнопка корзины убрана: число товаров видно на вкладке «Корзина». */}
         {/* Web navbar — hidden on native iOS (native glass bar used instead) */}
         {/* On native iOS the SwiftUI Liquid Glass bar is shown for the user
             tabs (4 fixed cases). The admin panel has 6 items so it doesn't

@@ -181,6 +181,19 @@ export function DesktopLayout({
   const [modalVariantId, setModalVariantId] = useState(null);
   const [modalImgIndex, setModalImgIndex] = useState(0);
 
+  // Консультант «Спросить» открывает аромат событием open:product (как уведомления на телефоне).
+  useEffect(() => {
+    const onOpen = (e) => {
+      const p = products.find(x => String(x.id) === String(e.detail));
+      if (!p) return;
+      setSelectedProduct(p);
+      setModalVariantId((p.variants || []).find(v => v.inStock)?.id || p.variants?.[0]?.id || null);
+      setModalImgIndex(0);
+    };
+    window.addEventListener("open:product", onOpen);
+    return () => window.removeEventListener("open:product", onOpen);
+  }, [products]);
+
   const minPrice = (p) => {
     const prices = (p.variants || []).filter(v => v.inStock).map(v => v.price || 0).filter(Boolean);
     return prices.length ? Math.min(...prices) : 0;
@@ -515,7 +528,7 @@ export function DesktopLayout({
   };
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif", background: '#FAF6EE', minHeight: '100vh' }}>
+    <div style={{ fontFamily: "var(--ku-font)", background: '#FAF6EE', minHeight: '100vh' }}>
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; }
@@ -603,7 +616,7 @@ export function DesktopLayout({
           alignItems: 'center', justifyContent: 'space-between' }}>
           <div
             style={{
-              fontFamily: "'Georgia', 'Playfair Display', serif",
+              fontFamily: "var(--ku-font-display)",
               fontStyle: 'italic',
               fontWeight: 400,
               fontSize: 26,
@@ -945,7 +958,7 @@ export function DesktopLayout({
               </svg>
               <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2.5, textTransform: 'uppercase', color: 'rgba(0,0,0,0.35)' }}>Instagram</span>
             </div>
-            <div style={{ fontSize: 30, fontWeight: 400, color: '#0a0a0a', fontFamily: "'Georgia', serif", fontStyle: 'italic', lineHeight: 1.2, marginBottom: 14 }}>
+            <div style={{ fontSize: 30, fontWeight: 400, color: '#0a0a0a', fontFamily: "var(--ku-font-display)", fontStyle: 'italic', lineHeight: 1.2, marginBottom: 14 }}>
               {lang === 'kg' ? 'Бизди ээрчиңиз' : 'Следите за нами'}
             </div>
             <div style={{ fontSize: 14, color: 'rgba(0,0,0,0.4)', lineHeight: 1.7, marginBottom: 28 }}>
@@ -1122,7 +1135,7 @@ export function DesktopLayout({
                   <div style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)', marginBottom: 6, fontWeight: 600 }}>
                     {bestsellers.length >= 3 ? (lang === 'kg' ? 'Эң популярдуу' : 'Хиты продаж') : (lang === 'kg' ? 'Тандалган' : 'Рекомендуемые')}
                   </div>
-                  <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', fontFamily: "'Georgia', serif", fontStyle: 'italic' }}>
+                  <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', fontFamily: "var(--ku-font-display)", fontStyle: 'italic' }}>
                     {bestsellers.length >= 3 ? (lang === 'kg' ? 'Бестселлерлер' : 'Бестселлеры') : (lang === 'kg' ? 'Сиз үчүн' : 'Для вас')}
                   </div>
                 </div>
@@ -1218,7 +1231,7 @@ export function DesktopLayout({
               <div style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)', marginBottom: 6, fontWeight: 600 }}>
                 {lang === 'kg' ? 'Каталог' : 'Каталог'}
               </div>
-              <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', fontFamily: "'Georgia', serif", fontStyle: 'italic' }}>
+              <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', fontFamily: "var(--ku-font-display)", fontStyle: 'italic' }}>
                 {lang === 'kg' ? 'Жыпар суулар' : 'Ароматы'}
               </div>
             </div>
@@ -1321,7 +1334,7 @@ export function DesktopLayout({
               <div style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)', marginBottom: 10, fontWeight: 600 }}>
                 {lang === 'kg' ? 'Кардарлардын пикири' : 'Отзывы клиентов'}
               </div>
-              <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', marginBottom: 32, fontFamily: "'Georgia', serif", fontStyle: 'italic' }}>
+              <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', marginBottom: 32, fontFamily: "var(--ku-font-display)", fontStyle: 'italic' }}>
                 {lang === 'kg' ? 'Алар биз жөнүндө эмне дейт' : 'Что говорят о нас'}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(approved.length, 3)}, 1fr)`, gap: 16 }}>
@@ -1356,7 +1369,7 @@ export function DesktopLayout({
               <div style={{ fontSize: 9, letterSpacing: 3, textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)', marginBottom: 10, fontWeight: 600 }}>
                 {lang === 'kg' ? 'Жаңы келгендер' : 'Новинки'}
               </div>
-              <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', fontFamily: "'Georgia', serif", fontStyle: 'italic' }}>
+              <div style={{ fontSize: 26, fontWeight: 400, color: '#0a0a0a', fontFamily: "var(--ku-font-display)", fontStyle: 'italic' }}>
                 {lang === 'kg' ? 'Жаңы ароматтар' : 'Свежие поступления'}
               </div>
             </div>
@@ -1415,7 +1428,7 @@ export function DesktopLayout({
               <div style={{ fontSize: 11, letterSpacing: 3, textTransform: 'uppercase', color: 'rgba(0,0,0,0.3)', fontWeight: 600 }}>
                 {lang === 'kg' ? 'Бонус система' : 'Бонусная программа'}
               </div>
-              <div style={{ fontSize: 22, fontWeight: 400, color: '#0a0a0a', fontFamily: "'Georgia', serif", fontStyle: 'italic', lineHeight: 1.2, marginTop: 2 }}>
+              <div style={{ fontSize: 22, fontWeight: 400, color: '#0a0a0a', fontFamily: "var(--ku-font-display)", fontStyle: 'italic', lineHeight: 1.2, marginTop: 2 }}>
                 {lang === 'kg' ? 'Сатып алыңыз — бонус алыңыз' : 'Покупайте — получайте бонусы'}
               </div>
             </div>
@@ -1434,7 +1447,7 @@ export function DesktopLayout({
               }}
             >
               {/* Background decorative % */}
-              <div style={{ position: 'absolute', top: -10, right: -10, fontSize: 120, fontWeight: 200, color: 'rgba(255,255,255,0.04)', fontFamily: "'Georgia', serif", fontStyle: 'italic', lineHeight: 1, pointerEvents: 'none' }}>
+              <div style={{ position: 'absolute', top: -10, right: -10, fontSize: 120, fontWeight: 200, color: 'rgba(255,255,255,0.04)', fontFamily: "var(--ku-font-display)", fontStyle: 'italic', lineHeight: 1, pointerEvents: 'none' }}>
                 {settings?.bonusPercent || 5}%
               </div>
               {/* Icon */}
@@ -1442,7 +1455,7 @@ export function DesktopLayout({
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
               </div>
               {/* Percentage */}
-              <div style={{ fontSize: 42, fontWeight: 700, color: '#fff', fontFamily: "-apple-system, sans-serif", letterSpacing: -2, lineHeight: 1, marginBottom: 6 }}>
+              <div style={{ fontSize: 42, fontWeight: 700, color: '#fff', fontFamily: "var(--ku-font)", letterSpacing: -2, lineHeight: 1, marginBottom: 6 }}>
                 {settings?.bonusPercent || 5}%
               </div>
               <div style={{ fontSize: 16, fontWeight: 500, color: 'rgba(255,255,255,0.9)', marginBottom: 8, letterSpacing: -0.3 }}>
@@ -1477,7 +1490,7 @@ export function DesktopLayout({
               </div>
               {/* Amount */}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-                <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "-apple-system, sans-serif", letterSpacing: -2, lineHeight: 1 }}>
+                <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "var(--ku-font)", letterSpacing: -2, lineHeight: 1 }}>
                   {settings?.referralBonus || 100}
                 </span>
                 <span style={{ fontSize: 16, fontWeight: 500, color: '#8E8E93', letterSpacing: -0.3 }}>
@@ -1529,7 +1542,7 @@ export function DesktopLayout({
               </div>
               {/* Amount */}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 6 }}>
-                <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "-apple-system, sans-serif", letterSpacing: -2, lineHeight: 1 }}>
+                <span style={{ fontSize: 42, fontWeight: 700, color: '#111', fontFamily: "var(--ku-font)", letterSpacing: -2, lineHeight: 1 }}>
                   {settings?.welcomeBonus || 150}
                 </span>
                 <span style={{ fontSize: 16, fontWeight: 500, color: '#8E8E93', letterSpacing: -0.3 }}>
@@ -1580,7 +1593,7 @@ export function DesktopLayout({
             {/* Brand + socials */}
             <div>
               <div style={{
-                fontFamily: "'Georgia', 'Playfair Display', serif",
+                fontFamily: "var(--ku-font-display)",
                 fontStyle: 'italic', fontWeight: 400, fontSize: 20,
                 letterSpacing: -0.2, color: '#fff', lineHeight: 1, marginBottom: 6,
               }}>Kemal Usman</div>
@@ -2180,7 +2193,7 @@ export function DesktopLayout({
                     </div>
                   )}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: -0.5, color: '#111', marginBottom: 6 }}>
+                <div style={{ fontFamily: 'var(--ku-font-display)', fontSize: 32, fontWeight: 400, lineHeight: 1.15, letterSpacing: -0.3, color: '#111', marginBottom: 6 }}>
                   {selectedProduct.name}
                 </div>
                 {/* Badges row */}
@@ -2225,7 +2238,7 @@ export function DesktopLayout({
                   if (si) {
                     return (
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 20 }}>
-                        <span style={{ fontSize: 24, fontWeight: 800, color: '#FF3B30' }}>
+                        <span style={{ fontSize: 24, fontWeight: 600, color: '#FF3B30', fontVariantNumeric: 'tabular-nums' }}>
                           {salePrice(selVariant.price, si.percent).toLocaleString()} сом
                         </span>
                         <span style={{ fontSize: 16, fontWeight: 500, color: '#AEAEB2', textDecoration: 'line-through' }}>
@@ -2238,7 +2251,7 @@ export function DesktopLayout({
                     );
                   }
                   return (
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#111', marginBottom: 20 }}>
+                    <div style={{ fontSize: 24, fontWeight: 600, color: '#111', marginBottom: 20, fontVariantNumeric: 'tabular-nums' }}>
                       {Number(selVariant.price).toLocaleString()} сом
                     </div>
                   );
@@ -2423,7 +2436,7 @@ export function DesktopLayout({
                     style={{ width: '100%', border: '1px solid #E5E5EA', padding: '10px 12px',
                       fontSize: 13, color: '#111', background: '#fff', outline: 'none',
                       resize: 'none', marginBottom: 14, boxSizing: 'border-box',
-                      fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}
+                      fontFamily: "var(--ku-font)" }}
                   />
                   <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                     {[

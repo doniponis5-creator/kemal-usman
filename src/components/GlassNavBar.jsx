@@ -1,220 +1,153 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { IS_NATIVE } from '../utils/platform';
-import { useGlass } from '../glass';
+import { haptic } from '../utils/haptics';
 
 /**
- * GlassNavBar — iOS 26 Liquid Glass floating bottom navigation.
- *
- * WEB SAFETY: on web (IS_NATIVE === false) this renders EXACTLY as before —
- * the `S.pill` material and the light color set. Glass material + dark-mode
- * inks are layered on ONLY in the native app build.
- *
- * Mirrors the native SwiftUI bar in `LiquidGlassTabView.swift`: a translucent
- * capsule, a sliding selected pill (framer-motion `layoutId` ≈ SwiftUI
- * `matchedGeometryEffect`), snappy iOS 26 spring physics.
+ * GlassNavBar — нижняя навигация в монохроме бренда: белая полоса во всю
+ * ширину, прижата к низу, тонкая линия сверху. Выбранная вкладка: чёрный
+ * значок и подпись + короткая чёрная черта над значком, черта переезжает
+ * между вкладками. У всех вкладок есть подписи.
+ * На iOS вкладки покупателя рисует нативный SwiftUI-бар (LiquidGlassTabView);
+ * этот компонент там показывается только в админке.
  */
-const iosSpring = { type: 'spring', stiffness: 420, damping: 32, mass: 0.85 };
+const spring = { type: 'spring', stiffness: 520, damping: 40, mass: 0.8 };
 
 export function GlassNavBar({ items, active, onSelect }) {
-  const glass = useGlass();
-  const dark = IS_NATIVE && glass.scheme === 'dark';
-
-  const handleSelect = (id) => { onSelect(id); };
-
-  // Web path = S.pill untouched. Native = Apple glass material (scheme-aware).
-  const pillStyle = IS_NATIVE
-    ? { ...S.pill, ...glass.style({ variant: 'regular', radius: 32 }) }
-    : S.pill;
-
   return (
-    <div style={S.outer}>
-      <div style={pillStyle}>
+    <nav style={S.outer} aria-label="Навигация">
+      <div style={S.bar}>
         {items.map((item) => (
           <Tab
             key={item.id}
             item={item}
             isActive={item.id === active}
-            dark={dark}
-            onClick={() => handleSelect(item.id)}
+            onClick={() => {
+              if (item.id !== active) haptic('light');
+              onSelect(item.id);
+            }}
           />
         ))}
       </div>
-    </div>
+    </nav>
   );
 }
 
-// ─── Subcomponents ────────────────────────────────────────────────────────────
-
-function Tab({ item, isActive, dark, onClick }) {
-  const activeColor = dark ? '#0A84FF' : '#007AFF';
-  const idleColor = dark ? 'rgba(235,235,245,0.62)' : 'rgba(0,0,0,0.6)';
-  const activePillStyle = dark
-    ? { ...S.activePill, background: 'rgba(255,255,255,0.16)', boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.22)' }
-    : S.activePill;
-
+function Tab({ item, isActive, onClick }) {
+  const color = isActive ? '#111111' : '#8A8A8E';
   return (
     <motion.button
       onClick={onClick}
-      whileTap={{ scale: 0.94 }}
-      transition={iosSpring}
-      style={S.tabBtn}
-      aria-label={item.label}
+      whileTap={{ scale: 0.92 }}
+      transition={spring}
+      aria-label={item.badge > 0 ? `${item.label}, ${item.badge}` : item.label}
       aria-current={isActive ? 'page' : undefined}
+      style={S.tab}
     >
-      {/* Sliding selected pill — layoutId gives the smooth liquid morph
-          between tabs (web equivalent of SwiftUI matchedGeometryEffect). */}
-      {isActive && (
-        <motion.div
-          layoutId="ios26-selectedPill"
-          transition={iosSpring}
-          style={activePillStyle}
-        />
-      )}
+      {isActive && <motion.span layoutId="ku-nav-mark" transition={spring} style={S.lineMark} />}
 
-      <div style={S.tabContent}>
-        <motion.div
-          animate={{
-            scale: isActive ? 1.06 : 1,
-            color: isActive ? activeColor : idleColor,
-          }}
-          transition={iosSpring}
-          style={S.iconWrap}
-        >
-          {React.cloneElement(item.icon, { style: { width: 22, height: 22, display: 'block' } })}
+      <span style={{ ...S.icon, color }}>
+        {React.cloneElement(item.icon, { width: 22, height: 22, strokeWidth: isActive ? 2.1 : 1.7, style: { display: 'block' } })}
+        {item.badge > 0 && (
+          <motion.span
+            key={item.badge}
+            initial={{ scale: 0.4 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 600, damping: 16 }}
+            style={S.badge}
+          >
+            {item.badge > 99 ? '99+' : item.badge}
+          </motion.span>
+        )}
+      </span>
 
-          {item.badge > 0 && (
-            <motion.div
-              key={item.badge}
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: [0.5, 1.2, 1], opacity: 1 }}
-              transition={{ duration: 0.36, times: [0, 0.6, 1], ease: [0.32, 0.72, 0, 1] }}
-              style={S.badge}
-            >
-              {item.badge > 99 ? '99+' : item.badge}
-            </motion.div>
-          )}
-        </motion.div>
-
-        <motion.span
-          animate={{
-            color: isActive ? activeColor : idleColor,
-            fontWeight: isActive ? 600 : 500,
-          }}
-          transition={iosSpring}
-          style={S.label}
-        >
-          {item.label}
-        </motion.span>
-      </div>
+      <span style={{ ...S.label, color, fontWeight: isActive ? 600 : 500 }}>{item.label}</span>
     </motion.button>
   );
 }
 
-// ─── Styles (web baseline — also the native layout; native overrides material) ─
-
 const S = {
   outer: {
     position: 'fixed',
-    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
-    left: 16,
-    right: 16,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 1000,
-    pointerEvents: 'none',
-    display: 'flex',
-    justifyContent: 'center',
+    background: 'rgba(255, 255, 255, 0.94)',
+    backdropFilter: 'saturate(160%) blur(20px)',
+    WebkitBackdropFilter: 'saturate(160%) blur(20px)',
+    borderTop: '1px solid rgba(17, 17, 17, 0.08)',
+    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
   },
-
-  pill: {
-    position: 'relative',
-    width: '100%',
-    maxWidth: 460,
-    minHeight: 64,
-    padding: 6,
-    borderRadius: 32,
-    pointerEvents: 'all',
+  bar: {
+    height: 58,
+    maxWidth: 560,
+    margin: '0 auto',
+    padding: '0 6px',
     display: 'flex',
     alignItems: 'stretch',
-    background: 'rgba(255, 255, 255, 0.72)',
-    backdropFilter: 'saturate(180%) blur(26px)',
-    WebkitBackdropFilter: 'saturate(180%) blur(26px)',
-    border: '0.5px solid rgba(255, 255, 255, 0.55)',
-    boxShadow:
-      '0 14px 32px rgba(0, 0, 0, 0.12),' +
-      '0 4px 10px rgba(0, 0, 0, 0.06),' +
-      'inset 0 1px 0 rgba(255, 255, 255, 0.7)',
   },
-
-  tabBtn: {
-    flex: 1,
-    height: 52,
+  tab: {
+    flex: '1 1 0',
     minWidth: 0,
+    position: 'relative',
     padding: 0,
-    background: 'none',
     border: 'none',
+    background: 'none',
     cursor: 'pointer',
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    WebkitTapHighlightColor: 'transparent',
-    fontFamily: 'inherit',
-  },
-
-  activePill: {
-    position: 'absolute',
-    inset: 4,
-    borderRadius: 24,
-    background: 'rgba(118, 118, 128, 0.16)',
-    boxShadow: 'inset 0 0.5px 0 rgba(255,255,255,0.7)',
-    zIndex: 0,
-  },
-
-  tabContent: {
-    position: 'relative',
-    zIndex: 1,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 2,
-    padding: '0 4px',
+    justifyContent: 'center',
+    gap: 4,
+    WebkitTapHighlightColor: 'transparent',
+    fontFamily: 'inherit',
   },
-
-  iconWrap: {
+  icon: {
     position: 'relative',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    willChange: 'transform',
+    transition: 'color 0.2s ease',
   },
-
-  badge: {
-    position: 'absolute',
-    top: -7,
-    right: -10,
-    background: '#FF3B30',
-    color: '#fff',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    padding: '0 5px',
-    fontSize: 10,
-    fontWeight: 800,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-    letterSpacing: -0.2,
-    lineHeight: 1,
-  },
-
   label: {
-    fontSize: 11,
-    letterSpacing: -0.1,
+    fontSize: 10.5,
+    letterSpacing: '-0.005em',
     lineHeight: 1.1,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     maxWidth: '100%',
+    padding: '0 2px',
+    transition: 'color 0.2s ease',
+  },
+  // Черта над значком выбранной вкладки.
+  lineMark: {
+    position: 'absolute',
+    top: 0,
+    left: '50%',
+    width: 22,
+    height: 2,
+    marginLeft: -11,
+    borderRadius: 2,
+    background: '#111111',
+  },
+  // Счётчик в монохроме бренда: белый кружок с тонкой чёрной обводкой,
+  // без красного; не сливается с чёрным значком выбранной вкладки.
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -9,
+    minWidth: 15,
+    height: 15,
+    padding: '0 3.5px',
+    borderRadius: 8,
+    border: '1px solid #111111',
+    background: '#FFFFFF',
+    color: '#111111',
+    fontSize: 9,
+    fontWeight: 600,
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontVariantNumeric: 'tabular-nums',
   },
 };

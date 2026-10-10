@@ -1,0 +1,4 @@
+{
+  "//": "PocketBase hooks are CommonJS (goja require). This file lets Node/Vite load pb_hooks/_lib/*.js the same way for the local preview and tests.",
+  "type": "commonjs"
+}

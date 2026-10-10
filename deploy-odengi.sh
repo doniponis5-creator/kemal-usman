@@ -34,6 +34,17 @@ else
   echo "   ✅ odengi_credentials.json serverga yozildi (pb_data/, git tashqarisi)"
 fi
 
+# 0b. «Спросить» konsultanti (Gemini) kaliti — xuddi O!Dengi kabi pb_data faylga.
+# Lokal .env da GEMINI_API_KEY bo'lmasa — o'tkazib yuboriladi (konsultant AI'siz ishlaydi).
+GEMINI_API_KEY=$(grep -E '^GEMINI_API_KEY=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | tr -d "'")
+if [ -n "$GEMINI_API_KEY" ]; then
+  printf '{"geminiKey":"%s"}\n' "$GEMINI_API_KEY" | \
+    ssh root@$VPS "cat > $PB_DIR/pb_data/assistant_credentials.json && chmod 600 $PB_DIR/pb_data/assistant_credentials.json"
+  echo "   ✅ assistant_credentials.json serverga yozildi («Спросить» konsultanti)"
+else
+  echo "   ℹ️  .env da GEMINI_API_KEY yo'q — «Спросить» AI'siz javob beradi"
+fi
+
 # 1. Upload ALL PocketBase hooks (old debug hooks removed locally — clean dir sync)
 echo "1) Uploading PocketBase hooks..."
 rsync -avz --delete --exclude='*.bak' pb_hooks/ root@$VPS:$PB_DIR/pb_hooks/
