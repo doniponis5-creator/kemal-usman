@@ -2,7 +2,7 @@
 // App.jsx'dan SOF MEXANIK ko'chirildi — logika o'zgarmagan.
 // React.lazy orqali yuklanadi: mijozlar admin kodini umuman yuklab olmaydi.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/backend.js";
 import { sendWhatsApp as sendWhatsAppServer } from "../api/whatsapp";
 import { sendPushBroadcast } from "../api/onesignal";
@@ -17,6 +17,7 @@ import { T, btnGreen, card, inputStyle } from "../theme.js";
 import { formatSum, parseOrderDate } from "../utils/format.js";
 import { haptic } from "../utils/haptics";
 import logger from "../utils/logger";
+import { createProductSearchIndex, searchProductIndex } from "../utils/productSearch.js";
 import { captureError } from "../utils/sentry";
 import { AnimatePresence, motion } from "framer-motion";
 import { BannerCropModal, MultiImageUpload, ProductAudioRecorder, ProductCard, StatusChip, getSaleInfo } from "../App.jsx";
@@ -551,6 +552,9 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
   const { t, lang } = useLang();
   const [editing, setEditing] = useState(null);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+  const searchPending = search !== deferredSearch;
+  const searchInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [deleteStep, setDeleteStep] = useState(0); // 0=not active, 1=first confirm, 2=second confirm, 3=final warning
@@ -558,6 +562,19 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
   // Reset to 'ru' whenever a different product is opened.
   const [editLang, setEditLang] = useState('ru');
   useEffect(() => { setEditLang('ru'); }, [editing]);
+  useEffect(() => {
+    const handleSearchShortcut = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (event.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setSearch('');
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handleSearchShortcut);
+    return () => window.removeEventListener('keydown', handleSearchShortcut);
+  }, []);
   // filtered is now replaced by processedProducts (useMemo with search + filters + sort)
   const editProd = products.find(p => p.id === editing);
   // Ruchka (edit) bosilganda tahrir oynasiga AVTOMATIK ko'tarilamiz — ilgari
@@ -1316,14 +1333,15 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
     showToast?.('CSV экспортирован');
   };
 
-  // Process: filter + sort
+  // Product text is normalized only when the catalog changes, not on every keypress.
+  const productSearchIndex = useMemo(() => createProductSearchIndex(products), [products]);
+
+  // Process: relevance search + filters + sort
   const processedProducts = useMemo(() => {
-    let list = [...products];
-    // Text search
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(p => (p.name||'').toLowerCase().includes(q) || (p.brand||'').toLowerCase().includes(q));
-    }
+    const hasQuery = deferredSearch.trim().length > 0;
+    let list = hasQuery
+      ? searchProductIndex(productSearchIndex, deferredSearch)
+      : products.slice();
     // Category filter — "Новинки" checks isNew flag, others check category field
     if (filterCat === 'Новинки') list = list.filter(p => p.isNew);
     else if (filterCat !== 'all') list = list.filter(p => p.category === filterCat);
@@ -1349,10 +1367,10 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
       const sb = (b.variants||[]).filter(v=>v.inStock).length;
       return sb - sa;
     });
-    // newest = default order (most recently added last, but we want newest first)
-    else if (sortBy === 'newest') list.reverse();
+    // With a query, the default ordering is relevance. Without one, newest first.
+    else if (sortBy === 'newest' && !hasQuery) list.reverse();
     return list;
-  }, [products, search, filterCat, filterStock, sortBy]);
+  }, [products, productSearchIndex, deferredSearch, filterCat, filterStock, sortBy]);
 
   // Summary stats
   const summaryStats = useMemo(() => {
@@ -1854,8 +1872,13 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8E8E93" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t.search || "Поиск парфюма..."}
+          <input ref={searchInputRef} value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Название, бренд, ID, теги..." aria-label="Поиск товаров" autoComplete="off" spellCheck="false"
             style={{ flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 14, fontWeight: 500, color: "#111", padding: "10px 8px", fontFamily: "inherit", letterSpacing: -0.1 }} />
+          {searchPending && (
+            <motion.span animate={{ rotate: 360 }} transition={{ duration: 0.7, repeat: Infinity, ease: "linear" }}
+              aria-label="Поиск" style={{ width: 13, height: 13, border: "1.5px solid rgba(0,0,0,0.16)", borderTopColor: "#111", borderRadius: "50%", flexShrink: 0 }} />
+          )}
           <AnimatePresence>
             {search && (
               <motion.button key="clear" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.6, opacity: 0 }}
@@ -1901,7 +1924,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
           {/* Sort dropdown */}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ padding: "6px 10px", borderRadius: 999, border: "none", fontSize: 12, fontWeight: 600, background: "rgba(120,120,128,0.10)", color: "#3A3A3C", fontFamily: "inherit", cursor: "pointer", flexShrink: 0, outline: "none" }}>
-            <option value="newest">Новые</option>
+            <option value="newest">{search.trim() ? 'По релевантности' : 'Новые'}</option>
             <option value="name">По имени</option>
             <option value="priceAsc">Цена ↑</option>
             <option value="priceDesc">Цена ↓</option>
@@ -2343,7 +2366,7 @@ export function AdminProductsScreen({ products = [], setProducts, showToast }) {
               )}
             </button>
             <span style={{ fontSize: 12, color: "#8E8E93", fontWeight: 500 }}>
-              {processedProducts.length} {processedProducts.length === 1 ? 'товар' : 'товаров'}
+              {searchPending ? 'Ищем…' : `${processedProducts.length} ${processedProducts.length === 1 ? 'товар' : 'товаров'}`}
               {search || filterCat !== 'all' || filterStock !== 'all' ? ' (фильтр)' : ''}
             </span>
           </div>
@@ -3744,9 +3767,12 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
   const selectedProduct = products.find(p => p.id === selectedProductId);
   const selectedClient = clients.find(c => c.phone === targetPhone);
 
-  const filteredProducts = products.filter(p =>
-    !productSearch || p.name?.toLowerCase().includes(productSearch.toLowerCase()) || p.brand?.toLowerCase().includes(productSearch.toLowerCase())
-  ).slice(0, 20);
+  const productSearchTerms = productSearch.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const filteredProducts = products.filter(p => {
+    if (productSearchTerms.length === 0) return true;
+    const searchable = `${p.name || ''} ${p.brand || ''}`.toLowerCase();
+    return productSearchTerms.every(term => searchable.includes(term));
+  }).slice(0, 20);
 
   const filteredClients = clients.filter(c =>
     !clientSearch || c.name?.toLowerCase().includes(clientSearch.toLowerCase()) || c.phone?.includes(clientSearch)
