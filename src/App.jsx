@@ -45,6 +45,8 @@ import { normalizePhone } from "./utils/phone";
 import { haptic } from "./utils/haptics";
 import { useFavorites, useIsFavorite, toggleFavorite } from "./utils/favorites";
 import { getTrim, measureTrim } from "./utils/trim";
+import { createProductSearchIndex, searchProductIndex } from './utils/productSearch';
+import { getTint, loadTint } from './utils/tint';
 import { initPush, setPushUser, clearPushUser } from "./api/onesignal";
 // PRO: screen transitions + button micro-animations
 import { MotionScreen, iosEase, iosSpring } from "./components/MotionScreen";
@@ -199,7 +201,7 @@ function OtpBoxes({ value, onChange, error = false, dark = false, autoFocus = tr
         onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        aria-label="SMS code"
+        aria-label="Код подтверждения"
         style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, border: "none", background: "transparent", caretColor: "transparent", zIndex: 2, cursor: "text" }}
       />
       <motion.div
@@ -1394,110 +1396,317 @@ export function StoryViewer({ stories, initialGroup, onClose, onAddToCart, lang 
   );
 }
 
-// ─── BANNER SLIDER ─────────────────────────────────────────────────────────────
-function BannerSlider({ banners }) {
-  const [idx, setIdx] = useState(0);
-  const [imgErrors, setImgErrors] = useState({});
-  const [paused, setPaused] = useState(false);
-  const touchRef = useRef(null);
-
-  // Auto-advance — one-shot timer per slide, so a manual swipe restarts the
-  // full 4.5s (no jarring double-jump). Touching the banner pauses it.
-  useEffect(() => {
-    if (!banners.length || paused) return;
-    const timer = setTimeout(() => setIdx(i => (i + 1) % banners.length), 4500);
-    return () => clearTimeout(timer);
-  }, [banners.length, idx, paused]);
-
-  if (!banners.length) return null;
-  // Filter out banners whose images failed to load
-  const validBanners = banners.filter(b => !b.img || !imgErrors[b.id]);
-  if (!validBanners.length) return null;
-  const safeIdx = idx % validBanners.length;
-  const b = validBanners[safeIdx];
-  const fallbackBg = b.bg || "linear-gradient(135deg, #111111 0%, #000000 100%)";
-  // Ken Burns alternates per slide: even slides settle IN, odd slides drift OUT.
-  const kenBurns = safeIdx % 2 === 0
-    ? { initial: { scale: 1.08 }, animate: { scale: 1 } }
-    : { initial: { scale: 1 }, animate: { scale: 1.07 } };
-
-  // Manual swipe — same threshold pattern as the detail hero carousel.
-  // Direction check (|dx| > |dy|*1.2) keeps vertical page scroll untouched.
-  const onTouchStart = (e) => {
-    const t = e.touches[0];
-    touchRef.current = { x: t.clientX, y: t.clientY };
-    setPaused(true);
-  };
-  const onTouchEnd = (e) => {
-    setPaused(false);
-    const start = touchRef.current;
-    touchRef.current = null;
-    if (!start || validBanners.length <= 1) return;
-    const dx = e.changedTouches[0].clientX - start.x;
-    const dy = e.changedTouches[0].clientY - start.y;
-    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-      haptic('light');
-      setIdx(i => dx < 0
-        ? (i + 1) % validBanners.length
-        : (i - 1 + validBanners.length) % validBanners.length);
-    }
-  };
-
+// ─── FEED BANNER ─────────────────────────────────────────────────────────────
+// Большой баннер внутри ленты ароматов: на всю ширину экрана, без полей.
+// Баннеры стоят по одному через каждые два ряда товаров (см. BANNER_SLOTS).
+// Картинка 2880×1152 (5 : 2) — показываем целиком, без обрезки флакона и логотипа.
+const BANNER_SLOTS = [8, 14, 20, 26, 32];
+function FeedBanner({ banner: b }) {
+  const [broken, setBroken] = useState(false);
+  const hasImg = b.img && !broken;
+  if (!hasImg && !b.title && !b.bg) return null;
   return (
-    <div
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      onTouchCancel={() => { touchRef.current = null; setPaused(false); }}
-      style={{ margin: "0 16px", borderRadius: 14, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.10)", position: "relative", aspectRatio: "21 / 9" }}
-    >
-      {/* PRO: crossfade + Ken Burns (alternating direction) — premium jonlilik */}
-      <AnimatePresence initial={false}>
-        <motion.div
-          key={b.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.7, ease: iosEase }}
-          style={{ position: "absolute", inset: 0, background: fallbackBg }}
-        >
-          {b.img && !imgErrors[b.id] && (
-            <motion.img
-              src={b.img} alt=""
-              onError={() => setImgErrors(prev => ({ ...prev, [b.id]: true }))}
-              initial={kenBurns.initial}
-              animate={kenBurns.animate}
-              transition={{ duration: 5, ease: "easeOut" }}
-              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", display: "block" }}
-            />
-          )}
-          {/* Gradient scrim — matn kontrasti har qanday rasmda kafolatlanadi.
-              Admin overlayTop/overlayBottom maydonlarini hurmat qiladi. */}
-          <div style={{
-            position: "absolute", inset: 0, padding: "20px 22px",
-            display: "flex", flexDirection: "column", justifyContent: "center",
-            background: b.img && !imgErrors[b.id]
-              ? `linear-gradient(to bottom, rgba(0,0,0,${b.overlayTop ?? 0.18}), rgba(0,0,0,${b.overlayBottom ?? 0.48}))`
-              : "transparent",
-          }}>
-            {b.title && <div style={{ color: "#fff", fontSize: 20, fontWeight: 800, lineHeight: 1.2, marginBottom: 8, textShadow: "0 1px 14px rgba(0,0,0,0.35)" }}>{b.title}</div>}
-            {b.subtitle && <div style={{ color: "rgba(255,255,255,0.9)", fontSize: 14, textShadow: "0 1px 10px rgba(0,0,0,0.35)" }}>{b.subtitle}</div>}
-          </div>
-        </motion.div>
-      </AnimatePresence>
-      {validBanners.length > 1 && (
-        <div style={{ position: "absolute", bottom: -2, right: 2, display: "flex" }}>
-          {/* Dot visuals stay 6px; each sits in a 30px padded hit-area (HIG). */}
-          {validBanners.map((_, i) => (
-            <div
-              key={i}
-              onClick={(e) => { e.stopPropagation(); if (i !== safeIdx) haptic('light'); setIdx(i); }}
-              style={{ padding: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <div style={{ width: i === safeIdx ? 20 : 6, height: 6, borderRadius: 3, background: i === safeIdx ? "var(--ku-surface, #FFFFFF)" : "rgba(255,255,255,0.5)", transition: "width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.35s" }} />
-            </div>
-          ))}
+    <div style={{ gridColumn: '1 / -1', margin: '6px -16px', position: 'relative', aspectRatio: '5 / 2', overflow: 'hidden',
+      background: b.bg || 'linear-gradient(135deg, #111111 0%, #000000 100%)' }}>
+      {hasImg && (
+        <img src={b.img} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center center', display: 'block' }} />
+      )}
+      {(b.title || b.subtitle) && (
+        <div style={{ position: 'absolute', inset: 0, padding: '20px 22px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          background: hasImg ? `linear-gradient(to bottom, rgba(0,0,0,${b.overlayTop ?? 0.18}), rgba(0,0,0,${b.overlayBottom ?? 0.48}))` : 'transparent' }}>
+          {b.title && <div style={{ color: '#fff', fontSize: 22, fontWeight: 800, lineHeight: 1.2, marginBottom: 8, textShadow: '0 1px 14px rgba(0,0,0,0.35)' }}>{b.title}</div>}
+          {b.subtitle && <div style={{ color: 'rgba(255,255,255,0.9)', fontSize: 14, textShadow: '0 1px 10px rgba(0,0,0,0.35)' }}>{b.subtitle}</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── PROMO BANNER (тест) ─────────────────────────────────────────────────────
+// Пока нет новых картинок для баннеров, в ленте стоят баннеры, собранные из
+// самих ароматов, как рекламная страница журнала: фон в тон флакону (цвет
+// берётся с фото, utils/tint), флакон в луче света на мягком пятне, номер
+// «01 / 05», бренд, название шрифтом Playfair, ноты курсивом и цена.
+// Анимация спокойная: флакон поднимается и проявляется, текст выходит по
+// строкам, потом флакон еле заметно «дышит». Нажатие открывает аромат.
+// Когда будут настоящие картинки — BANNER_TEST_PROMOS = false, и в те же
+// места встанут баннеры из админки (FeedBanner).
+const BANNER_TEST_PROMOS = true;
+function pickPromoProducts(products, count) {
+  const score = (p) => (p.isNew ? 3 : 0) + (p.isHit ? 2 : 0) + (p.isPopular ? 1 : 0);
+  const list = products.filter(p => p.img && productHasStock(p)).sort((a, b) => score(b) - score(a));
+  const out = [];
+  const brands = new Set();
+  for (const p of list) {
+    const key = String(p.brand || '').toLowerCase();
+    if (brands.has(key)) continue;
+    brands.add(key);
+    out.push(p);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+// Три-четыре ноты для подписи: сначала верхние, потом сердце.
+function promoNotes(p) {
+  const n = splitNotes(p?.desc || "");
+  const src = [n.top, n.heart].filter(Boolean).join(", ");
+  const seen = new Set();
+  const out = [];
+  for (const raw of src.split(/\s*[,;]\s*/)) {
+    const n = raw.trim().toLocaleLowerCase("ru");
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+    if (out.length >= 4) break;
+  }
+  return out.join(" · ");
+}
+function PromoBanner({ p, index, onOpen }) {
+  const { lang, t } = useLang();
+  useNoteFont();
+  const ref = useRef(null);
+  const [on, setOn] = useState(() => typeof IntersectionObserver === "undefined");
+  const [tint, setTint] = useState(() => getTint(p.img));
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  useEffect(() => { let alive = true; loadTint(p.img, (x) => { if (alive) setTint(x); }); return () => { alive = false; }; }, [p.img]);
+
+  const stk = productHasStock(p);
+  const minP = productMinPrice(p);
+  const kg = lang === 'kg';
+  // Палитра в тон флакону. Бесцветный или чёрный флакон — тёплый «песочный» фон витрины.
+  const h = tint ? tint.h : 36;
+  const s = tint ? Math.round(14 + Math.min(1, tint.s) * 22) : 16;
+  const bgTop = `hsl(${h} ${s}% 94%)`;
+  const bgBottom = `hsl(${h} ${s}% 88%)`;
+  const glow = `hsl(${h} ${Math.max(8, s - 6)}% 98%)`;
+  const accent = `hsl(${h} ${Math.min(55, s + 18)}% 30%)`;
+  const label = PROMO_LABEL_TEXT[p.isNew ? "new" : p.isHit ? "hit" : p.isPopular ? "popular" : "pick"][kg ? "kg" : "ru"];
+  const notes = promoNotes(p);
+  const flip = index % 2 === 1; // флакон то справа, то слева
+  const side = flip ? "left" : "right";
+  const other = flip ? "right" : "left";
+  return (
+    <div ref={ref} className={`ku-promo${on ? " ku-promo-on ku-note-on" : ""}`} onClick={() => { haptic('light'); onOpen?.(p); }} role="link" tabIndex={0} aria-label={`${p.brand || ""} ${cardName(p, lang)}`.trim()}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(p); } }}
+      style={{ gridColumn: "1 / -1", margin: "10px -16px", position: "relative", height: 340, overflow: "hidden", cursor: "pointer",
+        background: `radial-gradient(60% 75% at ${flip ? "26%" : "74%"} 44%, ${glow} 0%, rgba(255,255,255,0) 70%), linear-gradient(180deg, ${bgTop} 0%, ${bgBottom} 100%)`,
+        transition: "background 0.6s ease" }}>
+      {/* Тонкая рамка внутри — как у журнальной рекламной полосы. */}
+      <div style={{ position: "absolute", inset: 10, border: `1px solid hsl(${h} ${s}% 20% / 0.08)`, pointerEvents: "none" }} />
+      <div className="ku-promo-sweep" />
+      {/* Луч света сверху на флакон. */}
+      <div className="ku-promo-beam" style={{ position: "absolute", top: 0, [side]: "5%", width: "36%", height: "72%",
+        background: "linear-gradient(180deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0) 100%)", clipPath: "polygon(38% 0, 62% 0, 100% 100%, 0 100%)", filter: "blur(10px)" }} />
+      {/* Мягкое пятно-подиум и тень касания. */}
+      <div className="ku-promo-floor" style={{ position: "absolute", bottom: 30, [side]: "5%", width: "36%", height: 26, borderRadius: "50%",
+        background: `radial-gradient(ellipse at center, hsl(${h} ${s}% 30% / 0.22) 0%, hsl(${h} ${s}% 30% / 0.10) 45%, rgba(0,0,0,0) 72%)` }} />
+      {/* Флакон: multiply на обёртке с анимацией, иначе белый фон фото виден квадратом. */}
+      <div className="ku-promo-bottle" style={{ position: "absolute", top: 34, bottom: 38, width: "40%", [side]: "3%", mixBlendMode: "multiply" }}>
+        <BottleImg src={p.img} alt={`${p.brand || ''} ${p.name || ''}`.trim()} box={{ top: 0, left: "4%", width: "92%", height: "100%" }} fillW={0.84} blend={false} />
+      </div>
+      <div className="ku-promo-text" style={{ position: "absolute", top: 0, bottom: 0, width: "57%", [other]: 0, boxSizing: "border-box", padding: flip ? "0 22px 0 12px" : "0 12px 0 22px",
+        display: "flex", flexDirection: "column", justifyContent: "center", gap: 9 }}>
+        {/* Подпись от руки и стрелка к флакону: флакон справа — стрелка после
+            подписи до края колонки; флакон слева — короткая стрелка влево. */}
+        <div aria-hidden="true" style={{ position: "relative", display: "flex", alignItems: "flex-end", height: 34 }}>
+          {flip && <PickArrow ink={accent} toward="side" width={54} style={{ position: "absolute", right: "100%", bottom: 2, marginLeft: 0, marginRight: 2, transform: "scaleX(-1)" }} />}
+          <span className="ku-note-text" style={{ flex: "0 0 auto", fontFamily: "\"Caveat\", cursive", fontWeight: 500, fontSize: 26, lineHeight: 1, color: accent,
+            whiteSpace: "nowrap", transform: "rotate(-4deg)", transformOrigin: "left center", marginBottom: 4 }}>{label}</span>
+          {!flip && <PickArrow ink={accent} toward="side" style={{ marginBottom: 2 }} />}
+        </div>
+        <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 11, fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase", lineHeight: 1.3, marginTop: 4 }}>{p.brand}</div>
+        <div style={{ fontFamily: "var(--ku-font-display)", fontSize: 32, fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.015em", color: "var(--ku-text, #111111)",
+          display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{cardName(p, lang)}</div>
+        {notes && (
+          <div style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontSize: 13.5, lineHeight: 1.4, color: "var(--ku-text-2, #55555A)",
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{notes}</div>
+        )}
+        <div style={{ marginTop: 4 }}><CardPrice p={p} t={t} lang={lang} minP={minP} saleMinP={null} stk={stk} /></div>
+        <span className="ku-promo-cta" style={{ alignSelf: "flex-start", marginTop: 8, display: "inline-flex", alignItems: "center", gap: 8, height: 36, padding: "0 16px",
+          borderRadius: 999, background: "var(--ku-text, #111111)", color: "#FFFFFF", fontSize: 12.5, fontWeight: 600, letterSpacing: "0.01em" }}>
+          {kg ? "Жытын көрүү" : "Открыть аромат"}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── PHOTO BANNER «Выбор Kemal Usman» (тест) ────────────────────────────────
+// Настоящее фото Kemal Usman на всю ширину ленты, снизу тёмный переход и текст:
+// «Выбор Kemal Usman», аромат (бренд, название Playfair, ноты), белая плитка с
+// флаконом, цена и кнопка. Фото медленно приближается, текст выходит по строкам.
+// Фото лежат в public/kemal.
+// pos — какую часть вертикального фото показывать (лицо не должно обрезаться).
+// split — для крупного портрета: фото слева на всю высоту, текст справа на
+// тёмной панели цвета panel (иначе текст закрывает лицо).
+const KU_PHOTOS = [
+  { src: "/kemal/ku-car.webp", pos: "62% 16%" },
+  { src: "/kemal/ku-studio.webp", pos: "40% 20%" },
+  { src: "/kemal/ku-red.webp", pos: "50% 30%", split: true, panel: "#140A0B" },
+];
+// Рисованная стрелка от «Выбор Кемаля» до плитки с флаконом. Ширина свободного
+// места разная (длина надписи, экран), поэтому стрелка меряет себя и строит
+// кривую в настоящих пикселях — линия и наконечник всегда сходятся.
+function PickArrow({ ink, toward = "down", width, style }) {
+  const ref = useRef(null);
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setW(Math.round(el.getBoundingClientRect().width));
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const h = 32;
+  const side = toward === "side";
+  // Почерк как у подсказки «Послушайте, как он пахнет»: волна, маленькая петля
+  // (всегда 10–12 px, на любом экране) и открытый наконечник — вниз к плитке
+  // или вбок к флакону.
+  const lx = Math.max(26, Math.round(w * 0.45));
+  const d = [
+    `M0 21`,
+    `C ${lx * 0.45} 13, ${lx - 16} 9, ${lx} 14`,
+    `C ${lx + 6} 18, ${lx + 3} 26, ${lx - 3} 25`,
+    `C ${lx - 9} 24, ${lx - 7} 13, ${lx + 4} 10`,
+    side ? `C ${lx + (w - lx) * 0.5} 6, ${w - 12} 16, ${w} 16` : `C ${lx + (w - lx) * 0.55} 5, ${w - 2} 11, ${w} ${h - 3}`,
+  ].join(" ");
+  const head = side ? `M${w - 7} 10 L${w} 16 L${w - 7} 22` : `M${w - 6} ${h - 9} L${w} ${h - 2} L${w + 6} ${h - 8}`;
+  return (
+    <div ref={ref} style={{ position: "relative", flex: width ? `0 0 ${width}px` : "1 1 auto", minWidth: width || (side ? 36 : 48), height: h, marginLeft: 6, ...style }}>
+      {w > 0 && (
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
+          <path className="ku-note-draw" d={d} stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+          <path className="ku-note-head" d={head} stroke={ink} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+function PhotoBanner({ photo, p, onOpen }) {
+  const { lang, t } = useLang();
+  useNoteFont();
+  const ref = useRef(null);
+  const [on, setOn] = useState(() => typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setOn(true); io.disconnect(); } }, { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  const kg = lang === 'kg';
+  const stk = productHasStock(p);
+  const minP = productMinPrice(p);
+  const notes = promoNotes(p);
+  const vol = cardMinVolume(p);
+  const a11y = {
+    role: "link", tabIndex: 0, "aria-label": `${p.brand || ""} ${cardName(p, lang)}`.trim(),
+    onClick: () => { haptic('light'); onOpen?.(p); },
+    onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen?.(p); } },
+  };
+  // «Выбор Кемаля» от руки: золотистые чернила, стрелка рисуется к плитке с флаконом.
+  const ink = "#E2C68E";
+  const pickText = KEMAL_PICK_TEXT[kg ? "kg" : "ru"];
+  const kicker = (
+    <div aria-hidden="true" style={{ display: "flex", alignItems: "flex-end", height: 36, paddingRight: 37 }}>
+      <span className="ku-note-text" style={{ flex: "0 0 auto", fontFamily: "\"Caveat\", cursive", fontWeight: 500, fontSize: 28, lineHeight: 1,
+        color: ink, whiteSpace: "nowrap", transform: "rotate(-4deg)", transformOrigin: "left center", marginBottom: 4 }}>{pickText}</span>
+      <PickArrow ink={ink} />
+    </div>
+  );
+  const cta = (
+    <span className="ku-promo-cta" style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 38, padding: "0 18px", borderRadius: 999, background: "#FFFFFF", color: "#111111", fontSize: 12.5, fontWeight: 600 }}>
+      {kg ? "Жытын көрүү" : "Открыть аромат"}
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+    </span>
+  );
+  const price = (
+    <span style={{ fontSize: 15, fontWeight: 500, fontVariantNumeric: "tabular-nums", color: "#FFFFFF" }}>
+      {stk && minP > 0 ? <><span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>{t.fromPrice} </span>{formatSum(minP)}
+        {vol && <span style={{ fontSize: 12, color: "rgba(255,255,255,0.7)", marginLeft: 6 }}>{kg ? `${vol} үчүн` : `за ${vol}`}</span>}</> : t.outOfStock}
+    </span>
+  );
+
+  if (photo.split) {
+    // Крупный портрет: фото слева 50 %, мягко растворяется в панели справа.
+    return (
+      <div ref={ref} className={`ku-photo${on ? " ku-photo-on ku-note-on" : ""}`} {...a11y}
+        style={{ gridColumn: "1 / -1", margin: "10px -16px", position: "relative", height: 420, overflow: "hidden", cursor: "pointer", background: photo.panel || "#0E0D0C", color: "#FFFFFF" }}>
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "52%", overflow: "hidden" }}>
+          <img className="ku-photo-img" src={photo.src} alt="" loading="lazy" decoding="async"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: photo.pos, display: "block" }} />
+          <div style={{ position: "absolute", inset: 0, background: `linear-gradient(90deg, rgba(0,0,0,0) 55%, ${photo.panel || "#0E0D0C"} 100%)` }} />
+        </div>
+        <div style={{ position: "absolute", inset: 10, border: "1px solid rgba(255,255,255,0.12)", pointerEvents: "none" }} />
+        <div className="ku-photo-text" style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "54%", boxSizing: "border-box", padding: "0 22px 0 8px",
+          display: "flex", flexDirection: "column", justifyContent: "center", gap: 9 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 6 }}>
+            <div style={{ position: "relative", flex: "0 0 64px", height: 82, borderRadius: 12, background: "#FFFFFF", boxShadow: "0 10px 30px rgba(0,0,0,0.4)", overflow: "hidden" }}>
+              <BottleImg src={p.img} alt="" box={{ top: 7, left: 5, right: 5, bottom: 7 }} anchor="center" fillW={0.86} fillH={0.92} />
+            </div>
+            <div aria-hidden="true" style={{ position: "relative", paddingLeft: 34, minWidth: 0 }}>
+              <svg width="34" height="30" viewBox="0 0 34 30" fill="none" style={{ position: "absolute", left: 0, top: 18, overflow: "visible" }}>
+                <path className="ku-note-draw" d="M32 4 C 22 2, 10 10, 5 22" stroke={ink} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+                <path className="ku-note-head" d="M1 15 L5 23 L12 18" stroke={ink} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span className="ku-note-text" style={{ display: "block", fontFamily: "\"Caveat\", cursive", fontWeight: 500, fontSize: 26, lineHeight: 0.95, color: ink,
+                transform: "rotate(-5deg)", transformOrigin: "left center" }}>
+                {pickText.split(" ").map((w, i) => <span key={i} style={{ display: "block" }}>{w}</span>)}
+              </span>
+            </div>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase" }}>{p.brand}</div>
+          <div style={{ fontFamily: "var(--ku-font-display)", fontSize: 28, fontWeight: 400, lineHeight: 1.06, letterSpacing: "-0.015em",
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{cardName(p, lang)}</div>
+          {notes && <div style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontSize: 13, lineHeight: 1.4, color: "rgba(255,255,255,0.78)",
+            display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{notes}</div>}
+          <div>{price}</div>
+          <div style={{ marginTop: 4 }}>{cta}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className={`ku-photo${on ? " ku-photo-on ku-note-on" : ""}`} {...a11y}
+      style={{ gridColumn: "1 / -1", margin: "10px -16px", position: "relative", height: 460, overflow: "hidden", cursor: "pointer", background: "#0E0D0C", color: "#FFFFFF" }}>
+      <img className="ku-photo-img" src={photo.src} alt="" loading="lazy" decoding="async"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: photo.pos, display: "block" }} />
+      {/* Тёмный переход снизу — текст читается на любом фото. */}
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(8,7,6,0) 34%, rgba(8,7,6,0.55) 58%, rgba(8,7,6,0.92) 100%)" }} />
+      <div style={{ position: "absolute", inset: 10, border: "1px solid rgba(255,255,255,0.12)", pointerEvents: "none" }} />
+      <div className="ku-photo-text" style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "0 24px 28px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {kicker}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, marginTop: 4 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: 500, letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: 6 }}>{p.brand}</div>
+            <div style={{ fontFamily: "var(--ku-font-display)", fontSize: 32, fontWeight: 400, lineHeight: 1.05, letterSpacing: "-0.015em",
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{cardName(p, lang)}</div>
+            {notes && <div style={{ marginTop: 6, fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontSize: 13.5, lineHeight: 1.4, color: "rgba(255,255,255,0.78)",
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{notes}</div>}
+          </div>
+          {/* Белая плитка с флаконом: на белом фоне фото флакона смотрится чисто. */}
+          <div style={{ position: "relative", flex: "0 0 74px", height: 96, borderRadius: 12, background: "#FFFFFF", boxShadow: "0 10px 30px rgba(0,0,0,0.35)", overflow: "hidden" }}>
+            <BottleImg src={p.img} alt="" box={{ top: 8, left: 6, right: 6, bottom: 8 }} anchor="center" fillW={0.86} fillH={0.92} />
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 6 }}>
+          {price}
+          {cta}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1507,7 +1716,30 @@ function BannerSlider({ banners }) {
 // attempts to place an order. After successful OTP verification the parent
 // receives onRegister({ phone, name, refCode, record, isNewClient }) and can
 // immediately submit the pending order.
-function RegisterModal({ open, onClose, onRegister, showToast }) {
+// Ссылка «заказ через WhatsApp» для тех, у кого нет Telegram: готовое сообщение
+// магазину со списком ароматов из корзины, суммой и доставкой.
+function buildWhatsAppOrderUrl({ phone, cart, products, order, lang }) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits || !cart?.length) return null;
+  const kg = lang === "kg";
+  const lines = cart.map(ci => {
+    const prod = products.find(p => String(p.id) === String(ci.productId));
+    if (!prod) return null;
+    const v = prod.variants?.find(x => String(x.id) === String(ci.variantId));
+    const title = [prod.brand, prod.name].filter(Boolean).join(" ");
+    return `• ${title}${v?.label ? `, ${v.label}` : ""} × ${ci.qty}${v?.price ? ` — ${formatSum(v.price * ci.qty)}` : ""}`;
+  }).filter(Boolean);
+  const o = order || {};
+  const parts = [kg ? "Саламатсызбы! Заказ бергим келет:" : "Здравствуйте! Хочу оформить заказ:", ...lines];
+  if (o.total) parts.push(`${kg ? "Жалпы" : "Итого"}: ${formatSum(o.total)}`);
+  parts.push(o.deliveryType === "delivery"
+    ? `${kg ? "Жеткирүү" : "Доставка"}: ${o.address?.trim() || (kg ? "даректи жазам" : "адрес напишу")}`
+    : (kg ? "Өзүм алып кетем" : "Самовывоз"));
+  if (o.comment?.trim()) parts.push(`${kg ? "Комментарий" : "Комментарий"}: ${o.comment.trim()}`);
+  return `https://wa.me/${digits}?text=${encodeURIComponent(parts.join("\n"))}`;
+}
+
+function RegisterModal({ open, onClose, onRegister, showToast, whatsappUrl }) {
   const { lang, t } = useLang();
   const [phone, setPhone] = useState("+996");
   const [name, setName] = useState("");
@@ -1549,7 +1781,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
     try {
       await requestOtp(phone);
       setOtpStep("verify"); setOtpCode(""); setResendCooldown(60);
-      showToast?.(lang === "ru" ? "Код отправлен по SMS" : "Код SMS аркылуу жөнөтүлдү");
+      showToast?.(lang === "ru" ? "Код отправлен в Telegram" : "Код Telegram'га жөнөтүлдү");
     } catch (e) {
       const msg = String(e?.message || "");
       if (msg.includes("429") || msg.includes("too_many")) {
@@ -1566,7 +1798,7 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
 
   async function handleVerifyOtp() {
     const code = otpCode.replace(/\D/g, "");
-    if (code.length !== 6) { setErr(lang === "ru" ? "Введите код из SMS" : "SMS кодду жазыңыз"); return; }
+    if (code.length !== 6) { setErr(lang === "ru" ? "Введите 6 цифр кода из Telegram" : "Telegram'дагы 6 сандуу кодду жазыңыз"); return; }
     setErr(""); setOtpLoading(true);
     try {
       const { record, isNewClient } = await verifyOtp({ phone, code, name, referredBy: refCode.trim().toUpperCase() || null });
@@ -1678,12 +1910,22 @@ function RegisterModal({ open, onClose, onRegister, showToast }) {
                 }}>
                   {otpLoading ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Spinner /> {lang === "ru" ? "ОТПРАВКА..." : "ЖӨНӨТҮҮ..."}</span> : (lang === "ru" ? "ПОЛУЧИТЬ КОД" : "КОДДУ АЛУУ")}
                 </button>
+                {/* Запасной путь: нет Telegram — заказ уходит в WhatsApp магазина сообщением
+                    со списком ароматов из корзины. */}
+                {whatsappUrl && (
+                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" onClick={() => haptic('light')}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", boxSizing: "border-box", marginTop: 10, padding: "14px",
+                      borderRadius: 14, border: "1px solid rgba(17,17,17,0.12)", background: "transparent", color: "var(--ku-text, #111111)",
+                      fontSize: 13.5, fontWeight: 600, textDecoration: "none" }}>
+                    {lang === "ru" ? "Нет Telegram? Оформить через WhatsApp" : "Telegram жокпу? WhatsApp аркылуу заказ берүү"}
+                  </a>
+                )}
               </>
             ) : (
               <>
                 {/* OTP input */}
                 <div style={{ marginBottom: 14 }}>
-                  <div style={lbl}>{lang === "ru" ? "КОД ИЗ SMS" : "SMS КОДУ"}</div>
+                  <div style={lbl}>{lang === "ru" ? "КОД ИЗ TELEGRAM" : "TELEGRAM КОДУ"}</div>
                   <OtpBoxes value={otpCode} onChange={(v) => { setOtpCode(v); setErr(""); }} error={!!err} />
                 </div>
 
@@ -1803,7 +2045,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       setOtpStep('verify');
       setOtpCode("");
       setResendCooldown(60);
-      showToast?.(lang === 'ru' ? 'Код отправлен по SMS' : 'Код SMS аркылуу жөнөтүлдү');
+      showToast?.(lang === 'ru' ? 'Код отправлен в Telegram' : "Код Telegram'га жөнөтүлдү");
     } catch (e) {
       const msg = String(e?.message || '');
       // Server returns 429 too_many_requests when phone exceeds 5 reqs/hr.
@@ -1825,7 +2067,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
   // auth.js `verifyOtp` already saves the token into pb.authStore + secureStorage.
   async function handleVerifyOtp() {
     const code = otpCode.replace(/\D/g, '');
-    if (code.length !== 6) { setErr(lang === "ru" ? "Введите код из SMS" : "SMS кодду жазыңыз"); return; }
+    if (code.length !== 6) { setErr(lang === "ru" ? "Введите 6 цифр кода из Telegram" : "Telegram'дагы 6 сандуу кодду жазыңыз"); return; }
     setErr("");
     setOtpLoading(true);
     try {
@@ -1925,7 +2167,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           <>
             {/* OTP code input */}
             <div style={{ width: '100%', marginBottom: 14 }}>
-              <div style={labelDesktop}>{lang === 'ru' ? 'КОД ИЗ SMS' : 'SMS КОДУ'}</div>
+              <div style={labelDesktop}>{lang === 'ru' ? 'КОД ИЗ TELEGRAM' : 'TELEGRAM КОДУ'}</div>
               <OtpBoxes value={otpCode} onChange={(v) => { setOtpCode(v); setErr(''); }} error={!!err} />
             </div>
 
@@ -1964,7 +2206,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
             cursor: 'pointer', letterSpacing: 1, padding: '12px 0', borderRadius: 14,
             width: '100%', fontWeight: 600, textTransform: 'uppercase',
           }}>
-            {lang === 'ru' ? 'Войти как гость' : 'Мейман катары кирүү'}
+            {lang === 'ru' ? 'Вернуться в магазин' : 'Дүкөнгө кайтуу'}
           </button>
         )}
       </div>
@@ -2166,7 +2408,7 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
           {/* SMS code input — large monospace, 6 digits, autoFocus */}
           <div style={{ width: "100%", marginBottom: 14 }}>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.45)", marginBottom: 6, letterSpacing: 1.5 }}>
-              {lang === "ru" ? "КОД ИЗ SMS" : "SMS КОДУ"}
+              {lang === "ru" ? "КОД ИЗ TELEGRAM" : "TELEGRAM КОДУ"}
             </div>
             <OtpBoxes value={otpCode} onChange={(v) => { setOtpCode(v); setErr(""); }} error={!!err} dark />
           </div>
@@ -2220,11 +2462,11 @@ function LoginScreen({ onLogin, welcomeConfig = { enabled: false, amount: 0, exp
       {/* Guest mode */}
       {onGuest && (
         <button onClick={setGuestMode} style={{
-          background: "none", border: "1.5px solid rgba(255,255,255,0.25)", color: "rgba(255,255,255,0.5)",
-          fontSize: 13, cursor: "pointer", letterSpacing: 1, padding: "12px 0",
+          background: "rgba(255,255,255,0.08)", border: "1.5px solid rgba(255,255,255,0.55)", color: "#FFFFFF",
+          fontSize: 13, cursor: "pointer", letterSpacing: 1, padding: "13px 0",
           borderRadius: 14, width: "100%", fontWeight: 600, textTransform: "uppercase",
         }}>
-          {lang === "ru" ? "Войти как гость" : "Мейман катары кирүү"}
+          {lang === "ru" ? "Вернуться в магазин" : "Дүкөнгө кайтуу"}
         </button>
       )}
 
@@ -2263,11 +2505,47 @@ export const getSaleInfo = (p) => {
 // Sale price calculator
 export const salePrice = (originalPrice, salePercent) => Math.round(originalPrice * (1 - salePercent / 100));
 
+// Прокрутка страницы: в зависимости от браузера и стилей прокручивается окно или <body>.
+const pageScrollTop = () => Math.max(document.body.scrollTop || 0, document.documentElement.scrollTop || 0, window.scrollY || 0);
+const setPageScrollTop = (y) => { document.body.scrollTop = y; document.documentElement.scrollTop = y; };
+
 // ─── SMART SEARCH ──────────────────────────────────────────────────────────────
 // Fuzzy matching: supports partial words, typos (edit distance), transliteration
 // Returns scored results sorted by relevance
+// Как покупатели пишут бренды по-русски → как они записаны в каталоге.
+// Остальное (диор → dior, опечатки) делает перевод букв в utils/productSearch.
+const BRAND_ALIASES = [
+  ["ив сен лоран", "yves saint laurent"], ["ив сен-лоран", "yves saint laurent"], ["парфюм де марли", "parfums de marly"],
+  ["мейсон маржела", "maison margiela"], ["мэйсон маржела", "maison margiela"], ["тизиана терензи", "tiziana terenzi"],
+  ["клайв кристиан", "clive christian"], ["луи виттон", "louis vuitton"], ["луи вюиттон", "louis vuitton"],
+  ["джорджио армани", "armani"], ["том форд", "tom ford"], ["ле лабо", "le labo"], ["эскентрик", "escentric"],
+  ["молекула", "molecule"], ["крид", "creed"], ["шанель", "chanel"], ["диор", "dior"], ["армани", "armani"],
+  ["гуччи", "gucci"], ["версаче", "versace"], ["килиан", "kilian"], ["байредо", "byredo"], ["ксерджофф", "xerjoff"],
+  ["аджмал", "ajmal"], ["латтафа", "lattafa"], ["монталь", "montale"], ["мансера", "mancera"], ["инишио", "initio"],
+  ["инитио", "initio"], ["марли", "marly"], ["кензо", "kenzo"], ["живанши", "givenchy"], ["герлен", "guerlain"],
+  ["ланком", "lancome"], ["прада", "prada"], ["булгари", "bvlgari"], ["бвлгари", "bvlgari"], ["картье", "cartier"],
+  ["эрмес", "hermes"], ["нишан", "nishane"], ["аттар", "attar"], ["роджа", "roja"], ["рожа", "roja"], ["амуаж", "amouage"],
+  ["баккара", "baccarat"], ["бакара", "baccarat"], ["шопард", "chopard"], ["мемо", "memo"], ["кай али", "kay ali"],
+].sort((a, b) => b[0].length - a[0].length);
+function expandBrandAliases(query) {
+  let q = String(query || "").toLowerCase().replace(/ё/g, "е");
+  for (const [ru, lat] of BRAND_ALIASES) if (q.includes(ru)) q = q.split(ru).join(lat);
+  return q;
+}
+// Индекс поиска строится один раз на каждый новый список товаров.
+const searchIndexCache = new WeakMap();
+function catalogSearch(products, query, limit = Infinity) {
+  if (!query || !String(query).trim() || !products) return [];
+  let index = searchIndexCache.get(products);
+  if (!index) { index = createProductSearchIndex(products); searchIndexCache.set(products, index); }
+  return searchProductIndex(index, expandBrandAliases(query), limit);
+}
+
 export const smartSearch = (products, query, lang, limit = 8) => {
   if (!query || query.length < 3) return [];
+  // Новый поиск: русские буквы, опечатки и русские названия брендов.
+  const found = catalogSearch(products, query, limit);
+  if (found.length) return found;
   const q = query.toLowerCase().trim();
 
   // Simple edit distance for short strings (fuzzy)
@@ -2827,10 +3105,19 @@ function ProductCardBoutique({ p, onClick, preview, hintVisible, onAudioHintDism
 // Стрелка «рисуется», текст проявляется — когда карточка доходит до экрана.
 // Шрифт Caveat грузится только с нужными буквами.
 const AUDIO_NOTE_TEXT = { ru: "Послушайте, как он пахнет", kg: "Жытын угуп көрүңүз" };
+// Рукописная подпись на фото-баннерах (тем же почерком).
+const KEMAL_PICK_TEXT = { ru: "Выбор Кемаля", kg: "Кемалдын тандоосу" };
+const PROMO_LABEL_TEXT = {
+  new: { ru: "Новинка", kg: "Жаңы" },
+  hit: { ru: "Хит продаж", kg: "Хит" },
+  popular: { ru: "Выбор покупателей", kg: "Кардарлардын тандоосу" },
+  pick: { ru: "Рекомендуем", kg: "Сунуштайбыз" },
+};
 function useNoteFont() {
   useEffect(() => {
     if (document.querySelector("link[data-ku-note-font]")) return;
-    const chars = [...new Set(Object.values(AUDIO_NOTE_TEXT).join(""))].join("");
+    const texts = [...Object.values(AUDIO_NOTE_TEXT), ...Object.values(KEMAL_PICK_TEXT), ...Object.values(PROMO_LABEL_TEXT).flatMap(Object.values)];
+    const chars = [...new Set(texts.join(""))].join("");
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = "https://fonts.googleapis.com/css2?family=Caveat:wght@500&display=swap&text=" + encodeURIComponent(chars);
@@ -3124,7 +3411,8 @@ function ShelfItem({ p, onTap, itemRef }) {
       onKeyDown={(e) => { if (e.key === "Enter") onTap(e); }}
       aria-label={`${p?.brand || ""} ${cardName(p, lang)}`.trim()}
       style={{ width: SHELF_ITEM_W, flexShrink: 0, scrollSnapAlign: "center", cursor: "pointer", textAlign: "center",
-        transformOrigin: "center 40%", willChange: SHELF_LITE ? "transform" : "transform, filter", mixBlendMode: "multiply" }}>
+        transformOrigin: "center 40%", willChange: SHELF_LITE ? "transform" : "transform, filter", mixBlendMode: "multiply",
+        transition: "filter 0.35s ease" }}>
       <div style={{ position: "relative", height: 236 }}>
         <span data-floor style={{ position: "absolute", left: "22%", right: "22%", bottom: 4, height: 16, borderRadius: "50%",
           background: "radial-gradient(ellipse at center, rgba(40,30,15,0.28) 0%, rgba(40,30,15,0) 70%)" }} />
@@ -3147,68 +3435,22 @@ function ShelfItem({ p, onTap, itemRef }) {
   );
 }
 
+// Время последнего касания витрины (вне компонента: так линтер не считает это
+// вызовом при отрисовке).
+const shelfNow = () => Date.now();
+// Какой аромат сейчас ближе всего к центру — по положению прокрутки (не ждём кадра).
+function shelfNearest(sc, els) {
+  const center = sc.scrollLeft + sc.clientWidth / 2;
+  let best = 0, bestD = Infinity;
+  els.forEach((el, i) => { if (!el) return; const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - center); if (d < bestD) { bestD = d; best = i; } });
+  return best;
+}
 function ShelfRow({ title, items, onOpen, action, onAction }) {
   const scRef = useRef(null);
   const itemRefs = useRef([]);
   const dotRefs = useRef([]);
-
-  useEffect(() => {
-    const sc = scRef.current;
-    if (!sc) return;
-    let raf = 0;
-    const update = () => {
-      raf = 0;
-      const center = sc.scrollLeft + sc.clientWidth / 2;
-      let best = 0, bestD = Infinity;
-      itemRefs.current.forEach((el, i) => {
-        if (!el) return;
-        const mid = el.offsetLeft + el.offsetWidth / 2;
-        const signed = (mid - center) / (el.offsetWidth + SHELF_GAP);
-        const d = Math.min(1, Math.abs(signed));
-        if (Math.abs(signed) < bestD) { bestD = Math.abs(signed); best = i; }
-        // Далеко за экраном — стиль уже выставлен, не трогаем (меньше работы на кадр).
-        if (Math.abs(signed) > 2.5) {
-          if (el.dataset.far === "1") return;
-          el.dataset.far = "1";
-        } else if (el.dataset.far) delete el.dataset.far;
-        const rot = Math.max(-1, Math.min(1, signed)) * -16;
-        el.style.transform = `perspective(900px) rotateY(${rot.toFixed(1)}deg) scale(${(1 - 0.24 * d).toFixed(3)})`;
-        // Радиус с шагом 0.25px — браузер реже перерисовывает размытие.
-        el.style.filter = !SHELF_LITE && d > 0.03 ? `blur(${(Math.round(8.8 * d) / 4).toFixed(2)}px)` : "none";
-        el.style.opacity = (1 - 0.32 * d).toFixed(3);
-        const cap = el.querySelector("[data-caption]");
-        if (cap) {
-          const k = Math.max(0, 1 - d * 1.8);
-          cap.style.opacity = k.toFixed(3);
-          cap.style.transform = `translateY(${((1 - k) * 8).toFixed(1)}px)`;
-        }
-        const floor = el.querySelector("[data-floor]");
-        if (floor) floor.style.opacity = (1 - 0.7 * d).toFixed(3);
-      });
-      dotRefs.current.forEach((dot, i) => {
-        if (!dot) return;
-        const on = i === best;
-        dot.style.transform = on ? "scaleX(1.8)" : "scaleX(0.5)";
-        dot.style.background = on ? "#111111" : "rgba(17,17,17,0.22)";
-      });
-    };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
-    // Сразу в центре вторая вещь — соседи видны с обеих сторон.
-    const second = itemRefs.current[1];
-    if (second && items.length >= 3 && sc.scrollLeft === 0) {
-      sc.scrollLeft = second.offsetLeft + second.offsetWidth / 2 - sc.clientWidth / 2;
-    }
-    update();
-    sc.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    return () => {
-      sc.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, [items.length]);
-
-  if (!items.length) return null;
+  const touchedAt = useRef(0); // когда покупатель последний раз сам листал — автолистание ждёт
+  const dragRef = useRef(null);
 
   const scrollToItem = (i) => {
     const sc = scRef.current;
@@ -3216,10 +3458,139 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
     if (sc && el) sc.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - sc.clientWidth / 2, behavior: "smooth" });
   };
 
+  useEffect(() => {
+    const sc = scRef.current;
+    if (!sc) return;
+    let raf = 0;
+    let geo = [];
+    let half = 0;
+    let step = SHELF_ITEM_W + SHELF_GAP;
+    let lastBest = -1;
+    // Размеры и элементы — один раз (и при смене размера), а не на каждом кадре.
+    const measure = () => {
+      half = sc.clientWidth / 2;
+      step = (itemRefs.current[0]?.offsetWidth || SHELF_ITEM_W) + SHELF_GAP;
+      geo = itemRefs.current.map(el => el ? {
+        el, mid: el.offsetLeft + el.offsetWidth / 2,
+        cap: el.querySelector("[data-caption]"), floor: el.querySelector("[data-floor]"),
+        blur: -1, far: false,
+      } : null);
+    };
+    const update = () => {
+      raf = 0;
+      const center = sc.scrollLeft + half;
+      let best = 0, bestD = Infinity;
+      for (let i = 0; i < geo.length; i++) {
+        const g = geo[i];
+        if (!g) continue;
+        const signed = (g.mid - center) / step;
+        const a = Math.abs(signed);
+        if (a < bestD) { bestD = a; best = i; }
+        // Далеко за экраном — стиль уже выставлен, не трогаем.
+        if (a > 2.5) { if (g.far) continue; g.far = true; } else g.far = false;
+        const d = Math.min(1, a);
+        const rot = Math.max(-1, Math.min(1, signed)) * -16;
+        g.el.style.transform = `perspective(900px) rotateY(${rot.toFixed(1)}deg) scale(${(1 - 0.24 * d).toFixed(3)})`;
+        g.el.style.opacity = (1 - 0.32 * d).toFixed(3);
+        // Размытие — три ступени с плавным переходом (CSS transition), а не новый
+        // радиус на каждом кадре: так браузер перерисовывает картинку редко.
+        if (!SHELF_LITE) {
+          const b = d < 0.2 ? 0 : d < 0.65 ? 1.5 : 3;
+          if (b !== g.blur) { g.blur = b; g.el.style.filter = b ? `blur(${b}px)` : "none"; }
+        }
+        if (g.cap) {
+          const k = Math.max(0, 1 - d * 1.8);
+          g.cap.style.opacity = k.toFixed(3);
+          g.cap.style.transform = `translateY(${((1 - k) * 8).toFixed(1)}px)`;
+        }
+        if (g.floor) g.floor.style.opacity = (1 - 0.7 * d).toFixed(3);
+      }
+      if (best !== lastBest) {
+        lastBest = best;
+        dotRefs.current.forEach((dot, i) => {
+          if (!dot) return;
+          const on = i === best;
+          dot.style.transform = on ? "scaleX(1.8)" : "scaleX(0.5)";
+          dot.style.background = on ? "#111111" : "rgba(17,17,17,0.22)";
+        });
+      }
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    const onResize = () => { measure(); onScroll(); };
+    measure();
+    // Сразу в центре вторая вещь — соседи видны с обеих сторон.
+    const second = itemRefs.current[1];
+    if (second && items.length >= 3 && sc.scrollLeft === 0) {
+      sc.scrollLeft = second.offsetLeft + second.offsetWidth / 2 - sc.clientWidth / 2;
+    }
+    update();
+    sc.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    ro?.observe(sc);
+    return () => {
+      sc.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+      ro?.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [items.length]);
+
+  // Медленное автолистание: раз в 4,5 с следующий аромат плавно встаёт в центр.
+  // Только пока витрина на экране, вкладка открыта и покупатель 6 с ничего не трогал.
+  // При «уменьшить движение» — выключено.
+  useEffect(() => {
+    const sc = scRef.current;
+    if (!sc || items.length < 2 || SHELF_LITE) return;
+    let visible = false;
+    const io = typeof IntersectionObserver !== "undefined"
+      ? new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.6 }) : null;
+    io?.observe(sc);
+    const timer = setInterval(() => {
+      if (!visible || document.hidden || shelfNow() - touchedAt.current < 6000 || dragRef.current) return;
+      const el = itemRefs.current[(shelfNearest(sc, itemRefs.current) + 1) % items.length];
+      if (el) sc.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - sc.clientWidth / 2, behavior: "smooth" });
+    }, 4500);
+    return () => { clearInterval(timer); io?.disconnect(); };
+  }, [items.length]);
+
+  if (!items.length) return null;
+
+  // Мышкой (на компьютере) витрину можно тянуть, как пальцем; отпустили —
+  // ближайший аромат плавно встаёт в центр. Пальцем браузер листает сам.
+  const onPointerDown = (e) => {
+    touchedAt.current = shelfNow();
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    const sc = scRef.current;
+    dragRef.current = { x: e.clientX, left: sc.scrollLeft, moved: false, id: e.pointerId };
+    sc.style.scrollSnapType = "none";
+  };
+  const onPointerMove = (e) => {
+    const dr = dragRef.current;
+    if (!dr || dr.id !== e.pointerId) return;
+    const dx = e.clientX - dr.x;
+    if (!dr.moved && Math.abs(dx) > 5) { dr.moved = true; scRef.current.setPointerCapture?.(e.pointerId); }
+    if (dr.moved) scRef.current.scrollLeft = dr.left - dx;
+  };
+  const endDrag = () => {
+    const dr = dragRef.current;
+    if (!dr) return;
+    const sc = scRef.current;
+    touchedAt.current = shelfNow();
+    if (sc) scrollToItem(shelfNearest(sc, itemRefs.current));
+    // Снап возвращаем, когда плавная докрутка закончилась.
+    setTimeout(() => { if (sc) sc.style.scrollSnapType = "x mandatory"; }, 450);
+    // Сразу после перетаскивания «клик» не должен открывать аромат.
+    setTimeout(() => { dragRef.current = null; }, 0);
+    if (!dr.moved) dragRef.current = null;
+  };
+
   const tap = (p, i) => {
+    if (dragRef.current?.moved) return;
     const sc = scRef.current;
     const el = itemRefs.current[i];
     haptic("light");
+    touchedAt.current = shelfNow();
     if (sc && el && Math.abs(el.offsetLeft + el.offsetWidth / 2 - (sc.scrollLeft + sc.clientWidth / 2)) > el.offsetWidth / 3) {
       scrollToItem(i);
       return;
@@ -3231,9 +3602,11 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
     <div style={{ gridColumn: "1 / -1", margin: "22px -16px 14px", paddingTop: 22, paddingBottom: 18,
       background: "radial-gradient(70% 62% at 50% 42%, #FFFFFF 0%, #FFFFFF 38%, rgba(255,255,255,0) 100%), #F1EFEA" }}>
       <KuSectionHead title={title} action={action} onAction={onAction} style={{ padding: "0 16px 4px" }} />
-      <div ref={scRef} className="no-scrollbar"
+      <div ref={scRef} className="no-scrollbar ku-shelf"
+        onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}
+        onTouchStart={() => { touchedAt.current = shelfNow(); }}
         style={{ position: "relative", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory",
-          padding: `10px calc(50% - ${SHELF_ITEM_W / 2}px) 6px` }}>
+          padding: `10px calc(50% - ${SHELF_ITEM_W / 2}px) 6px`, cursor: "grab", userSelect: "none" }}>
         <div style={{ display: "flex", gap: SHELF_GAP, width: "max-content" }}>
           {items.map((p, i) => (
             <ShelfItem key={p.id} p={p} onTap={() => tap(p, i)} itemRef={el => { itemRefs.current[i] = el; }} />
@@ -3242,7 +3615,7 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
       </div>
       <div style={{ display: "flex", justifyContent: "center", gap: 8, paddingTop: 12 }} aria-hidden="true">
         {items.map((p, i) => (
-          <span key={p.id} ref={el => { dotRefs.current[i] = el; }} onClick={() => scrollToItem(i)}
+          <span key={p.id} ref={el => { dotRefs.current[i] = el; }} onClick={() => { touchedAt.current = shelfNow(); scrollToItem(i); }}
             style={{ height: 3, width: 10, borderRadius: 2, background: "rgba(17,17,17,0.22)", cursor: "pointer", transform: "scaleX(0.5)",
               transition: "transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s" }} />
         ))}
@@ -3509,6 +3882,19 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const glass = useGlass(); // Liquid Glass (native-only); web => no-op
   const edgeRef = React.useRef(null);
   const [detail, setDetail] = useState(null);
+  const listScrollRef = useRef(0);
+  // Аромат закрыли — лента строится заново; возвращаем покупателя на его место
+  // (несколько попыток: картинки и блоки ленты дорисовываются не сразу).
+  useEffect(() => {
+    if (detail) return;
+    const y = listScrollRef.current;
+    if (!y) return;
+    setPageScrollTop(y);
+    const raf = requestAnimationFrame(() => setPageScrollTop(y));
+    const t1 = setTimeout(() => setPageScrollTop(y), 120);
+    const t2 = setTimeout(() => setPageScrollTop(y), 400);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t1); clearTimeout(t2); };
+  }, [detail]);
   const [selVariant, setSelVariant] = useState(null);
   // First-time audio hint — visible briefly after catalog mount, capped at 5
   // lifetime shows. Counter is incremented exactly once per mount inside
@@ -3576,6 +3962,9 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   // PERF: memoized so a re-render (search typing, sale ticks, language, etc.)
   // doesn't re-filter + re-sort + re-clone the whole catalog every time.
   const filteredProducts = useMemo(() => {
+    // Умный поиск (диор → Dior, опечатки); простое совпадение текста ниже
+    // оставляем — так ищутся и ноты по-русски («роза», «ваниль»).
+    const smartIds = search.trim() ? new Set(catalogSearch(products, search).map(p => p.id)) : null;
     let list = products.filter(p => {
       // Hide products where ALL variants are out of stock (admin X toggle controls visibility)
       const vars = p.variants || [];
@@ -3589,7 +3978,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
         (p.brand || "").toLowerCase().includes(q) ||
         (p.shortDesc || "").toLowerCase().includes(q) ||
         (p.tags || "").toLowerCase().includes(q) ||
-        (p.desc || "").toLowerCase().includes(q);
+        (p.desc || "").toLowerCase().includes(q) ||
+        !!smartIds?.has(p.id);
       const matchBrand = !brand || brandKey(p.brand) === brand;
       const matchFlag = !flag || (flag === 'new' ? p.isNew : (p.isPopular || p.isHit));
       return matchCat && matchSearch && matchBrand && matchFlag;
@@ -3620,6 +4010,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const plainHome = cat === "all" && !search && !brand && !flag && sort === 'default';
   const brands = useMemo(() => topBrands(products), [products]);
   const shelfNew = useMemo(() => products.filter(p => p.isNew && productHasStock(p)).slice(0, 12), [products]);
+  const promoProducts = useMemo(() => pickPromoProducts(products, BANNER_SLOTS.length), [products]);
   const shelfPopular = useMemo(() => products.filter(p => (p.isPopular || p.isHit) && productHasStock(p)).slice(0, 12), [products]);
   const kg = lang === 'kg';
   const flagTitle = { new: kg ? 'Жаңы келгендер' : 'Новинки', popular: kg ? 'Кардарлардын тандоосу' : 'Выбор покупателей' };
@@ -3627,12 +4018,22 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const activeLabel = flag ? flagTitle[flag] : brand ? (brands.find(b => b.key === brand)?.name || "") : null;
   const pickBrand = (k) => { setBrand(k); requestAnimationFrame(() => gridTopRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })); };
   const homeInserts = {
-    2: <BrandShelf key="ins-brands" brands={brands} onPick={pickBrand} lang={lang} />,
-    5: <ShelfRow key="ins-new" title={flagTitle.new} items={shelfNew} onOpen={(p) => openDetail(p)} action={kg ? 'Баары' : 'Смотреть все'} onAction={() => showAll('new')} />,
+    // «Новинки» — первым блоком, до ароматов (вместо прежнего баннера сверху); бренды — ниже.
+    top: <ShelfRow key="ins-new" title={flagTitle.new} items={shelfNew} onOpen={(p) => openDetail(p)} action={kg ? 'Баары' : 'Смотреть все'} onAction={() => showAll('new')} />,
+    5: <BrandShelf key="ins-brands" brands={brands} onPick={pickBrand} lang={lang} />,
     11: <InfoBonusCard key="ins-bonus" settings={settings} lang={lang} />,
     17: <ShelfRow key="ins-pop" title={flagTitle.popular} items={shelfPopular} onOpen={(p) => openDetail(p)} action={kg ? 'Баары' : 'Смотреть все'} onAction={() => showAll('popular')} />,
     23: <InfoWhyUsCard key="ins-why" settings={settings} lang={lang} />,
   };
+  // Большие баннеры — по одному через каждые два ряда ароматов.
+  // Чередуем: фото Kemal Usman (чётные места) и баннер-аромат (нечётные).
+  if (BANNER_TEST_PROMOS) promoProducts.forEach((p, i) => {
+    const photo = i % 2 === 0 ? KU_PHOTOS[i / 2] : null;
+    homeInserts[BANNER_SLOTS[i]] = photo
+      ? <PhotoBanner key={`ins-photo-${p.id}`} photo={photo} p={p} onOpen={(x) => openDetail(x)} />
+      : <PromoBanner key={`ins-promo-${p.id}`} p={p} index={i} onOpen={(x) => openDetail(x)} />;
+  });
+  else banners.slice(0, BANNER_SLOTS.length).forEach((b, i) => { homeInserts[BANNER_SLOTS[i]] = <FeedBanner key={`ins-banner-${b.id}`} banner={b} />; });
 
   const renderGridCard = (p, idx) => {
     // Ритм каталога: две обычные карточки, потом одна большая на всю ширину.
@@ -3673,7 +4074,9 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
     );
   };
 
-  const openDetail = (p) => { setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setImgIsLandscape(false); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
+  // Перед открытием аромата запоминаем, где покупатель был в ленте (открытие
+  // «похожего» аромата со страницы аромата место не перезаписывает).
+  const openDetail = (p) => { if (!detail) listScrollRef.current = pageScrollTop(); setDetail(p); setSelVariant(p.variants.find(v => v.inStock) || p.variants[0]); setImgIndex(0); setImgIsLandscape(false); setDescExpanded(false); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(true); };
 
   // Bildirishnomadan / WhatsApp deeplink'dan (?product=ID) mahsulot ochish.
   // Notif sheet 'open:product' event yuboradi; WA xabarlardagi
@@ -4132,8 +4535,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
       <motion.div
         animate={{
           boxShadow: headerCollapsed
-            ? "0 1px 12px rgba(0,0,0,0.10)"
-            : "0 1px 0 rgba(0,0,0,0.04)",
+            ? "0 1px 0 rgba(17,17,17,0.07)"
+            : "0 0 0 rgba(17,17,17,0)",
         }}
         transition={{ duration: 0.2 }}
         style={ IS_NATIVE ? {
@@ -4147,8 +4550,10 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           zIndex: 20,
           overflow: "hidden",
         } : {
-          background: "var(--ku-surface, #FFFFFF)",
-          paddingTop: "max(44px, env(safe-area-inset-top, 44px))",
+          // Сайт: фон шапки = фон страницы, как во всей витрине. Сверху только
+          // безопасная зона телефона + небольшой отступ (было 44 px пустоты).
+          background: "var(--ku-bg, #F5F5F5)",
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 14px)",
           position: "sticky",
           top: 0,
           zIndex: 20,
@@ -4178,8 +4583,10 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           transition={{ type: "spring", stiffness: 420, damping: 36 }}
           style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}
         >
-          <div style={{ display: "flex", alignItems: "center", background: (IS_NATIVE && glass.scheme === 'dark') ? 'rgba(255,255,255,0.10)' : "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="8" stroke="var(--ku-text-3, #AEAEB2)" strokeWidth="2" /><path d="m21 21-4.35-4.35" stroke="var(--ku-text-3, #AEAEB2)" strokeWidth="2" /></svg>
+          <div style={IS_NATIVE
+            ? { display: "flex", alignItems: "center", background: glass.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }
+            : { display: "flex", alignItems: "center", background: "var(--ku-surface, #FFFFFF)", border: "1px solid rgba(17,17,17,0.08)", borderRadius: 999, padding: "11px 16px", gap: 10 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}><circle cx="11" cy="11" r="7.5" stroke={IS_NATIVE ? "var(--ku-text-3, #AEAEB2)" : "#8A8A8E"} strokeWidth="1.8" /><path d="m20.5 20.5-4.2-4.2" stroke={IS_NATIVE ? "var(--ku-text-3, #AEAEB2)" : "#8A8A8E"} strokeWidth="1.8" strokeLinecap="round" /></svg>
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={lang === "ru" ? "Поиск парфюма..." : "Атыр издөө..."} style={{ border: "none", background: "transparent", outline: "none", fontSize: 14, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", width: "100%", fontFamily: "inherit" }} />
             <AnimatePresence>
               {search && (
@@ -4224,11 +4631,11 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
       </motion.div>
       {/* Banner */}
       <div style={{ marginTop: 12 }}><AppDownloadBanner settings={settings} /></div>
-      {banners.length > 0 && <div style={{ marginTop: 2, marginBottom: 16 }}><BannerSlider banners={banners} /></div>}
       {/* Categories + sort button */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px' }}>
-        <div className="no-scrollbar" style={{ flex: 1, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ display: "flex", gap: 8 }}>
+        <div className="no-scrollbar" style={{ flex: 1, overflowX: "auto", WebkitOverflowScrolling: "touch",
+          ...(IS_NATIVE ? {} : { WebkitMaskImage: "linear-gradient(90deg, #000 calc(100% - 28px), transparent)", maskImage: "linear-gradient(90deg, #000 calc(100% - 28px), transparent)", paddingRight: 24 }) }}>
+          <div style={{ display: "flex", gap: IS_NATIVE ? 8 : 4 }}>
             {cats.map(c => {
               const active = cat === c;
               return (
@@ -4243,13 +4650,13 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
                     color: active
                       ? ((IS_NATIVE && glass.scheme === 'dark') ? '#111' : '#fff')
                       : ((IS_NATIVE && glass.scheme === 'dark') ? 'rgba(235,235,245,0.62)' : T.textSecond),
-                    scale: active ? 1.04 : 1,
-                    boxShadow: active
+                    scale: active && IS_NATIVE ? 1.04 : 1,
+                    boxShadow: active && IS_NATIVE
                       ? '0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)'
                       : '0 0 0 rgba(0,0,0,0)',
                   }}
                   transition={{ type: 'spring', stiffness: 360, damping: 26 }}
-                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "0.5px solid var(--ku-border, #EEEEEE)"), fontSize: 13, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(14px)", WebkitBackdropFilter: "saturate(180%) blur(14px)" } : {}) }}
+                  style={{ padding: "6px 16px", minHeight: 36, borderRadius: 20, border: active ? "none" : (IS_NATIVE ? (glass.scheme === 'dark' ? "0.5px solid rgba(255,255,255,0.12)" : "0.5px solid rgba(255,255,255,0.55)") : "none"), fontSize: 13.5, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, ...(IS_NATIVE && !active ? { backdropFilter: "saturate(180%) blur(14px)", WebkitBackdropFilter: "saturate(180%) blur(14px)" } : {}) }}
                 >
                   {c === "all" ? t.allCategories : c}
                 </motion.button>
@@ -4264,20 +4671,18 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             background: sort !== 'default' ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)",
             color: sort !== 'default' ? '#fff' : "var(--ku-text, #111111)",
             scale: sort !== 'default' ? 1.04 : 1,
-            boxShadow: sort !== 'default'
-              ? '0 4px 12px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.10)'
-              : '0 1px 3px rgba(0,0,0,0.04)',
+            boxShadow: '0 0 0 rgba(0,0,0,0)',
           }}
           transition={{ type: 'spring', stiffness: 360, damping: 26 }}
           aria-label={lang === 'kg' ? 'Иргөө' : 'Сортировка'}
           style={{
             width: 36, height: 36, borderRadius: 18,
-            border: sort !== 'default' ? 'none' : '0.5px solid var(--ku-border, #EEEEEE)',
+            border: sort !== 'default' ? 'none' : '1px solid rgba(17,17,17,0.08)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer', flexShrink: 0,
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="6" y1="12" x2="18" y2="12" />
             <line x1="10" y1="18" x2="14" y2="18" />
@@ -4312,6 +4717,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             <div style={{ fontSize: 13 }}>Попробуйте изменить запрос</div>
           </div>
         )}
+        {plainHome && homeInserts.top}
         {filteredProducts.map((p, idx) => {
           const card = renderGridCard(p, idx);
           const ins = plainHome ? homeInserts[idx] : null;
@@ -5152,7 +5558,9 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
             <div style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>{user?.name || t.guest}</div>
             <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 300 }}>{user?.phone}</div>
           </div>
-          <button onClick={onLogout} style={{ background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{t.logout}</button>
+          <button onClick={onLogout} style={{ background: user ? "rgba(255,255,255,0.15)" : "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: user ? "#fff" : "#111111", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            {user ? t.logout : (lang === 'kg' ? 'Кирүү' : 'Войти')}
+          </button>
         </div>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -5175,7 +5583,21 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
           </motion.div>
         </motion.div>
       </div>
-      {referralCode && (
+      {/* Гостю реф. код не показываем: без аккаунта бонус начислить некуда. */}
+      {!user && (
+        <div style={{ margin: "0 16px 16px", ...card({ padding: "18px 20px" }) }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ku-text, #111111)", marginBottom: 6 }}>
+            {lang === 'kg' ? 'Катталыңыз — бонустар сизде калат' : 'Зарегистрируйтесь — бонусы будут копиться'}
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--ku-text-2, #6E6E73)", marginBottom: 14 }}>
+            {lang === 'kg' ? 'Ар бир заказдан бонус, досторуңузга шилтеме жана заказдардын тарыхы.' : 'Бонусы с каждого заказа, ссылка для друзей и история заказов.'}
+          </div>
+          <button onClick={onLogout} style={{ height: 42, padding: "0 18px", borderRadius: 999, border: "none", background: "var(--ku-text, #111111)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
+            {lang === 'kg' ? 'Кирүү / катталуу' : 'Войти или зарегистрироваться'}
+          </button>
+        </div>
+      )}
+      {referralCode && user && (
         <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
           <div style={{
             fontSize: 11,
@@ -6889,8 +7311,10 @@ export default function App() {
   const [visitCount, setVisitCount] = useState(() => { const v = parseInt(localStorage.getItem('parfum_visits') || '0'); return v; });
   const [welcomeBonusUsed, setWelcomeBonusUsed] = useState(false);
   const [guestMode, setGuestMode] = useState(() => {
-    // Mehmon reload qilsa qayta login ekraniga tushmasin
-    try { return localStorage.getItem('parfum_guest_mode') === '1' && !pb.authStore.isValid; } catch { return false; }
+    // Новый посетитель сразу видит магазин (как гость), а не экран регистрации:
+    // регистрация нужна только при оформлении заказа (RegisterModal).
+    // Экран входа открывается сам, только если человек нажал «Войти» в профиле.
+    try { return !pb.authStore.isValid; } catch { return true; }
   });
   useEffect(() => {
     try {
@@ -7934,6 +8358,7 @@ export default function App() {
         onClose={() => { setShowRegModal(false); setPendingOrderForReg(null); }}
         onRegister={handleRegisterFromModal}
         showToast={showToast}
+        whatsappUrl={showRegModal ? buildWhatsAppOrderUrl({ phone: settings?.whatsappPhone, cart, products, order: pendingOrderForReg, lang }) : null}
       />
       {welcomeCelebration && (
         <BonusCelebration

@@ -110,6 +110,8 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
   const [now, setNow] = useState(() => Date.now());
   // При прокрутке вниз кнопка сжимается в круг, чтобы меньше закрывать карточки.
   const [compact, setCompact] = useState(false);
+  // Пока покупатель листает — кнопка прячется, через секунду после остановки возвращается.
+  const [scrolling, setScrolling] = useState(false);
   const listRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -124,16 +126,26 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
   useEffect(() => {
     if (desktop) return;
     let last = 0;
+    let timer = 0;
     // Каталог прокручивается внутри своего блока, а не окна, — ловим прокрутку любого блока.
     const onScroll = (e) => {
-      const el = e.target === document ? document.scrollingElement : e.target;
-      const top = el?.scrollTop || 0;
+      // Событие от документа: прокручивается либо окно, либо <body> — берём тот, что двигается.
+      const root = document.scrollingElement;
+      const el = e.target === document
+        ? (root && root.scrollHeight > root.clientHeight + 1 ? root : document.body)
+        : e.target;
+      // Горизонтальные витрины (карусели) кнопку не трогают.
+      if (!el || el.scrollHeight <= el.clientHeight + 1) return;
+      const top = el.scrollTop || 0;
       if (Math.abs(top - last) < 8) return;
       setCompact(top > 120 && top > last);
       last = top;
+      setScrolling(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setScrolling(false), 900);
     };
     document.addEventListener("scroll", onScroll, { capture: true, passive: true });
-    return () => document.removeEventListener("scroll", onScroll, { capture: true });
+    return () => { document.removeEventListener("scroll", onScroll, { capture: true }); clearTimeout(timer); };
   }, [desktop]);
 
   useEffect(() => {
@@ -217,8 +229,9 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
     <motion.button
       key="ask-fab"
       initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
+      animate={scrolling && !desktop ? { opacity: 0, scale: 0.85, y: 12 } : { opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
+      transition={{ duration: 0.22 }}
       whileTap={{ scale: 0.95 }}
       onClick={() => { haptic("light"); setNow(Date.now()); setOpen(true); }}
       aria-label={t.askTitle}
@@ -226,7 +239,8 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
         position: "fixed", zIndex: 1001,
         ...(desktop
           ? { right: 24, bottom: 24 }
-          : { left: 16, bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom, 0px) + 14px)` }),
+          // Справа: слева внизу на карточках кнопка ▶ «Послушать аромат».
+          : { right: 16, bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom, 0px) + 14px)`, pointerEvents: scrolling ? "none" : "auto" }),
         display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 46,
         padding: compact ? 0 : "0 18px 0 14px", width: compact ? 46 : "auto",
         borderRadius: R.pill, border: "none", cursor: "pointer", fontFamily: FONT,

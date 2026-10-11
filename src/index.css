@@ -301,3 +301,53 @@ html[data-theme="dark"] {
   --ku-glass: rgba(28,28,30,0.80);
   --ku-glass-thick: rgba(28,28,30,0.92);
 }
+
+/* ── Тестовые баннеры-ароматы в ленте (PromoBanner) ───────────────────────── */
+/* Вход: флакон поднимается и проявляется, свет и подиум загораются, текст по строкам.
+   Потом флакон еле заметно «дышит». Без «уменьшить движение» на телефоне. */
+.ku-promo-bottle { opacity: 0; transform: translate3d(0, 26px, 0) scale(0.97); transition: opacity 0.9s ease, transform 1.2s cubic-bezier(0.22, 1, 0.36, 1); }
+.ku-promo-on .ku-promo-bottle { opacity: 1; transform: none; animation: kuPromoBreath 7s 1.3s ease-in-out infinite alternate; }
+@keyframes kuPromoBreath { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(0, -5px, 0); } }
+.ku-promo-floor, .ku-promo-beam { opacity: 0; transition: opacity 1.2s 0.3s ease; }
+.ku-promo-on .ku-promo-floor, .ku-promo-on .ku-promo-beam { opacity: 1; }
+.ku-promo-on .ku-promo-floor { animation: kuPromoFloor 7s 1.3s ease-in-out infinite alternate; }
+@keyframes kuPromoFloor { from { transform: scale(1); } to { transform: scale(0.94); } }
+.ku-promo-text > * { opacity: 0; transform: translate3d(0, 12px, 0); transition: opacity 0.7s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
+.ku-promo-on .ku-promo-text > * { opacity: 1; transform: none; }
+.ku-promo-on .ku-promo-text > :nth-child(1) { transition-delay: 0.15s; }
+.ku-promo-on .ku-promo-text > :nth-child(2) { transition-delay: 0.25s; }
+.ku-promo-on .ku-promo-text > :nth-child(3) { transition-delay: 0.33s; }
+.ku-promo-on .ku-promo-text > :nth-child(4) { transition-delay: 0.41s; }
+.ku-promo-on .ku-promo-text > :nth-child(5) { transition-delay: 0.49s; }
+.ku-promo-on .ku-promo-text > :nth-child(6) { transition-delay: 0.57s; }
+.ku-promo-sweep { position: absolute; inset: 0; pointer-events: none; transform: translate3d(-110%, 0, 0);
+  background: linear-gradient(105deg, rgba(255,255,255,0) 35%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0) 65%); }
+.ku-promo-on .ku-promo-sweep { animation: kuPromoSweep 1.8s 0.6s cubic-bezier(0.4, 0, 0.2, 1) both; }
+@keyframes kuPromoSweep { from { transform: translate3d(-110%, 0, 0); } to { transform: translate3d(110%, 0, 0); } }
+.ku-promo:active .ku-promo-cta { transform: scale(0.96); }
+.ku-promo-cta { transition: transform 0.2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .ku-promo-bottle, .ku-promo-floor, .ku-promo-beam, .ku-promo-text > * { opacity: 1; transform: none; transition: none; animation: none; }
+  .ku-promo-on .ku-promo-bottle, .ku-promo-on .ku-promo-floor, .ku-promo-on .ku-promo-sweep { animation: none; }
+}
+
+/* ── Фото-баннеры «Выбор Kemal Usman» (PhotoBanner) ─────────────────────── */
+.ku-photo-img { transform: scale(1.1); transition: transform 9s cubic-bezier(0.16, 1, 0.3, 1); }
+.ku-photo-on .ku-photo-img { transform: scale(1); }
+.ku-photo-text > * { opacity: 0; transform: translate3d(0, 14px, 0); transition: opacity 0.7s ease, transform 0.9s cubic-bezier(0.22, 1, 0.36, 1); }
+.ku-photo-on .ku-photo-text > * { opacity: 1; transform: none; }
+.ku-photo-on .ku-photo-text > :nth-child(1) { transition-delay: 0.2s; }
+.ku-photo-on .ku-photo-text > :nth-child(2) { transition-delay: 0.32s; }
+.ku-photo-on .ku-photo-text > :nth-child(3) { transition-delay: 0.44s; }
+.ku-photo:active .ku-promo-cta { transform: scale(0.96); }
+@media (prefers-reduced-motion: reduce) {
+  .ku-photo-img, .ku-photo-text > * { transform: none; opacity: 1; transition: none; }
+}
+
+/* Нажатие и фокус с клавиатуры для баннеров в ленте */
+.ku-promo, .ku-photo { -webkit-tap-highlight-color: transparent; outline: none; }
+.ku-promo:focus-visible, .ku-photo:focus-visible { box-shadow: inset 0 0 0 2px var(--ku-text, #111111); }
+.ku-photo:focus-visible { box-shadow: inset 0 0 0 2px #FFFFFF; }
+
+/* Витрина-карусель: при перетаскивании мышкой — «сжатая рука» */
+.ku-shelf:active { cursor: grabbing; }
