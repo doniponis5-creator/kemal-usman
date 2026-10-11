@@ -4052,14 +4052,22 @@ function CatalogScreen({ products, settings, addToCart, banners, kemalPicks, sho
     }
   };
 
+
+  const cats = ["all", ...Array.from(new Set(products.map(p => (p.category || "").trim()).filter(Boolean)))];
+  // PRO: sort state + bottom-sheet
+  const [sort, setSort] = useState('default');
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+
   // Нажатие на «Kemal Usman» в шапке — обновить (просьба владельца, вместо
   // «потяни вниз»): плавно наверх, фильтры сброшены, свежие товары и баннеры из
   // базы. Страница не перезагружается — поэтому 5 нажатий подряд по-прежнему
   // открывают вход в админку. Пока грузится, надпись мягко мерцает.
   const [logoBusy, setLogoBusy] = useState(false);
-  const handleLogoTap = async () => {
-    handleSecretTap();
-    haptic('light');
+  // То же делает кнопка «Каталог» внизу (событие catalog:home): открытый аромат
+  // закрывается, и лента не возвращается на старое место, а встаёт наверх.
+  const goCatalogHome = async () => {
+    listScrollRef.current = 0;
+    if (detail) { setDetail(null); setIsDetailOpen?.(false); }
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setCat("all"); setSearch(""); setBrand(null); setFlag(null); setSort('default');
     if (logoBusy || !onRefresh) return;
@@ -4067,11 +4075,12 @@ function CatalogScreen({ products, settings, addToCart, banners, kemalPicks, sho
     try { await onRefresh(); } catch { /* сеть — покажем то, что есть */ }
     setLogoBusy(false);
   };
-
-  const cats = ["all", ...Array.from(new Set(products.map(p => (p.category || "").trim()).filter(Boolean)))];
-  // PRO: sort state + bottom-sheet
-  const [sort, setSort] = useState('default');
-  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const handleLogoTap = () => { handleSecretTap(); haptic('light'); goCatalogHome(); };
+  useEffect(() => {
+    const onHome = () => goCatalogHome();
+    window.addEventListener('catalog:home', onHome);
+    return () => window.removeEventListener('catalog:home', onHome);
+  });
   // PERF: memoized so a re-render (search typing, sale ticks, language, etc.)
   // doesn't re-filter + re-sort + re-clone the whole catalog every time.
   const filteredProducts = useMemo(() => {
@@ -7427,7 +7436,7 @@ export default function App() {
   useEffect(() => {
     const userHandler = (e) => {
       const tab = e.detail;
-      if (tab === 'catalog')  setScreen('catalog');
+      if (tab === 'catalog')  { setScreen('catalog'); window.dispatchEvent(new Event('catalog:home')); }
       else if (tab === 'cart')     setScreen('cart');
       else if (tab === 'myorders') setScreen('myorders');
       else if (tab === 'profile')  setScreen('profile');
@@ -8691,7 +8700,8 @@ export default function App() {
             render GlassNavBar. */}
         {isAdmin
           ? (<GlassNavBar items={ADMIN_NAV} active={adminScreen} onSelect={setAdminScreen} />)
-          : (!hasNativeBar && <GlassNavBar items={USER_NAV} active={screen} onSelect={setScreen} />)}
+          // «Каталог» внизу — ещё и «домой»: наверх + свежие товары (catalog:home).
+          : (!hasNativeBar && <GlassNavBar items={USER_NAV} active={screen} onSelect={(id) => { if (id === 'catalog') window.dispatchEvent(new Event('catalog:home')); setScreen(id); }} />)}
         {showAdminLogin && (
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }} onClick={() => setShowAdminLogin(false)}>
             <div onClick={e => e.stopPropagation()} style={{ background: "var(--ku-surface, #FFFFFF)", borderRadius: 24, padding: 28, width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
