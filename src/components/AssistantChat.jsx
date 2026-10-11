@@ -157,9 +157,11 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
   // Телефон: окно на весь экран — страницу под ним не прокручиваем.
   useEffect(() => {
     if (!open || desktop) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    // Страницу прокручивает окно (overflow у <html>), поэтому замок — на <html>.
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = "hidden";
+    return () => { root.style.overflow = prev; };
   }, [open, desktop]);
 
   useEffect(() => {
@@ -225,14 +227,21 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
 
   const chips = [t.askChip1, t.askChip2, t.askChip3, t.askChip4];
 
+  // Компактная кнопка (38 px вместо 46): появляется пружиной снизу, при прокрутке
+  // уезжает вниз и гаснет, надпись «Спросить» плавно сворачивается в круглую
+  // кнопку и разворачивается обратно (ширина надписи 0 ↔ auto, отступы те же —
+  // без рывка). Раз в 7 с вокруг кнопки расходится тонкое кольцо и пузырёк чата
+  // чуть покачивается (index.css: .ku-ask-ring / .ku-ask-icon) — заметно, но не
+  // назойливо; при «уменьшить движение» этого нет.
   const fab = (
     <motion.button
       key="ask-fab"
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={scrolling && !desktop ? { opacity: 0, scale: 0.85, y: 12 } : { opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9 }}
-      transition={{ duration: 0.22 }}
-      whileTap={{ scale: 0.95 }}
+      initial={{ opacity: 0, scale: 0.6, y: 18 }}
+      animate={scrolling && !desktop ? { opacity: 0, scale: 0.8, y: 18 } : { opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.6, y: 18 }}
+      transition={{ type: "spring", stiffness: 460, damping: 30 }}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.9 }}
       onClick={() => { haptic("light"); setNow(Date.now()); setOpen(true); }}
       aria-label={t.askTitle}
       style={{
@@ -240,16 +249,30 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
         ...(desktop
           ? { right: 24, bottom: 24 }
           // Справа: слева внизу на карточках кнопка ▶ «Послушать аромат».
-          : { right: 16, bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom, 0px) + 14px)`, pointerEvents: scrolling ? "none" : "auto" }),
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 46,
-        padding: compact ? 0 : "0 18px 0 14px", width: compact ? 46 : "auto",
+          : { right: 14, bottom: `calc(${bottomOffset}px + env(safe-area-inset-bottom, 0px) + 12px)`, pointerEvents: scrolling ? "none" : "auto" }),
+        display: "flex", alignItems: "center", justifyContent: "center", height: 38, minWidth: 38,
+        padding: "0 11px",
         borderRadius: R.pill, border: "none", cursor: "pointer", fontFamily: FONT,
-        background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 15, fontWeight: 600,
-        boxShadow: "0 6px 20px rgba(0,0,0,0.22)",
+        background: "var(--ku-accent, #111111)", color: "#fff", fontSize: 13, fontWeight: 600,
+        boxShadow: "0 4px 14px rgba(0,0,0,0.20)",
       }}
     >
-      {IC.chat}
-      {!compact && t.askButton}
+      <span className="ku-ask-ring" aria-hidden="true" />
+      <span className="ku-ask-icon" style={{ display: "flex", width: 16, height: 16 }}>
+        {React.cloneElement(IC.chat, { width: 16, height: 16 })}
+      </span>
+      <AnimatePresence initial={false}>
+        {!compact && (
+          <motion.span key="ask-label"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: "auto", opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 420, damping: 34 }}
+            style={{ overflow: "hidden", whiteSpace: "nowrap", display: "block" }}>
+            <span style={{ display: "block", paddingLeft: 6, paddingRight: 2 }}>{t.askButton}</span>
+          </motion.span>
+        )}
+      </AnimatePresence>
     </motion.button>
   );
 
@@ -281,7 +304,6 @@ export function AssistantChat({ products, cart, addToCart, onOpenProduct, settin
       >
         {/* Шапка */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: desktop ? "14px 14px 12px 18px" : "16px 14px 12px 18px", background: T.white, borderBottom: `0.5px solid ${T.border}` }}>
-          <div style={{ width: 38, height: 38, borderRadius: 19, background: "var(--ku-accent, #111111)", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, letterSpacing: 0.5, flexShrink: 0 }}>KU</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{t.askTitle}</div>
             <div style={{ fontSize: 12, color: T.textSecond }}>{t.askSubtitle}</div>

@@ -20,7 +20,8 @@ import logger from "../utils/logger";
 import { createProductSearchIndex, searchProductIndex } from "../utils/productSearch.js";
 import { captureError } from "../utils/sentry";
 import { AnimatePresence, motion } from "framer-motion";
-import { BannerCropModal, MultiImageUpload, ProductAudioRecorder, ProductCard, StatusChip, getSaleInfo } from "../App.jsx";
+import { BannerCropModal, MultiImageUpload, ProductAudioRecorder, ProductCard, StatusChip, getSaleInfo, PhotoBanner } from "../App.jsx";
+import { KU_PICKS_DEFAULT, kemalPickPhoto, newKemalPickId } from "../utils/kemalPicks.js";
 
 const STATUS_COLORS = {
   new:        { bg: "#FFF3E0", color: "#FF6B00", border: "#FFB74D" },
@@ -3386,6 +3387,182 @@ export function AdminBannersScreen({ banners = [], setBanners, products = [] }) 
   );
 }
 
+// ─── «ВЫБОР КЕМАЛЯ» ───────────────────────────────────────────────────────────
+// Фото-баннеры в ленте: фото Кемаля + аромат + рукописное «Выбор Кемаля».
+// Наверху каждой карточки — баннер ровно как на сайте (тот же PhotoBanner).
+// Изменения сохраняются сами через секунду (site_media: kemal_picks + фото).
+// Порядок карточек = порядок в ленте: 1-я встаёт после 2-го ряда ароматов и т.д.
+const KEMAL_PICKS_MAX = 5;
+const KEMAL_PANELS = ["#140A0B", "#0E0D0C", "#1B1F2A", "#2A1E14"];
+
+// Фото с телефона бывает 5–10 МБ — перед загрузкой уменьшаем до 1600 px по
+// длинной стороне и сохраняем в JPEG (≈200–400 КБ): лента грузится быстрее.
+function shrinkPhoto(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => resolve(b ? new File([b], "kemal.jpg", { type: "image/jpeg" }) : file), "image/jpeg", 0.85);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+export function AdminKemalPicksScreen({ picks, setPicks, products = [] }) {
+  const { lang } = useLang();
+  const kg = lang === 'kg';
+  const list = picks || KU_PICKS_DEFAULT;
+  const [saved, setSaved] = useState(null); // null | 'saving' | 'ok' | 'err'
+  const [busy, setBusy] = useState(null);   // id карточки, где грузится фото ('new' — новая)
+  const saveTimer = useRef(null);
+  const fileRef = useRef(null);
+  const fileFor = useRef(null);
+
+  const inStock = (p) => (p?.variants || []).some(v => v.inStock);
+  const sorted = useMemo(() => [...products].sort((a, b) => `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`)), [products]);
+  const autoProduct = useMemo(() => products.find(p => p.img && inStock(p) && (p.isNew || p.isHit)) || products.find(p => p.img && inStock(p)), [products]);
+
+  const commit = (next) => {
+    setPicks(next);
+    setSaved('saving');
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      const ok = await api.saveKemalPicks(next);
+      setSaved(ok ? 'ok' : 'err');
+    }, 900);
+  };
+  const upd = (id, patch) => commit(list.map(k => k.id === id ? { ...k, ...patch } : k));
+  const move = (i, d) => { const j = i + d; if (j < 0 || j >= list.length) return; const a = [...list]; [a[i], a[j]] = [a[j], a[i]]; commit(a); };
+  const del = (k) => {
+    if (!window.confirm(kg ? 'Өчүрөлсүнбү?' : 'Удалить этот баннер?')) return;
+    if (!String(k.img || '').startsWith('/')) api.deleteKemalPickImage(k.id).catch(() => {});
+    commit(list.filter(x => x.id !== k.id));
+  };
+  const pickFile = (id) => { fileFor.current = id; fileRef.current?.click(); };
+  const onFile = async (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    const target = fileFor.current;
+    const id = target === 'new' ? newKemalPickId() : target;
+    setBusy(target);
+    const small = await shrinkPhoto(f);
+    const url = await api.saveKemalPickImage(id, small);
+    setBusy(null);
+    if (!url) { setSaved('err'); return; }
+    if (target === 'new') commit([...list, { id, img: url, productId: "", posX: 50, posY: 25, split: false, panel: KEMAL_PANELS[0], active: true }]);
+    else upd(id, { img: url });
+  };
+
+  const label = { fontSize: 12, fontWeight: 600, color: T.textSecond, margin: "14px 0 6px" };
+  const seg = (on) => ({ flex: 1, padding: "10px 8px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600,
+    border: on ? "1.5px solid #111" : `1px solid ${T.border}`, background: on ? "#111" : "#fff", color: on ? "#fff" : T.text });
+
+  return (
+    <div style={{ padding: "0 16px 24px", maxWidth: 520, margin: "0 auto" }}>
+      <div style={{ fontSize: 13, color: T.textSecond, lineHeight: 1.5, marginBottom: 6 }}>
+        {kg
+          ? 'Лентада ар бир эки катардан кийин чоң баннер. Сүрөт, атыр жана кадр — өзүңүз тандайсыз. Өзгөртүүлөр өзү сакталат.'
+          : 'Большие баннеры в ленте — после каждых двух рядов ароматов. Фото, аромат и кадр выбираете сами; изменения сохраняются сами.'}
+      </div>
+      <div style={{ fontSize: 12, fontWeight: 600, height: 18, color: saved === 'err' ? T.danger : T.textMuted }}>
+        {saved === 'saving' ? (kg ? 'Сакталууда…' : 'Сохраняю…') : saved === 'ok' ? (kg ? 'Сакталды ✓' : 'Сохранено ✓') : saved === 'err' ? (kg ? 'Сакталган жок — интернетти текшериңиз' : 'Не сохранилось — проверьте интернет') : ''}
+      </div>
+
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={onFile} />
+
+      {list.map((k, i) => {
+        const chosen = products.find(p => p.id === k.productId);
+        const previewP = (chosen && chosen.img && inStock(chosen)) ? chosen : autoProduct;
+        return (
+          <div key={k.id} style={{ background: "#fff", borderRadius: 16, boxShadow: T.shadowSm, margin: "14px 0", overflow: "hidden", opacity: k.active ? 1 : 0.55 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.text }}>{kg ? `Баннер ${i + 1}` : `Баннер ${i + 1}`}</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => move(i, -1)} disabled={i === 0} aria-label="Выше" style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: "#fff", cursor: "pointer", opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                <button onClick={() => move(i, 1)} disabled={i === list.length - 1} aria-label="Ниже" style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${T.border}`, background: "#fff", cursor: "pointer", opacity: i === list.length - 1 ? 0.3 : 1 }}>↓</button>
+              </div>
+            </div>
+
+            {/* Как на сайте. */}
+            <div style={{ display: "grid", padding: "0 16px", pointerEvents: "none" }}>
+              {previewP
+                ? <PhotoBanner key={`${k.img}-${k.split}`} photo={kemalPickPhoto(k)} p={previewP} onOpen={() => {}} />
+                : <img src={k.img} alt="" style={{ width: "100%", height: 300, objectFit: "cover" }} />}
+            </div>
+
+            <div style={{ padding: "4px 14px 16px" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={() => pickFile(k.id)} disabled={busy === k.id} style={{ ...seg(false), flex: 1 }}>
+                  {busy === k.id ? (kg ? 'Жүктөлүүдө…' : 'Загружаю…') : (kg ? 'Сүрөттү алмаштыруу' : 'Заменить фото')}
+                </button>
+                <button onClick={() => upd(k.id, { active: !k.active })} style={{ ...seg(k.active), flex: 1 }}>
+                  {k.active ? (kg ? 'Сайтта ✓' : 'На сайте ✓') : (kg ? 'Жашырылган' : 'Скрыт')}
+                </button>
+              </div>
+
+              <div style={label}>{kg ? 'Атыр' : 'Аромат'}</div>
+              <select value={k.productId || ""} onChange={e => upd(k.id, { productId: e.target.value })}
+                style={{ ...inputStyle, borderRadius: 10, padding: "12px 14px", appearance: "auto" }}>
+                <option value="">{kg ? 'Сайт өзү тандайт' : 'Сайт выберет сам (новинки и хиты)'}</option>
+                {sorted.map(p => (
+                  <option key={p.id} value={p.id}>{p.brand ? `${p.brand} — ` : ''}{p.name}{inStock(p) ? '' : (kg ? ' (жок)' : ' (нет в наличии)')}</option>
+                ))}
+              </select>
+              {chosen && !inStock(chosen) && (
+                <div style={{ fontSize: 12, color: T.danger, marginTop: 6 }}>{kg ? 'Бул атыр азыр жок — сайт башкасын көрсөтөт.' : 'Этого аромата сейчас нет в наличии — сайт покажет другой.'}</div>
+              )}
+
+              <div style={label}>{kg ? 'Көрүнүшү' : 'Вид'}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => upd(k.id, { split: false })} style={seg(!k.split)}>{kg ? 'Сүрөт толук' : 'Фото на всю ширину'}</button>
+                <button onClick={() => upd(k.id, { split: true })} style={seg(!!k.split)}>{kg ? 'Портрет солдо' : 'Портрет слева'}</button>
+              </div>
+              {k.split && (
+                <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: T.textSecond }}>{kg ? 'Фон:' : 'Фон справа:'}</span>
+                  {KEMAL_PANELS.map(c => (
+                    <button key={c} onClick={() => upd(k.id, { panel: c })} aria-label={c}
+                      style={{ width: 30, height: 30, borderRadius: "50%", background: c, cursor: "pointer", border: (k.panel || KEMAL_PANELS[0]) === c ? "3px solid #C9A86A" : "2px solid #fff", boxShadow: "0 0 0 1px rgba(0,0,0,0.15)" }} />
+                  ))}
+                </div>
+              )}
+
+              <div style={label}>{kg ? 'Кадр (бет көрүнүп турсун)' : 'Кадр — двигайте, пока лицо не будет видно целиком'}</div>
+              {[["posX", kg ? 'Солго — оңго' : 'Влево — вправо'], ["posY", kg ? 'Өйдө — ылдый' : 'Вверх — вниз']].map(([f, name]) => (
+                <div key={f} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+                  <span style={{ fontSize: 12, color: T.textSecond, minWidth: 100 }}>{name}</span>
+                  <input type="range" min="0" max="100" step="1" value={k[f] ?? (f === 'posX' ? 50 : 25)}
+                    onChange={e => upd(k.id, { [f]: Number(e.target.value) })} style={{ flex: 1, accentColor: "#111" }} />
+                </div>
+              ))}
+
+              <button onClick={() => del(k)} style={{ marginTop: 16, width: "100%", padding: "11px 0", borderRadius: 10, border: "none", background: "rgba(229,57,53,0.08)", color: T.danger, fontWeight: 700, cursor: "pointer", fontSize: 13 }}>
+                {kg ? 'Баннерди өчүрүү' : 'Удалить баннер'}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {list.length < KEMAL_PICKS_MAX && (
+        <button onClick={() => pickFile('new')} disabled={busy === 'new'}
+          style={{ width: "100%", padding: "16px 0", borderRadius: 14, border: `2px dashed ${T.border}`, background: "#fff", color: T.text, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          {busy === 'new' ? (kg ? 'Жүктөлүүдө…' : 'Загружаю фото…') : `+ ${kg ? 'Жаңы баннер (сүрөт тандаңыз)' : 'Новый баннер — выберите фото'}`}
+        </button>
+      )}
+      <div style={{ fontSize: 12, color: T.textMuted, marginTop: 8, textAlign: "center" }}>{list.length}/{KEMAL_PICKS_MAX}</div>
+    </div>
+  );
+}
+
 // ─── ADMIN BONUS ───────────────────────────────────────────────────────────────
 export function AdminBonusScreen({ settings = {}, setSettings, showToast }) {
   const { t, lang } = useLang();
@@ -4090,7 +4267,7 @@ export function AdminNotificationsScreen({ products = [], clients = [], showToas
   );
 }
 
-export function AdminSettingsScreen({ banners = [], setBanners, products = [], settings = {}, setSettings, onLogout, showToast, lang }) {
+export function AdminSettingsScreen({ banners = [], setBanners, kemalPicks, setKemalPicks, products = [], settings = {}, setSettings, onLogout, showToast, lang }) {
   const { t, setLang } = useLang();
   const [sub, setSub] = useState(null); // null | 'banners' | 'bonus' | 'whatsapp' | 'shop' | 'loginBg'
 
@@ -4243,6 +4420,12 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
   const renderBanners = () => (
     <SettingsSubScreen title="Баннеры" onBack={() => setSub(null)}>
       <AdminBannersScreen banners={banners} setBanners={setBanners} products={products} />
+    </SettingsSubScreen>
+  );
+
+  const renderKemalPicks = () => (
+    <SettingsSubScreen title="Выбор Кемаля" onBack={() => setSub(null)}>
+      <AdminKemalPicksScreen picks={kemalPicks} setPicks={setKemalPicks} products={products} />
     </SettingsSubScreen>
   );
 
@@ -4891,6 +5074,12 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
           onClick={() => setSub('banners')} isFirst
         />
         <PremiumRow
+          icon={SET_ICON.photo} iconBg="#1C1C1E"
+          label={lang === 'kg' ? 'Кемалдын тандоосу' : 'Выбор Кемаля'}
+          hint={(() => { const n = (kemalPicks || KU_PICKS_DEFAULT).filter(k => k.active).length; return lang === 'kg' ? `Лентадагы сүрөт-баннерлер · ${n}` : `Фото-баннеры в ленте · ${n} на сайте`; })()}
+          onClick={() => setSub('kemalPicks')}
+        />
+        <PremiumRow
           icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>}
           iconBg="#5856D6"
           label={lang === 'kg' ? 'Башкы бет' : 'Главная страница'}
@@ -5066,6 +5255,7 @@ export function AdminSettingsScreen({ banners = [], setBanners, products = [], s
             style={{ position: 'absolute', inset: 0 }}
           >
             {sub === 'banners'  && renderBanners()}
+            {sub === 'kemalPicks' && renderKemalPicks()}
             {sub === 'bonus'    && renderBonus()}
             {sub === 'whatsapp' && renderWhatsapp()}
             {sub === 'delivery' && renderDelivery()}

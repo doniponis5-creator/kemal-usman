@@ -64,9 +64,10 @@ export default function AudioPlayerOverlay({ product }) {
         height: 30,
         borderRadius: "50%",
         padding: 0,
-        background: "rgba(255,255,255,0.72)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
+        // Плотный белый вместо «стекла» (backdrop-filter): кнопка стоит на каждой
+        // карточке ленты (~40 штук), и размытие под каждой телефон пересчитывал на
+        // каждом кадре прокрутки — лента шла рывками.
+        background: "rgba(255,255,255,0.92)",
         border: "1px solid rgba(17,17,17,0.08)",
         cursor: "pointer",
         display: "flex",

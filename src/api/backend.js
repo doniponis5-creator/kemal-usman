@@ -151,6 +151,57 @@ export const api = {
     } catch { /* ignore */ }
   },
 
+  // ─── «Выбор Кемаля» — фото-баннеры в ленте (админка → Настройки → Выбор Кемаля) ──
+  // Фото → site_media key "kemal_pick_<id>"; список (фото, аромат, кадр, вкл.) →
+  // site_media key "kemal_picks" (JSON-файл, как payment_settings). Новых таблиц
+  // в базе не нужно — site_media уже есть.
+  saveKemalPickImage: async (pickId, file) => {
+    try {
+      const key = `kemal_pick_${pickId}`;
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="${key}"`, requestKey: null });
+      const formData = new FormData();
+      formData.append("key", key);
+      formData.append("file", file);
+      const record = existing.length > 0
+        ? await pb.collection("site_media").update(existing[0].id, formData, { requestKey: null })
+        : await pb.collection("site_media").create(formData, { requestKey: null });
+      return `${PB_URL}/api/files/site_media/${record.id}/${record.file}`;
+    } catch (e) { console.warn('saveKemalPickImage error:', e); return null; }
+  },
+  deleteKemalPickImage: async (pickId) => {
+    try {
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="kemal_pick_${pickId}"`, requestKey: null });
+      if (existing.length > 0) await pb.collection("site_media").delete(existing[0].id, { requestKey: null });
+    } catch { /* ignore */ }
+  },
+  saveKemalPicks: async (list) => {
+    try {
+      const key = "kemal_picks";
+      const existing = await pb.collection("site_media").getFullList({ filter: `key="${key}"`, requestKey: null });
+      const formData = new FormData();
+      formData.append("key", key);
+      const jsonBlob = new Blob([JSON.stringify(list)], { type: 'application/json' });
+      formData.append("file", new File([jsonBlob], "kemal_picks.json", { type: 'application/json' }));
+      if (existing.length > 0) await pb.collection("site_media").update(existing[0].id, formData, { requestKey: null });
+      else await pb.collection("site_media").create(formData, { requestKey: null });
+      return true;
+    } catch (e) { console.warn('saveKemalPicks error:', e); return false; }
+  },
+  loadKemalPicks: async () => {
+    try {
+      const records = await pb.collection("site_media").getFullList({ filter: `key="kemal_picks"`, requestKey: null });
+      if (records.length > 0 && records[0].file) {
+        const url = `${PB_URL}/api/files/site_media/${records[0].id}/${records[0].file}?t=${Date.now()}`;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) return data;
+        }
+      }
+      return null;
+    } catch { return null; }
+  },
+
   // ─── Global Settings (PB `settings` kolleksiyasi — server hooks ham o'qiydi) ──
   // getSettings: birinchi yozuvni qaytaradi (id='main' bo'lishi shart emas).
   // saveSettings: mavjud yozuvni yangilaydi, bo'lmasa yaratadi (faqat admin

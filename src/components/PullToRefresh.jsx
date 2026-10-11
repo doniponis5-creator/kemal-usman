@@ -32,17 +32,22 @@ export function PullToRefresh({ onRefresh, children, style }) {
     if (!el) return;
 
     let lastArmed = false;
+    // Прокручивается обычно вся страница, а не этот блок: смотрим и на неё.
+    // Раньше проверялся только el.scrollTop (всегда 0) — и любое движение пальца
+    // вниз посреди ленты тянуло её вниз и могло перезагрузить страницу.
+    const scrolled = () => Math.max(el.scrollTop || 0, window.scrollY || 0,
+      document.documentElement.scrollTop || 0, document.body.scrollTop || 0) > 0;
 
     const handleStart = (e) => {
       if (refreshing) return;
-      if (el.scrollTop > 0) { startY.current = null; return; }
+      if (scrolled()) { startY.current = null; return; }
       startY.current = e.touches[0].clientY;
     };
 
     const handleMove = (e) => {
       if (startY.current === null || refreshing) return;
       // If user scrolled away from the top, abort.
-      if (el.scrollTop > 0) { startY.current = null; pull.set(0); return; }
+      if (scrolled()) { startY.current = null; pull.set(0); return; }
       const dy = e.touches[0].clientY - startY.current;
       if (dy <= 0) { pull.set(0); return; }
       const v = Math.min(dy * RESISTANCE, MAX_PULL);
@@ -86,11 +91,10 @@ export function PullToRefresh({ onRefresh, children, style }) {
   return (
     <div
       ref={containerRef}
+      // Сам не прокручивается (страницу листает окно): блок с overflow ломал
+      // липкую шапку внутри.
       style={{
         position: 'relative',
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        height: '100%',
         ...style,
       }}
     >
@@ -112,8 +116,6 @@ export function PullToRefresh({ onRefresh, children, style }) {
           opacity,
           scale,
           pointerEvents: 'none',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
         }}
       >
         {refreshing ? (

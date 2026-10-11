@@ -47,6 +47,7 @@ import { useFavorites, useIsFavorite, toggleFavorite } from "./utils/favorites";
 import { getTrim, measureTrim } from "./utils/trim";
 import { createProductSearchIndex, searchProductIndex } from './utils/productSearch';
 import { getTint, loadTint } from './utils/tint';
+import { KU_PICKS_DEFAULT, kemalPickPhoto } from './utils/kemalPicks';
 import { initPush, setPushUser, clearPushUser } from "./api/onesignal";
 // PRO: screen transitions + button micro-animations
 import { MotionScreen, iosEase, iosSpring } from "./components/MotionScreen";
@@ -373,21 +374,54 @@ function splitNotes(text) {
   return out;
 }
 
-function NotesPyramid({ dp, lang }) {
+
+// Ноты кнопками: «Верх / Сердце / База» с тонкими иконками (SVG). Нажал уровень —
+// ниже его ноты отдельными плашками. Занимает одну строку кнопок и одну-две строки
+// плашек вместо трёх длинных строк — размеры и «В корзину» не уезжают вниз.
+const NOTE_ICONS = {
+  // Верх — слышно первым и улетает: стрелка вверх.
+  top: <><path d="M12 20V5" /><path d="M6.5 10.5L12 5l5.5 5.5" /></>,
+  // Сердце — сердце.
+  heart: <path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z" />,
+  // База — то, что остаётся надолго: слои.
+  base: <><path d="M12 4l8 4-8 4-8-4z" /><path d="M4 12l8 4 8-4" /><path d="M4 16l8 4 8-4" /></>,
+};
+function NotesTabs({ dp, lang }) {
   const kg = lang === "kg";
-  const rows = [
-    { label: kg ? "Үстү" : "Верх", text: dp.top },
-    { label: kg ? "Жүрөк" : "Сердце", text: dp.heart },
-    { label: kg ? "Негиз" : "База", text: dp.base },
-  ].filter(r => r.text);
+  const levels = [
+    { key: "top", label: kg ? "Үстү" : "Верх", text: dp.top },
+    { key: "heart", label: kg ? "Жүрөк" : "Сердце", text: dp.heart },
+    { key: "base", label: kg ? "Негиз" : "База", text: dp.base },
+  ].filter(l => l.text);
+  const [sel, setSel] = useState(levels[0]?.key);
+  const cur = levels.find(l => l.key === sel) || levels[0];
+  if (!cur) return null;
+  const notes = cur.text.split(/,\s*/).map(s => s.trim()).filter(Boolean);
   return (
-    <div style={{ marginTop: 6 }}>
-      {rows.map((r, i) => (
-        <div key={r.label} style={{ display: "grid", gridTemplateColumns: "64px 1fr", gap: 12, padding: "11px 0", borderTop: i ? "1px solid var(--ku-border, #EEEEEE)" : "none" }}>
-          <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 10.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase", paddingTop: 3 }}>{r.label}</div>
-          <div style={{ color: "var(--ku-text, #111111)", fontSize: 14.5, lineHeight: 1.45 }}>{r.text}</div>
-        </div>
-      ))}
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ color: "var(--ku-text, #111111)", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{kg ? "Ноталар" : "Ноты"}</div>
+      <div role="tablist" style={{ display: "grid", gridTemplateColumns: `repeat(${levels.length}, 1fr)`, gap: 8 }}>
+        {levels.map(l => {
+          const on = l.key === cur.key;
+          return (
+            <button key={l.key} role="tab" aria-selected={on} onClick={() => { haptic('light'); setSel(l.key); }}
+              style={{ height: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, cursor: "pointer",
+                background: on ? "#111111" : "var(--ku-surface, #FFFFFF)", color: on ? "#FFFFFF" : "var(--ku-text, #111111)",
+                border: on ? "1px solid #111111" : "1px solid var(--ku-border, #E2E0DB)", fontSize: 13, fontWeight: 600, transition: "background 0.2s, color 0.2s" }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{NOTE_ICONS[l.key]}</svg>
+              {l.label}
+            </button>
+          );
+        })}
+      </div>
+      <motion.div key={cur.key} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+        role="tabpanel" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+        {notes.map(n => (
+          <span key={n} style={{ padding: "6px 11px", borderRadius: 999, background: "var(--ku-surface-2, #F5F4F1)", color: "var(--ku-text, #111111)", fontSize: 13, lineHeight: 1.2 }}>
+            {n.charAt(0).toUpperCase() + n.slice(1)}
+          </span>
+        ))}
+      </motion.div>
     </div>
   );
 }
@@ -1543,15 +1577,7 @@ function PromoBanner({ p, index, onOpen }) {
 // Настоящее фото Kemal Usman на всю ширину ленты, снизу тёмный переход и текст:
 // «Выбор Kemal Usman», аромат (бренд, название Playfair, ноты), белая плитка с
 // флаконом, цена и кнопка. Фото медленно приближается, текст выходит по строкам.
-// Фото лежат в public/kemal.
-// pos — какую часть вертикального фото показывать (лицо не должно обрезаться).
-// split — для крупного портрета: фото слева на всю высоту, текст справа на
-// тёмной панели цвета panel (иначе текст закрывает лицо).
-const KU_PHOTOS = [
-  { src: "/kemal/ku-car.webp", pos: "62% 16%" },
-  { src: "/kemal/ku-studio.webp", pos: "40% 20%" },
-  { src: "/kemal/ku-red.webp", pos: "50% 30%", split: true, panel: "#140A0B" },
-];
+// Какое фото, аромат и кадр — настраивается в админке (utils/kemalPicks.js).
 // Рисованная стрелка от «Выбор Кемаля» до плитки с флаконом. Ширина свободного
 // места разная (длина надписи, экран), поэтому стрелка меряет себя и строит
 // кривую в настоящих пикселях — линия и наконечник всегда сходятся.
@@ -1594,7 +1620,7 @@ function PickArrow({ ink, toward = "down", width, style }) {
   );
 }
 
-function PhotoBanner({ photo, p, onOpen }) {
+export function PhotoBanner({ photo, p, onOpen }) {
   const { lang, t } = useLang();
   useNoteFont();
   const ref = useRef(null);
@@ -2792,8 +2818,8 @@ export function SaleCountdownBadge({ product, sale: saleProp = null }) {
       transition={{ type: 'spring', stiffness: 400, damping: 26 }}
       style={{
         position: 'absolute', top: 8, left: 8, right: 8,
-        background: 'rgba(0,0,0,0.82)',
-        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        // Без размытия под плашкой: она на карточках в ленте, размытие тормозит прокрутку.
+        background: 'rgba(0,0,0,0.86)',
         borderRadius: 12, padding: '8px 12px',
         display: 'flex', flexDirection: 'column', gap: 6,
         zIndex: 5,
@@ -3014,7 +3040,11 @@ const KU_TILE_BG = "var(--ku-tile-bg, var(--ku-bg, #F5F5F5))";
 // Флакон одного размера во всех карточках: по замеру (utils/trim) обрезаем пустые
 // белые поля фото и вписываем сам флакон в коробку (fillW × fillH), прижимая к низу
 // или по центру. Пока замера нет — обычное «contain», как раньше.
-function BottleImg({ src, alt, box, anchor = "bottom", fillW = 0.86, fillH = 0.96, blend = true }) {
+// Флакон проявляется плавно и уже в своём размере (раньше мелькал «contain», а после
+// замера прыгал в другой размер — в ленте это выглядело как дёрганье).
+// eager — грузить сразу, не дожидаясь экрана (полки: при быстром листании иначе
+// видно пустые места).
+function BottleImg({ src, alt, box, anchor = "bottom", fillW = 0.86, fillH = 0.96, blend = true, eager = false }) {
   const boxRef = useRef(null);
   const [size, setSize] = useState(null);
   const [nat, setNat] = useState(null);
@@ -3031,6 +3061,10 @@ function BottleImg({ src, alt, box, anchor = "bottom", fillW = 0.86, fillH = 0.9
   const [prevSrc, setPrevSrc] = useState(src);
   if (src !== prevSrc) { setPrevSrc(src); setTrim(getTrim(src)); setNat(null); }
 
+  const onBottleLoad = (im) => {
+    if (cors && !getTrim(src)) { const t = measureTrim(im); if (t) setTrim(t); }
+    setNat({ w: im.naturalWidth, h: im.naturalHeight });
+  };
   let imgStyle = { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", objectPosition: anchor === "bottom" ? "center bottom" : "center center" };
   if (trim && nat && size && size.w > 0 && size.h > 0) {
     const cw = trim.w * nat.w, ch = trim.h * nat.h;
@@ -3042,15 +3076,15 @@ function BottleImg({ src, alt, box, anchor = "bottom", fillW = 0.86, fillH = 0.9
   }
   return (
     <div ref={boxRef} style={{ position: "absolute", ...box }}>
-      <img key={cors ? "c" : "n"} src={src} alt={alt} loading="lazy" decoding="async" draggable={false}
+      <img key={cors ? "c" : "n"} src={src} alt={alt} loading={eager ? "eager" : "lazy"} decoding="async" draggable={false}
         crossOrigin={cors ? "anonymous" : undefined}
-        onLoad={(e) => {
-          const im = e.currentTarget;
-          setNat({ w: im.naturalWidth, h: im.naturalHeight });
-          if (cors && !getTrim(src)) { const t = measureTrim(im); if (t) setTrim(t); }
+        ref={(im) => {
+          // Картинка уже была в кэше и загрузилась раньше, чем React повесил onLoad.
+          if (im && im.complete && im.naturalWidth && !nat) onBottleLoad(im);
         }}
-        onError={() => { if (cors) setCors(false); }}
-        style={{ ...imgStyle, ...(blend ? { mixBlendMode: "multiply" } : null) }} />
+        onLoad={(e) => onBottleLoad(e.currentTarget)}
+        onError={() => { if (cors) setCors(false); else setNat({ w: 1, h: 1 }); }}
+        style={{ ...imgStyle, opacity: nat ? 1 : 0, transition: "opacity 0.3s ease", ...(blend ? { mixBlendMode: "multiply" } : null) }} />
     </div>
   );
 }
@@ -3383,22 +3417,27 @@ function BrandShelf({ brands, onPick, lang }) {
   );
 }
 
+// Высота строки с названием «Kemal Usman» в шапке каталога (шапка прилипает на
+// столько выше края, чтобы наверху остался только поиск).
+const KU_BRAND_ROW_H = 56;
+
 // Полка-витрина без карточек: только флакон (белый фон фото растворяется в фоне
 // через mix-blend-mode: multiply), под ним тень «на полу», бренд, название и цена.
-// Одна вещь крупно в центре под мягким светом; соседние меньше, развёрнуты к центру,
-// бледнее и размыты; подписи видны только у центральной. Всё считается от расстояния
-// до центра при каждой прокрутке (rAF, без перерисовки React).
+// Одна вещь крупно в центре под мягким светом; соседние чуть меньше и бледнее и
+// заметно видны по краям — сразу понятно, что полку можно листать. Подписи только
+// у центральной. Всё считается от расстояния до центра при прокрутке (rAF, без
+// перерисовки React). Только масштаб и прозрачность — их браузер двигает без
+// перерисовки картинок; размытие и 3D-поворот убраны: размытие тормозило на
+// телефонах, а с поворотом соседи превращались в узкие серые полоски у края.
 // Нажатие на боковую — подвинуть её в центр, на центральную — открыть аромат.
-const SHELF_ITEM_W = 190;
-const SHELF_GAP = 6;
-// Размытие — самый тяжёлый эффект (браузер перерисовывает картинку каждый кадр).
-// На слабых Android (≤2 ГБ памяти или ≤4 ядра; Chrome сообщает это) и при
-// «уменьшить движение» оставляем только масштаб и прозрачность — они почти бесплатные.
-// Safari память не сообщает — iPhone считаем сильным.
-const SHELF_LITE = typeof window !== "undefined" && (
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ||
-  (navigator.deviceMemory !== undefined && (navigator.deviceMemory <= 2 || (navigator.hardwareConcurrency || 8) <= 4))
-);
+const SHELF_ITEM_W = 172;
+const SHELF_GAP = 0;
+// «Уменьшить движение» в настройках телефона — без автолистания.
+const SHELF_LITE = typeof window !== "undefined" &&
+  !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+// Масштаб и подписи считает сам браузер по прокрутке (index.css, .ku-shelf-item) —
+// тогда JS их не трогает, только переключает точки под полкой.
+const SHELF_CSS_FX = typeof CSS !== "undefined" && !!CSS.supports?.("animation-timeline: view()");
 
 function ShelfItem({ p, onTap, itemRef }) {
   const { lang, t } = useLang();
@@ -3407,17 +3446,16 @@ function ShelfItem({ p, onTap, itemRef }) {
   const saleInfo = useSaleCountdown(p);
   const saleMinP = saleInfo && minP !== null ? salePrice(minP, saleInfo.percent) : null;
   return (
-    <div ref={itemRef} onClick={onTap} role="button" tabIndex={0}
+    <div ref={itemRef} onClick={onTap} role="button" tabIndex={0} className="ku-shelf-item"
       onKeyDown={(e) => { if (e.key === "Enter") onTap(e); }}
       aria-label={`${p?.brand || ""} ${cardName(p, lang)}`.trim()}
       style={{ width: SHELF_ITEM_W, flexShrink: 0, scrollSnapAlign: "center", cursor: "pointer", textAlign: "center",
-        transformOrigin: "center 40%", willChange: SHELF_LITE ? "transform" : "transform, filter", mixBlendMode: "multiply",
-        transition: "filter 0.35s ease" }}>
+        transformOrigin: "center 40%", willChange: "transform, opacity", mixBlendMode: "multiply" }}>
       <div style={{ position: "relative", height: 236 }}>
         <span data-floor style={{ position: "absolute", left: "22%", right: "22%", bottom: 4, height: 16, borderRadius: "50%",
           background: "radial-gradient(ellipse at center, rgba(40,30,15,0.28) 0%, rgba(40,30,15,0) 70%)" }} />
         {p?.img
-          ? <BottleImg src={p.img} alt="" box={{ top: 6, left: 0, right: 0, bottom: 14 }} fillW={0.8} blend={false} />
+          ? <BottleImg src={p.img} alt="" box={{ top: 6, left: 0, right: 0, bottom: 14 }} fillW={0.8} blend={false} eager />
           : <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#D1D1D6" }}>{IC.bottle}</span>}
       </div>
       <div data-caption style={{ paddingTop: 10 }}>
@@ -3473,7 +3511,7 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
       geo = itemRefs.current.map(el => el ? {
         el, mid: el.offsetLeft + el.offsetWidth / 2,
         cap: el.querySelector("[data-caption]"), floor: el.querySelector("[data-floor]"),
-        blur: -1, far: false,
+        far: false,
       } : null);
     };
     const update = () => {
@@ -3486,18 +3524,12 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
         const signed = (g.mid - center) / step;
         const a = Math.abs(signed);
         if (a < bestD) { bestD = a; best = i; }
+        if (SHELF_CSS_FX) continue;
         // Далеко за экраном — стиль уже выставлен, не трогаем.
         if (a > 2.5) { if (g.far) continue; g.far = true; } else g.far = false;
         const d = Math.min(1, a);
-        const rot = Math.max(-1, Math.min(1, signed)) * -16;
-        g.el.style.transform = `perspective(900px) rotateY(${rot.toFixed(1)}deg) scale(${(1 - 0.24 * d).toFixed(3)})`;
-        g.el.style.opacity = (1 - 0.32 * d).toFixed(3);
-        // Размытие — три ступени с плавным переходом (CSS transition), а не новый
-        // радиус на каждом кадре: так браузер перерисовывает картинку редко.
-        if (!SHELF_LITE) {
-          const b = d < 0.2 ? 0 : d < 0.65 ? 1.5 : 3;
-          if (b !== g.blur) { g.blur = b; g.el.style.filter = b ? `blur(${b}px)` : "none"; }
-        }
+        g.el.style.transform = `scale(${(1 - 0.2 * d).toFixed(3)})`;
+        g.el.style.opacity = (1 - 0.35 * d).toFixed(3);
         if (g.cap) {
           const k = Math.max(0, 1 - d * 1.8);
           g.cap.style.opacity = k.toFixed(3);
@@ -3537,8 +3569,10 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
   }, [items.length]);
 
   // Медленное автолистание: раз в 4,5 с следующий аромат плавно встаёт в центр.
-  // Только пока витрина на экране, вкладка открыта и покупатель 6 с ничего не трогал.
-  // При «уменьшить движение» — выключено.
+  // Только пока витрина на экране и вкладка открыта. Покупатель хоть раз сам
+  // тронул полку — автолистание выключается насовсем (раньше через 6 с оно снова
+  // уводило аромат, который он разглядывал). На последнем аромате останавливается,
+  // а не перелетает через всю полку к первому. При «уменьшить движение» — выключено.
   useEffect(() => {
     const sc = scRef.current;
     if (!sc || items.length < 2 || SHELF_LITE) return;
@@ -3546,12 +3580,16 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
     const io = typeof IntersectionObserver !== "undefined"
       ? new IntersectionObserver(([e]) => { visible = e.isIntersecting; }, { threshold: 0.6 }) : null;
     io?.observe(sc);
+    const stop = () => { clearInterval(timer); io?.disconnect(); };
     const timer = setInterval(() => {
-      if (!visible || document.hidden || shelfNow() - touchedAt.current < 6000 || dragRef.current) return;
-      const el = itemRefs.current[(shelfNearest(sc, itemRefs.current) + 1) % items.length];
+      if (touchedAt.current) { stop(); return; }
+      if (!visible || document.hidden || dragRef.current) return;
+      const next = shelfNearest(sc, itemRefs.current) + 1;
+      if (next >= items.length) { stop(); return; }
+      const el = itemRefs.current[next];
       if (el) sc.scrollTo({ left: el.offsetLeft + el.offsetWidth / 2 - sc.clientWidth / 2, behavior: "smooth" });
     }, 4500);
-    return () => { clearInterval(timer); io?.disconnect(); };
+    return stop;
   }, [items.length]);
 
   if (!items.length) return null;
@@ -3562,7 +3600,7 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
     touchedAt.current = shelfNow();
     if (e.pointerType !== "mouse" || e.button !== 0) return;
     const sc = scRef.current;
-    dragRef.current = { x: e.clientX, left: sc.scrollLeft, moved: false, id: e.pointerId };
+    dragRef.current = { x: e.clientX, left: sc.scrollLeft, moved: false, id: e.pointerId, pts: [{ x: e.clientX, t: e.timeStamp }] };
     sc.style.scrollSnapType = "none";
   };
   const onPointerMove = (e) => {
@@ -3571,15 +3609,35 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
     const dx = e.clientX - dr.x;
     if (!dr.moved && Math.abs(dx) > 5) { dr.moved = true; scRef.current.setPointerCapture?.(e.pointerId); }
     if (dr.moved) scRef.current.scrollLeft = dr.left - dx;
+    dr.pts.push({ x: e.clientX, t: e.timeStamp });
+    if (dr.pts.length > 6) dr.pts.shift();
   };
-  const endDrag = () => {
+  const endDrag = (e) => {
     const dr = dragRef.current;
     if (!dr) return;
     const sc = scRef.current;
     touchedAt.current = shelfNow();
-    if (sc) scrollToItem(shelfNearest(sc, itemRefs.current));
-    // Снап возвращаем, когда плавная докрутка закончилась.
-    setTimeout(() => { if (sc) sc.style.scrollSnapType = "x mandatory"; }, 450);
+    if (sc) {
+      // Бросок по инерции, как пальцем: скорость за последние ~100 мс, полка
+      // докатывается дальше и встаёт на тот флакон, у которого остановилась бы.
+      const now = e?.timeStamp ?? dr.pts[dr.pts.length - 1].t;
+      const recent = dr.pts.filter(p => now - p.t < 100);
+      const first = recent[0], last = recent[recent.length - 1];
+      const v = first && last && last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0; // px за мс
+      const target = sc.scrollLeft - v * 320 + sc.clientWidth / 2;
+      let best = 0, bestD = Infinity;
+      itemRefs.current.forEach((el, i) => { if (!el) return; const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - target); if (d < bestD) { bestD = d; best = i; } });
+      scrollToItem(best);
+    }
+    // Снап возвращаем, когда плавная докрутка закончилась (событие scrollend; если
+    // браузер его не знает или докручивать было некуда — через 1,2 с). Раньше было
+    // 450 мс: длинный бросок ещё катился, снап включался посреди и дёргал полку.
+    if (sc) {
+      let done = false;
+      const restore = () => { if (done) return; done = true; sc.style.scrollSnapType = "x mandatory"; };
+      sc.addEventListener("scrollend", restore, { once: true });
+      setTimeout(restore, 1200);
+    }
     // Сразу после перетаскивания «клик» не должен открывать аромат.
     setTimeout(() => { dragRef.current = null; }, 0);
     if (!dr.moved) dragRef.current = null;
@@ -3605,7 +3663,8 @@ function ShelfRow({ title, items, onOpen, action, onAction }) {
       <div ref={scRef} className="no-scrollbar ku-shelf"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag}
         onTouchStart={() => { touchedAt.current = shelfNow(); }}
-        style={{ position: "relative", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory",
+        onWheel={(e) => { if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) touchedAt.current = shelfNow(); }}
+        style={{ position: "relative", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory", overscrollBehaviorX: "contain",
           padding: `10px calc(50% - ${SHELF_ITEM_W / 2}px) 6px`, cursor: "grab", userSelect: "none" }}>
         <div style={{ display: "flex", gap: SHELF_GAP, width: "max-content" }}>
           {items.map((p, i) => (
@@ -3656,48 +3715,21 @@ function InfoBonusCard({ settings, lang }) {
       : <>Пригласите друга — вам <KuNum>{formatSum(settings.referralBonus)}</KuNum>{friend && <>, ему <KuNum>{friend}</KuNum></>}</>),
     kg ? "Бонустар заказ жеткирилгенден кийин түшөт" : "Бонусы приходят после доставки заказа",
   ].filter(Boolean);
-  // «Выдавленный» текст на пластике: тёмная тень снизу, светлая кромка сверху.
-  const emboss = "0 1px 0 rgba(0,0,0,0.65), 0 -0.5px 0 rgba(255,255,255,0.14)";
   if (!welcome && rows.length < 2) return null;
 
   return (
     <div ref={ref} style={{ gridColumn: "1 / -1", margin: "22px -16px 14px", padding: "26px 16px 22px", background: "#F1EFEA" }}>
-      <KuSectionHead title={kg
-        ? <><span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: "1.12em", letterSpacing: "0.005em" }}>Kemal Usman</span> клубу</>
-        : <>Клуб <span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: "1.12em", letterSpacing: "0.005em" }}>Kemal Usman</span></>} />
+      {/* Одним шрифтом, как «Новинки» и «Выбор покупателей» (владелец: смесь
+          жирного «Клуб» и курсива «Kemal Usman» не смотрелась). */}
+      <KuSectionHead title={kg ? "Kemal Usman клубу" : "Клуб Kemal Usman"} />
       <div style={{ fontSize: 14, color: "var(--ku-text-2, #6E6E73)", marginTop: 8, lineHeight: 1.45, textWrap: "balance" }}>
         {kg ? "Ар бир сатып алуудан бонус — кийинки жыпарга." : "Бонусы с каждой покупки — на следующий аромат."}
       </div>
 
       {/* Карта */}
       <div style={{ display: "flex", justifyContent: "center", padding: "26px 0 30px" }}>
-        <div style={{ position: "relative", width: "min(100%, 316px)", aspectRatio: "1.586", borderRadius: 18, overflow: "hidden", transform: "rotate(-3deg)",
-          background: "radial-gradient(120% 90% at 85% 0%, rgba(201,168,106,0.35) 0%, rgba(201,168,106,0) 50%), linear-gradient(160deg, #1E1E1E 0%, #0C0C0C 60%, #151515 100%)",
-          boxShadow: "0 24px 40px -18px rgba(20,14,4,0.55), 0 8px 16px -8px rgba(20,14,4,0.35), inset 0 0 0 1px rgba(255,255,255,0.06)", color: "#fff" }}>
-          {/* золотая кромка */}
-          <div style={{ position: "absolute", inset: 0, borderRadius: 18, boxShadow: "inset 0 1px 0 rgba(232,206,150,0.35)" }} />
-          {/* блик */}
-          <div className={shine ? "ku-card-shine" : undefined} style={{ position: "absolute", top: "-40%", bottom: "-40%", width: "38%", left: "-60%",
-            background: "linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 100%)", transform: "rotate(18deg)" }} />
-          <div style={{ position: "absolute", inset: 0, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: 22, letterSpacing: "0.01em", color: "#F4EEE2", textShadow: emboss }}>Kemal Usman</span>
-              <span style={{ width: 34, height: 26, borderRadius: 6, background: "linear-gradient(135deg, #E8CE96 0%, #B8975A 55%, #8C6E3A 100%)", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)" }} />
-            </div>
-            <div>
-              {welcome > 0 && (
-                <>
-                  <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.26em", textTransform: "uppercase", color: "#D9BE85" }}>{kg ? "Белек бонус" : "Приветственный бонус"}</div>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 1 }}>
-                    <span style={{ fontFamily: "var(--ku-font-display)", fontWeight: 400, fontSize: 42, lineHeight: 1, letterSpacing: "-0.01em", color: "#F4EEE2", fontVariantNumeric: "lining-nums", textShadow: emboss }}>{Number(welcome).toLocaleString("ru-RU")}</span>
-                    <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "#D9BE85" }}>{kg ? "сом" : "сом"}</span>
-                  </div>
-                </>
-              )}
-              <div style={{ marginTop: 8, fontSize: 9, fontWeight: 500, letterSpacing: "0.34em", color: "rgba(244,238,226,0.5)" }}>CLUB</div>
-            </div>
-          </div>
-        </div>
+        <KuClubCard shine={shine} label={welcome > 0 ? (kg ? "Белек бонус" : "Приветственный бонус") : null}
+          amount={welcome > 0 ? Number(welcome).toLocaleString("ru-RU") : null} />
       </div>
 
       {/* Условия */}
@@ -3716,6 +3748,43 @@ function InfoBonusCard({ settings, lang }) {
         {kg ? 'Менин бонустарым' : 'Мои бонусы'}
         <KuIcon name="arrow" size={16} stroke={1.8} />
       </button>
+    </div>
+  );
+}
+
+// Пластиковая карта клуба Kemal Usman — одна и та же на главной (блок «Клуб») и в
+// профиле. label + amount — подпись и сумма (приветственный бонус или баланс);
+// amount может быть узлом (счётчик). tilt — лёгкий наклон, как карта на столе.
+function KuClubCard({ label, amount, shine = false, tilt = -3 }) {
+  // «Выдавленный» текст на пластике: тёмная тень снизу, светлая кромка сверху.
+  const emboss = "0 1px 0 rgba(0,0,0,0.65), 0 -0.5px 0 rgba(255,255,255,0.14)";
+  return (
+    <div style={{ position: "relative", width: "min(100%, 316px)", aspectRatio: "1.586", borderRadius: 18, overflow: "hidden", transform: tilt ? `rotate(${tilt}deg)` : undefined,
+      background: "radial-gradient(120% 90% at 85% 0%, rgba(201,168,106,0.35) 0%, rgba(201,168,106,0) 50%), linear-gradient(160deg, #1E1E1E 0%, #0C0C0C 60%, #151515 100%)",
+      boxShadow: "0 24px 40px -18px rgba(20,14,4,0.55), 0 8px 16px -8px rgba(20,14,4,0.35), inset 0 0 0 1px rgba(255,255,255,0.06)", color: "#fff" }}>
+      {/* золотая кромка */}
+      <div style={{ position: "absolute", inset: 0, borderRadius: 18, boxShadow: "inset 0 1px 0 rgba(232,206,150,0.35)" }} />
+      {/* блик */}
+      <div className={shine ? "ku-card-shine" : undefined} style={{ position: "absolute", top: "-40%", bottom: "-40%", width: "38%", left: "-60%",
+        background: "linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 100%)", transform: "rotate(18deg)" }} />
+      <div style={{ position: "absolute", inset: 0, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <span style={{ fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, fontSize: 22, letterSpacing: "0.01em", color: "#F4EEE2", textShadow: emboss }}>Kemal Usman</span>
+          <span style={{ width: 34, height: 26, borderRadius: 6, background: "linear-gradient(135deg, #E8CE96 0%, #B8975A 55%, #8C6E3A 100%)", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.15)" }} />
+        </div>
+        <div>
+          {amount != null && (
+            <>
+              {label && <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: "0.26em", textTransform: "uppercase", color: "#D9BE85" }}>{label}</div>}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 1 }}>
+                <span style={{ fontFamily: "var(--ku-font-display)", fontWeight: 400, fontSize: 42, lineHeight: 1, letterSpacing: "-0.01em", color: "#F4EEE2", fontVariantNumeric: "lining-nums", textShadow: emboss }}>{amount}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "#D9BE85" }}>сом</span>
+              </div>
+            </>
+          )}
+          <div style={{ marginTop: 8, fontSize: 9, fontWeight: 500, letterSpacing: "0.34em", color: "rgba(244,238,226,0.5)" }}>CLUB</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -3840,6 +3909,36 @@ function similarProducts(products, p, limit = 8) {
   return out;
 }
 
+// Условия покупки прямо на странице аромата (у Parfums de Marly — «доставка,
+// пробники, подарки, поддержка» строкой иконок). Только то, что есть в настройках
+// магазина, — те же факты, что в блоке «Покупать у нас спокойно» на главной.
+function DetailPerks({ settings, lang }) {
+  const kg = lang === 'kg';
+  const free = settings?.minOrderForFreeDelivery || 0;
+  const cost = settings?.deliveryCost || 0;
+  const items = [
+    { icon: "truck", title: kg ? 'Жеткирүү' : 'Доставка', text: free ? (kg ? `${formatSum(free)} дан бекер` : `Бесплатно от ${formatSum(free)}`) : cost ? (kg ? `Шаар ичинде — ${formatSum(cost)}` : `По городу — ${formatSum(cost)}`) : (kg ? 'Шаар ичинде' : 'По городу') },
+    settings?.onlinePaymentEnabled !== false && { icon: "card", title: kg ? 'Онлайн төлөм' : 'Оплата онлайн', text: kg ? 'Каалаган банктын картасы' : 'Картой любого банка' },
+    { icon: "drop", title: kg ? '5 мл дан' : 'От 5 мл', text: kg ? 'Алгач сынап көрүңүз' : 'Сначала попробуйте' },
+    { icon: "chat", title: kg ? 'Жеке тандоо' : 'Личный подбор', text: kg ? 'Ноталар боюнча' : 'По нотам и настроению' },
+  ].filter(Boolean);
+  const hair = "1px solid var(--ku-border, #EEEEEE)";
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: hair, borderBottom: hair, margin: "0 0 22px" }}>
+      {items.map((r, i) => (
+        <div key={r.icon} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 0", paddingLeft: i % 2 ? 12 : 0,
+          borderLeft: i % 2 ? hair : "none", borderTop: i > 1 ? hair : "none" }}>
+          <KuIcon name={r.icon} size={20} color="#111111" stroke={1.5} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ku-text, #111111)" }}>{r.title}</div>
+            <div style={{ fontSize: 11.5, color: "var(--ku-text-2, #6E6E73)", marginTop: 2, lineHeight: 1.3 }}>{r.text}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DetailAskShare({ p, settings, lang, showToast }) {
   const kg = lang === 'kg';
   const name = `${p?.brand || ''} ${cardName(p, lang)}`.trim();
@@ -3872,7 +3971,7 @@ function DetailAskShare({ p, settings, lang, showToast }) {
 }
 
 // ─── CATALOG SCREEN ────────────────────────────────────────────────────────────
-function CatalogScreen({ products, settings, addToCart, banners, showToast, onAdminLogin, onRefresh, setIsDetailOpen, reviews = [] }) {
+function CatalogScreen({ products, settings, addToCart, banners, kemalPicks, showToast, onAdminLogin, onRefresh, setIsDetailOpen, reviews = [] }) {
   const { lang, t } = useLang();
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState("all");
@@ -3908,7 +4007,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const [adminTap, setAdminTap] = React.useState(0);
   const [adminTapTimer, setAdminTapTimer] = React.useState(null);
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
-  const lastScrollYRef = useRef(0);
+  const lastScrollYRef = useRef(false);
   const [imgIndex, setImgIndex] = useState(0);
   const [imgIsLandscape, setImgIsLandscape] = useState(false);
   const [touchStartX, setTouchStartX] = React.useState(null);
@@ -3929,15 +4028,13 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const touchStartYRef = useRef(0);
   const [descExpanded, setDescExpanded] = useState(false);
 
+  // Тень под шапкой, когда она прилипла к верху (название уже уехало).
   useEffect(() => {
     const handler = () => {
-      const y = window.scrollY;
-      const prev = lastScrollYRef.current;
-      if (y < 40) setHeaderCollapsed(false);
-      else if (y > prev + 8) setHeaderCollapsed(true);
-      else if (y < prev - 8) setHeaderCollapsed(false);
-      lastScrollYRef.current = y;
+      const pinned = window.scrollY > KU_BRAND_ROW_H;
+      if (pinned !== lastScrollYRef.current) { lastScrollYRef.current = pinned; setHeaderCollapsed(pinned); }
     };
+    handler();
     window.addEventListener("scroll", handler, { passive: true });
     return () => window.removeEventListener("scroll", handler);
   }, []);
@@ -3953,6 +4050,22 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
       const timer = setTimeout(() => setAdminTap(0), 2000);
       setAdminTapTimer(timer);
     }
+  };
+
+  // Нажатие на «Kemal Usman» в шапке — обновить (просьба владельца, вместо
+  // «потяни вниз»): плавно наверх, фильтры сброшены, свежие товары и баннеры из
+  // базы. Страница не перезагружается — поэтому 5 нажатий подряд по-прежнему
+  // открывают вход в админку. Пока грузится, надпись мягко мерцает.
+  const [logoBusy, setLogoBusy] = useState(false);
+  const handleLogoTap = async () => {
+    handleSecretTap();
+    haptic('light');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setCat("all"); setSearch(""); setBrand(null); setFlag(null); setSort('default');
+    if (logoBusy || !onRefresh) return;
+    setLogoBusy(true);
+    try { await onRefresh(); } catch { /* сеть — покажем то, что есть */ }
+    setLogoBusy(false);
   };
 
   const cats = ["all", ...Array.from(new Set(products.map(p => (p.category || "").trim()).filter(Boolean)))];
@@ -4010,7 +4123,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   const plainHome = cat === "all" && !search && !brand && !flag && sort === 'default';
   const brands = useMemo(() => topBrands(products), [products]);
   const shelfNew = useMemo(() => products.filter(p => p.isNew && productHasStock(p)).slice(0, 12), [products]);
-  const promoProducts = useMemo(() => pickPromoProducts(products, BANNER_SLOTS.length), [products]);
+  const promoProducts = useMemo(() => pickPromoProducts(products, BANNER_SLOTS.length * 2), [products]);
   const shelfPopular = useMemo(() => products.filter(p => (p.isPopular || p.isHit) && productHasStock(p)).slice(0, 12), [products]);
   const kg = lang === 'kg';
   const flagTitle = { new: kg ? 'Жаңы келгендер' : 'Новинки', popular: kg ? 'Кардарлардын тандоосу' : 'Выбор покупателей' };
@@ -4026,13 +4139,28 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
     23: <InfoWhyUsCard key="ins-why" settings={settings} lang={lang} />,
   };
   // Большие баннеры — по одному через каждые два ряда ароматов.
-  // Чередуем: фото Kemal Usman (чётные места) и баннер-аромат (нечётные).
-  if (BANNER_TEST_PROMOS) promoProducts.forEach((p, i) => {
-    const photo = i % 2 === 0 ? KU_PHOTOS[i / 2] : null;
-    homeInserts[BANNER_SLOTS[i]] = photo
-      ? <PhotoBanner key={`ins-photo-${p.id}`} photo={photo} p={p} onOpen={(x) => openDetail(x)} />
-      : <PromoBanner key={`ins-promo-${p.id}`} p={p} index={i} onOpen={(x) => openDetail(x)} />;
-  });
+  // «Выбор Кемаля» (админка, или три фото по умолчанию) встают на 1-е, 3-е, 5-е
+  // места, если их больше — ещё на 2-е и 4-е; остальные места — баннер-аромат.
+  // Аромат в «выборе» не указан, закончился или без фото — сайт берёт сам
+  // (новинки → хиты → популярные, без повторов).
+  if (BANNER_TEST_PROMOS) {
+    const picks = (kemalPicks || KU_PICKS_DEFAULT).filter(k => k.active && k.img).slice(0, BANNER_SLOTS.length);
+    const photoSlots = [0, 2, 4, 1, 3].slice(0, picks.length);
+    const usable = (p) => p && p.img && productHasStock(p);
+    const chosen = picks.map(k => { const p = products.find(x => x.id === k.productId); return usable(p) ? p : null; });
+    const used = new Set(chosen.filter(Boolean).map(p => p.id));
+    const pool = promoProducts.filter(p => !used.has(p.id));
+    const nextAuto = () => { const p = pool.shift(); if (p) used.add(p.id); return p; };
+    picks.forEach((k, i) => {
+      const p = chosen[i] || nextAuto();
+      if (p) homeInserts[BANNER_SLOTS[photoSlots[i]]] = <PhotoBanner key={`ins-photo-${k.id}`} photo={kemalPickPhoto(k)} p={p} onOpen={(x) => openDetail(x)} />;
+    });
+    BANNER_SLOTS.forEach((slot, i) => {
+      if (photoSlots.includes(i)) return;
+      const p = nextAuto();
+      if (p) homeInserts[slot] = <PromoBanner key={`ins-promo-${p.id}`} p={p} index={i} onOpen={(x) => openDetail(x)} />;
+    });
+  }
   else banners.slice(0, BANNER_SLOTS.length).forEach((b, i) => { homeInserts[BANNER_SLOTS[i]] = <FeedBanner key={`ins-banner-${b.id}`} banner={b} />; });
 
   const renderGridCard = (p, idx) => {
@@ -4133,6 +4261,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
   if (detail) {
     const allImages = (detail.images && detail.images.length > 0) ? detail.images : (detail.img ? [detail.img] : []);
     const dismiss = () => { setDetail(null); scrollMV.set(0); heroScale.set(1); setIsDetailOpen?.(false); };
+    const detailNotes = splitNotes(pickDesc(detail, lang));
 
     return (
       <EdgeSwipeBack ref={edgeRef} onDismiss={dismiss}>
@@ -4195,6 +4324,8 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             overflowY: "auto",
             overflowX: "hidden",
             WebkitOverflowScrolling: "touch",
+            // Докрутили карточку до конца — лента под ней не едет.
+            overscrollBehavior: "contain",
           }}
         >
           {/* ── Hero image — adaptive: landscape photos get `cover` (edge-to-edge),
@@ -4264,29 +4395,20 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               </div>
             )}
 
-            {/* Carousel dots — positioned ABOVE the audio strip when audio is present
-                (audioUrl returns null when no audio so dots fall back to bottom). */}
+            {/* Фото листаются — под ними тонкие черты, как у Parfums de Marly:
+                текущая чёрная, остальные светлые. Зона нажатия выше самой черты. */}
             {allImages.length > 1 && (
               <div style={{
                 position: "absolute",
-                bottom: audioUrl(detail) ? 56 : 12,
+                bottom: audioUrl(detail) ? 50 : 30,
                 left: 0, right: 0,
-                display: "flex", justifyContent: "center", gap: 6,
+                display: "flex", justifyContent: "center", gap: 8,
                 zIndex: 12,
               }}>
                 {allImages.map((_, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setImgIndex(i)}
-                    style={{
-                      width: i === imgIndex ? 20 : 6,
-                      height: 6,
-                      borderRadius: 3,
-                      background: i === imgIndex ? "var(--ku-accent, #111111)" : "rgba(0,0,0,0.30)",
-                      transition: "width 0.25s",
-                      cursor: "pointer",
-                    }}
-                  />
+                  <div key={i} onClick={() => setImgIndex(i)} style={{ padding: "8px 0", cursor: "pointer" }}>
+                    <div style={{ width: 28, height: 2, background: i === imgIndex ? "#111111" : "rgba(17,17,17,0.15)", transition: "background 0.25s" }} />
+                  </div>
                 ))}
               </div>
             )}
@@ -4317,18 +4439,91 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           }}>
 
             <div style={{ marginBottom: 20 }}>
-              <div style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>{detail.brand}</div>
-              <div style={{ color: "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontSize: 30, fontWeight: 400, lineHeight: 1.15, letterSpacing: -0.3, marginBottom: 8 }}>{pickName(detail, lang)}</div>
+              {/* Бренд и название по центру, крупно и спокойно — как карточка у Parfums de Marly. */}
+              <div style={{ textAlign: "center", marginBottom: 14 }}>
+                <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 11, fontWeight: 500, letterSpacing: "0.22em", textTransform: "uppercase", marginBottom: 8 }}>{detail.brand}</div>
+                <div style={{ color: "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontSize: 32, fontWeight: 400, lineHeight: 1.12, letterSpacing: -0.3 }}>{pickName(detail, lang)}</div>
+              </div>
               {/* Sale badge + countdown in detail */}
               {(() => {
                 const si = getSaleInfo(detail);
                 if (!si) return null;
                 return <SaleCountdownBadge product={detail} />;
               })()}
-              {(() => { const dp = splitNotes(pickDesc(detail, lang)); const restText = dp.has ? dp.rest : pickDesc(detail, lang); return (<>
-              {dp.has && <NotesPyramid dp={dp} lang={lang} />}
+            </div>
+
+            {/* Порядок (просьба владельца — «нужное упало вниз»): сразу под названием
+                размеры, потом ноты кнопками, «Послушать», «Спросить»; длинное описание
+                и условия покупки — ниже. */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ color: "var(--ku-text, #111111)", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(72px, 1fr))", gap: 8 }}>
+                {detail.variants.filter(v => v.inStock).map((v, i) => {
+                  const isSel = selVariant?.id === v.id;
+                  const staggered = i < 4;
+                  return (
+                    <motion.div
+                      key={v.id}
+                      initial={staggered ? { opacity: 0, y: 10 } : false}
+                      animate={staggered ? { opacity: 1, y: 0 } : undefined}
+                      transition={staggered ? { duration: 0.28, delay: 0.2 + i * 0.06, ease: iosEase } : undefined}
+                    >
+                      {/* Строгая рамка, у выбранного — чёрная рамка и галочка (как размер
+                          флакона у Parfums de Marly), без заливки и прыжков. */}
+                      <motion.button
+                        onClick={() => { haptic('light'); setSelVariant(v); }}
+                        whileTap={{ scale: 0.97 }}
+                        aria-pressed={isSel}
+                        style={{
+                          position: "relative",
+                          width: "100%",
+                          padding: "13px 4px",
+                          borderRadius: 10,
+                          background: "var(--ku-surface, #FFFFFF)",
+                          border: isSel ? "1.5px solid #111111" : "1px solid var(--ku-border, #E2E0DB)",
+                          margin: isSel ? 0 : "0.5px",
+                          cursor: "pointer",
+                          textAlign: "center",
+                          transition: "border-color 0.2s",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 14, fontWeight: 600, color: "var(--ku-text, #111111)", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                          {isSel && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#111111" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"
+                              style={{ flexShrink: 0 }} aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                          )}
+                          {v.label}
+                        </div>
+                        {(() => {
+                          const si = getSaleInfo(detail);
+                          if (si) {
+                            const sp = salePrice(v.price, si.percent);
+                            return (
+                              <div style={{ marginTop: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#C0392B" }}>{formatSum(sp)}</span>
+                                <span style={{ fontSize: 10, color: "#AEAEB2", textDecoration: "line-through", marginLeft: 4 }}>{formatSum(v.price)}</span>
+                              </div>
+                            );
+                          }
+                          return <div style={{ fontSize: 11.5, color: isSel ? "var(--ku-text, #111111)" : T.gray, marginTop: 4, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{formatSum(v.price)}</div>;
+                        })()}
+                      </motion.button>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {detailNotes.has && <NotesTabs key={detail.id} dp={detailNotes} lang={lang} />}
+
+            <ClientAudioBtn product={detail} />
+
+            <DetailAskShare p={detail} settings={settings} lang={lang} showToast={showToast} />
+
+            <div style={{ marginBottom: 22 }}>
+              {(() => { const dp = detailNotes; const restText = dp.has ? dp.rest : pickDesc(detail, lang); return (<>
               {restText && (
-                <div style={dp.has ? { marginTop: 8 } : undefined}>
+                <div>
                   <motion.div
                     animate={{ height: descExpanded ? "auto" : 60 }}
                     transition={{ type: "spring", stiffness: 360, damping: 32 }}
@@ -4363,66 +4558,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               </>); })()}
             </div>
 
-            <div style={{ height: 1, background: "var(--ku-surface-2, #F5F5F5)", marginBottom: 20 }} />
-
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ color: "var(--ku-text, #111111)", fontSize: 13, fontWeight: 700, letterSpacing: 0.2, marginBottom: 12 }}>{t.chooseSize}</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 10 }}>
-                {detail.variants.filter(v => v.inStock).map((v, i) => {
-                  const isSel = selVariant?.id === v.id;
-                  const staggered = i < 4;
-                  return (
-                    <motion.div
-                      key={v.id}
-                      initial={staggered ? { opacity: 0, y: 10 } : false}
-                      animate={staggered ? { opacity: 1, y: 0 } : undefined}
-                      transition={staggered ? { duration: 0.28, delay: 0.2 + i * 0.06, ease: iosEase } : undefined}
-                    >
-                      <motion.button
-                        onClick={() => setSelVariant(v)}
-                        whileTap={{ scale: 0.94 }}
-                        animate={{
-                          scale: isSel ? 1.04 : 1,
-                          backgroundColor: isSel ? "var(--ku-accent, #111111)" : "var(--ku-surface, #FFFFFF)",
-                          borderColor: isSel ? "var(--ku-accent, #111111)" : "var(--ku-border, #EEEEEE)",
-                          boxShadow: isSel
-                            ? "0 6px 18px rgba(17,17,17,0.22), 0 1px 3px rgba(0,0,0,0.10)"
-                            : "0 1px 2px rgba(0,0,0,0.03)",
-                        }}
-                        transition={{ type: "spring", stiffness: 420, damping: 28 }}
-                        style={{
-                          width: "100%",
-                          padding: "13px 8px",
-                          borderRadius: 14,
-                          border: isSel ? "1.5px solid var(--ku-accent, #111111)" : "1.5px solid var(--ku-border, #EEEEEE)",
-                          cursor: "pointer",
-                          textAlign: "center",
-                        }}
-                      >
-                        <div style={{ fontSize: 13, fontWeight: 700, color: isSel ? "#fff" : "var(--ku-text, #111111)", lineHeight: 1.2 }}>{v.label}</div>
-                        {(() => {
-                          const si = getSaleInfo(detail);
-                          if (si) {
-                            const sp = salePrice(v.price, si.percent);
-                            return (
-                              <div style={{ marginTop: 4 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: isSel ? "#fff" : "#FF3B30" }}>{formatSum(sp)}</span>
-                                <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,0.4)" : "#AEAEB2", textDecoration: "line-through", marginLeft: 4 }}>{formatSum(v.price)}</span>
-                              </div>
-                            );
-                          }
-                          return <div style={{ fontSize: 12, color: isSel ? "rgba(255,255,255,0.65)" : T.gray, marginTop: 4 }}>{formatSum(v.price)}</div>;
-                        })()}
-                      </motion.button>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
-
-            <ClientAudioBtn product={detail} />
-
-            <DetailAskShare p={detail} settings={settings} lang={lang} showToast={showToast} />
+            <DetailPerks settings={settings} lang={lang} />
 
             {(() => {
               const sim = similarProducts(products, detail);
@@ -4430,10 +4566,11 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               return (
                 <div style={{ margin: "4px -20px 24px", "--ku-tile-bg": "#FFFFFF" }}>
                   <KuSectionHead title={lang === 'kg' ? 'Окшош жыпарлар' : 'Похожие ароматы'} style={{ padding: "0 20px 14px" }} />
-                  <div className="no-scrollbar" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 20px 8px" }}>
+                  <div className="no-scrollbar" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "0 20px 8px",
+                    scrollSnapType: "x mandatory", scrollPaddingLeft: 20, overscrollBehaviorX: "contain" }}>
                     <div style={{ display: "flex", gap: 12 }}>
                       {sim.map(x => (
-                        <div key={x.id} style={{ width: 150, flexShrink: 0 }}>
+                        <div key={x.id} style={{ width: 150, flexShrink: 0, scrollSnapAlign: "start" }}>
                           <ProductCard p={x} preview onClick={() => { openDetail(x); detailScrollRef.current?.scrollTo?.({ top: 0 }); }} />
                         </div>
                       ))}
@@ -4451,64 +4588,49 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 380, damping: 32, delay: 0.06 }}
+          // Одна строка, как липкая панель у Parfums de Marly: слева флакон, название
+          // и выбранный объём (видно, что именно кладёте), справа чёрная кнопка с ценой.
+          // Плотный фон без размытия — дешевле для телефона и читается на любом фоне.
           style={{
             flexShrink: 0,
-            padding: "16px 18px 0",
-            paddingBottom: "calc(env(safe-area-inset-bottom, 34px) + 22px)",
-            background: "var(--ku-glass, rgba(255,255,255,0.82))",
-            backdropFilter: "blur(14px) saturate(180%)",
-            WebkitBackdropFilter: "blur(14px) saturate(180%)",
-            borderTop: "0.5px solid rgba(0,0,0,0.06)",
-            boxShadow: "0 -1px 24px rgba(0,0,0,0.04)",
+            padding: "12px 16px 0",
+            paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+            background: "var(--ku-surface, #FFFFFF)",
+            borderTop: "1px solid var(--ku-border, #EEEEEE)",
+            display: "flex", alignItems: "center", gap: 12,
           }}
         >
-          {selVariant && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
-              <div style={{ color: "#9a9a9f", fontSize: 12, fontWeight: 500, letterSpacing: 0.2, textTransform: "uppercase" }}>{t.total}</div>
-              <motion.div
-                key={selVariant.id}
-                initial={{ opacity: 0, y: -4, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 380, damping: 26 }}
-                style={{ display: "flex", alignItems: "baseline", gap: 8 }}
-              >
-                {(() => {
-                  const si = getSaleInfo(detail);
-                  if (si) {
-                    return (
-                      <>
-                        <span style={{ color: "#FF3B30", fontSize: 26, fontWeight: 600, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-                          {formatSum(salePrice(selVariant.price, si.percent))}
-                        </span>
-                        <span style={{ color: "var(--ku-text-3, #AEAEB2)", fontSize: 16, fontWeight: 500, textDecoration: "line-through" }}>
-                          {formatSum(selVariant.price)}
-                        </span>
-                      </>
-                    );
-                  }
-                  return (
-                    <span style={{ color: "var(--ku-text, #111111)", fontSize: 26, fontWeight: 600, letterSpacing: -0.5, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-                      {formatSum(selVariant.price)}
-                    </span>
-                  );
-                })()}
-              </motion.div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+            <div style={{ position: "relative", width: 40, height: 48, flexShrink: 0, background: "#FFFFFF", "--ku-tile-bg": "#FFFFFF" }}>
+              {detail.img && <BottleImg src={detail.img} alt="" box={{ top: 2, left: 2, right: 2, bottom: 2 }} anchor="center" fillW={0.9} fillH={0.95} eager />}
             </div>
-          )}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "var(--ku-font-display)", fontSize: 16, lineHeight: 1.2, color: "var(--ku-text, #111111)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pickName(detail, lang)}</div>
+              <div style={{ fontSize: 12, color: "var(--ku-text-2, #6E6E73)", marginTop: 2 }}>{selVariant?.label || ""}</div>
+            </div>
+          </div>
           <motion.button
             onClick={() => { if (!selVariant) return; haptic('success'); addToCart(detail.id, selVariant.id); edgeRef.current?.close(); }}
             disabled={!selVariant?.inStock}
             whileTap={selVariant?.inStock ? { scale: 0.97 } : {}}
             transition={{ type: "spring", stiffness: 420, damping: 28 }}
             style={{
-              ...btnGreen({ opacity: selVariant?.inStock ? 1 : 0.4, padding: "17px", borderRadius: 16, fontSize: 15, letterSpacing: 0.3 }),
-              boxShadow: selVariant?.inStock
-                ? "0 10px 28px rgba(17,17,17,0.26), 0 2px 8px rgba(0,0,0,0.10)"
-                : "none",
+              flexShrink: 0, height: 50, padding: "0 18px", borderRadius: 12, border: "none",
+              background: "#111111", color: "#FFFFFF", opacity: selVariant?.inStock ? 1 : 0.4,
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              cursor: selVariant?.inStock ? "pointer" : "default",
             }}
           >
-            {React.cloneElement(IC.cart, { style: { width: 18, height: 18, display: "inline", marginRight: 8 } })}
-            {t.addToCart}
+            <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase" }}>{t.addToCart}</span>
+            {selVariant && (() => {
+              const si = getSaleInfo(detail);
+              return (
+                <motion.span key={selVariant.id} initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}
+                  style={{ fontSize: 12, fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.75)" }}>
+                  {si ? <>{formatSum(salePrice(selVariant.price, si.percent))} <s style={{ opacity: 0.6 }}>{formatSum(selVariant.price)}</s></> : formatSum(selVariant.price)}
+                </motion.span>
+              );
+            })()}
           </motion.button>
         </motion.div>
 
@@ -4525,13 +4647,20 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
     paddingBottom: "calc(var(--nav-height) + 24px)",
     WebkitOverflowScrolling: "touch",
   };
-  const Outer = onRefresh ? PullToRefresh : 'div';
-  const outerProps = onRefresh
+  // «Потяни вниз — обновить» — только в приложении iOS/Android. На сайте выключено
+  // (владелец: при прокрутке страница сама обновлялась); обновить сайт можно
+  // кнопкой браузера, а товары и так подтягиваются при возврате на вкладку.
+  const pullRefresh = onRefresh && IS_NATIVE;
+  const Outer = pullRefresh ? PullToRefresh : 'div';
+  const outerProps = pullRefresh
     ? { onRefresh, style: outerStyle }
     : { style: outerStyle };
   return (
     <Outer {...outerProps}>
-      {/* Sticky collapsing header */}
+      {/* Липкая шапка: прилипает с top = −высота строки с названием, поэтому
+          название уезжает вместе со страницей, а поиск остаётся наверху. Раньше
+          строка с названием сворачивалась по направлению прокрутки — высота шапки
+          менялась, и вся лента под ней прыгала на 56 px. */}
       <motion.div
         animate={{
           boxShadow: headerCollapsed
@@ -4546,43 +4675,27 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
           borderBottom: glass.scheme === 'dark' ? '0.5px solid rgba(255,255,255,0.10)' : '0.5px solid rgba(0,0,0,0.06)',
           paddingTop: "max(44px, env(safe-area-inset-top, 44px))",
           position: "sticky",
-          top: 0,
+          top: -KU_BRAND_ROW_H,
           zIndex: 20,
-          overflow: "hidden",
         } : {
           // Сайт: фон шапки = фон страницы, как во всей витрине. Сверху только
           // безопасная зона телефона + небольшой отступ (было 44 px пустоты).
           background: "var(--ku-bg, #F5F5F5)",
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 14px)",
           position: "sticky",
-          top: 0,
+          top: -KU_BRAND_ROW_H,
           zIndex: 20,
-          overflow: "hidden",
         }}
       >
-        {/* Brand row — slides up & fades when scrolled down */}
-        <AnimatePresence initial={false}>
-          {!headerCollapsed && (
-            <motion.div
-              key="brand-row"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 56 }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ type: "spring", stiffness: 420, damping: 36, mass: 0.8 }}
-              style={{ overflow: "hidden", display: "flex", alignItems: "center", padding: "6px 16px 10px" }}
-            >
-              <div>
-                <div onClick={handleSecretTap} style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "default", userSelect: "none" }}>Kemal Usman</div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div style={{ height: KU_BRAND_ROW_H, boxSizing: "border-box", overflow: "hidden", display: "flex", alignItems: "center", padding: "6px 16px 10px" }}>
+          <motion.div onClick={handleLogoTap} role="button" aria-label={lang === 'kg' ? 'Жаңылоо' : 'Обновить'}
+            animate={logoBusy ? { opacity: [1, 0.35, 1] } : { opacity: 1 }}
+            transition={logoBusy ? { duration: 0.9, repeat: Infinity, ease: "easeInOut" } : { duration: 0.2 }}
+            whileTap={{ scale: 0.96 }}
+            style={{ fontSize: 28, color: (IS_NATIVE && glass.scheme === 'dark') ? '#fff' : "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)", fontStyle: "italic", fontWeight: 400, lineHeight: 1.1, letterSpacing: -0.5, cursor: "pointer", userSelect: "none", transformOrigin: "left center" }}>Kemal Usman</motion.div>
+        </div>
         {/* Search bar — always visible */}
-        <motion.div
-          animate={{ paddingTop: headerCollapsed ? 10 : 0 }}
-          transition={{ type: "spring", stiffness: 420, damping: 36 }}
-          style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}
-        >
+        <div style={{ padding: "0 16px 10px", position: "relative", zIndex: 100 }}>
           <div style={IS_NATIVE
             ? { display: "flex", alignItems: "center", background: glass.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : "#f5f5f5", borderRadius: 12, padding: "10px 14px", gap: 8 }
             : { display: "flex", alignItems: "center", background: "var(--ku-surface, #FFFFFF)", border: "1px solid rgba(17,17,17,0.08)", borderRadius: 999, padding: "11px 16px", gap: 10 }}>
@@ -4615,7 +4728,7 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
               />
             )}
           </AnimatePresence>
-        </motion.div>
+        </div>
         {/* Backdrop overlay when search is active */}
         <AnimatePresence>
           {search.length >= 3 && smartSearch(products, search, lang).length > 0 && (
@@ -4737,7 +4850,10 @@ function CatalogScreen({ products, settings, addToCart, banners, showToast, onAd
             <div style={{ fontSize: 20, fontWeight: 400, color: "var(--ku-text, #111111)", marginBottom: 20, fontFamily: "var(--ku-font-display)", fontStyle: "italic" }}>
               {lang === 'kg' ? 'Алар биз жөнүндө эмне дейт' : 'Что говорят о нас'}
             </div>
-            <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8, WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory" }}>
+            {/* Отзывы листаются от края до края экрана, без полосы прокрутки;
+                первый и каждый следующий встают ровно с отступом 16 px. */}
+            <div className="no-scrollbar" style={{ display: "flex", gap: 12, overflowX: "auto", margin: "0 -16px", padding: "0 16px 8px", scrollPaddingLeft: 16,
+              WebkitOverflowScrolling: "touch", scrollSnapType: "x mandatory", overscrollBehaviorX: "contain" }}>
               {approved.slice(0, 10).map((r, i) => (
                 <motion.div
                   key={r.id || i}
@@ -5021,7 +5137,7 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                     onChange={e => setAddress(e.target.value)}
                     onBlur={() => setEditingAddress(false)}
                     onKeyDown={e => { if (e.key === "Enter") { e.target.blur(); } }}
-                    placeholder="ул. Манаса 45, кв. 12"
+                    placeholder={lang === 'kg' ? "Көчө, үй, батир" : "Улица, дом, квартира"}
                     style={{
                       width: "100%",
                       border: "none",
@@ -5047,7 +5163,9 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {address || "ул. Манаса 45, кв. 12"}
+                    {/* Пустой адрес раньше выглядел как введённый («ул. Манаса 45…» +
+                        «Изменить») — теперь явно просим указать. */}
+                    {address || (lang === 'kg' ? "Даректи жазыңыз" : "Укажите адрес")}
                   </div>
                 )}
               </div>
@@ -5072,7 +5190,9 @@ function CartScreen({ cart, setCart, products, onOrder, bonusBalance, useBonusPe
                       textUnderlineOffset: 3,
                     }}
                   >
-                    {lang === 'kg' ? 'Өзгөртүү' : 'Изменить'}
+                    {address
+                      ? (lang === 'kg' ? 'Өзгөртүү' : 'Изменить')
+                      : (lang === 'kg' ? 'Жазуу' : 'Указать')}
                   </motion.button>
                   <motion.button
                     type="button"
@@ -5514,8 +5634,36 @@ export function MyOrdersScreen({ orders, goToCatalog, reviews, user, showToast }
   );
 }
 // ─── PROFILE SCREEN ────────────────────────────────────────────────────────────
+// Строка меню профиля: тонкая иконка, название, подпись, стрелка; между строками
+// тонкая линия (последняя — без неё).
+function MenuRow({ icon, title, sub, onClick, badge = 0, last = false }) {
+  return (
+    <motion.div whileTap={{ backgroundColor: "rgba(17,17,17,0.04)" }} onClick={onClick} role="button"
+      style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", cursor: "pointer", borderBottom: last ? "none" : "1px solid var(--ku-border, #EEEEEE)" }}>
+      <div style={{ position: "relative", width: 22, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+        {React.cloneElement(icon, { style: { width: 20, height: 20, color: "var(--ku-text, #111111)" } })}
+        {badge > 0 && (
+          <div style={{ position: "absolute", top: -6, right: -8, minWidth: 16, height: 16, borderRadius: 8, background: "#FF3B30", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>
+            {badge > 9 ? '9+' : badge}
+          </div>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: "var(--ku-text, #111111)", fontSize: 15 }}>{title}</div>
+        {sub && <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 12.5, marginTop: 2 }}>{sub}</div>}
+      </div>
+      {React.cloneElement(IC.chevron, { style: { width: 15, height: 15, color: "#B8B8BC", flexShrink: 0 } })}
+    </motion.div>
+  );
+}
+
 function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHistory, referralCode, settings, onCopyReferral, onAdminLogin, goToOrders, onOpenNotifications, unreadNotifCount = 0 }) {
   const { t, lang, setLang } = useLang();
+  const kg = lang === 'kg';
+  const welcome = settings?.welcomeBonusEnabled !== false && settings?.welcomeBonus > 0 ? settings.welcomeBonus : 0;
+  const hair = "1px solid var(--ku-border, #EEEEEE)";
+  const groupBox = { background: "var(--ku-surface, #FFFFFF)", borderRadius: 16, overflow: "hidden", border: "1px solid rgba(17,17,17,0.04)" };
+  const groupHead = { fontSize: 11, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--ku-text-2, #6E6E73)", padding: "0 4px 8px" };
   const [tab, setTab] = useState("bonus");
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminEmail, setAdminEmail] = useState("");
@@ -5547,269 +5695,125 @@ function ProfileScreen({ user, onLogout, onDeleteAccount, bonusBalance, bonusHis
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <div style={{ background: T.bg, minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
-      <div style={{ background: "linear-gradient(160deg, #111111 0%, #000000 100%)", padding: "calc(env(safe-area-inset-top, 44px) + 8px) 20px 28px", borderRadius: "0 0 32px 32px", marginBottom: 20 }}>
-        {/* Language toggle moved to Settings — header stays clean & minimal. */}
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.user, { style: { width: 26, height: 26, color: "#fff" } })}
+    <div style={{ background: "var(--ku-bg, #F5F5F5)", minHeight: "100vh", paddingBottom: "var(--nav-height)" }}>
+      {/* Профиль в стиле витрины (владелец: «дизайн исправь»): светлая шапка с
+          именем шрифтом Playfair, та же карта клуба, что на главной (гостю —
+          приветственный бонус, вошедшему — баланс), одна кнопка входа, пункты
+          меню — списками с тонкими линиями. Убраны: чёрная шапка, вторая кнопка
+          «Войти», пустая «История» у гостя. */}
+      <div style={{ padding: "calc(env(safe-area-inset-top, 0px) + 24px) 20px 0", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--ku-text-2, #6E6E73)" }}>
+            {user ? (kg ? 'Профиль' : 'Профиль') : (kg ? 'Кош келиңиз' : 'Добро пожаловать')}
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: 18, letterSpacing: 1 }}>{user?.name || t.guest}</div>
-            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, fontWeight: 300 }}>{user?.phone}</div>
+          <div style={{ fontFamily: "var(--ku-font-display)", fontSize: 30, lineHeight: 1.15, color: "var(--ku-text, #111111)", marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {user?.name || t.guest}
           </div>
-          <button onClick={onLogout} style={{ background: user ? "rgba(255,255,255,0.15)" : "#FFFFFF", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 12, padding: "8px 14px", color: user ? "#fff" : "#111111", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            {user ? t.logout : (lang === 'kg' ? 'Кирүү' : 'Войти')}
-          </button>
+          {user?.phone && <div style={{ fontSize: 13.5, color: "var(--ku-text-2, #6E6E73)", marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{user.phone}</div>}
         </div>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4, ease: iosEase }}
-          style={{ marginTop: 20, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 16, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}
-        >
-          <div>
-            <div style={{ color: "rgba(255,255,255,0.75)", fontSize: 12, fontWeight: 300, letterSpacing: 1, textTransform: "uppercase" }}>{t.bonusBalance}</div>
-            {/* PRO: count-up from 0 to current balance on mount */}
-            <div style={{ color: "#fff", fontSize: 28, fontWeight: 700 }}>
-              <NumberCounter value={bonusBalance} duration={1.0} format={(v) => Math.round(v).toLocaleString() + ' сом'} />
-            </div>
-          </div>
-          <motion.div
-            animate={{ rotate: [0, -8, 8, -4, 0] }}
-            transition={{ duration: 1.4, delay: 0.6, ease: iosEase }}
-          >
-            {React.cloneElement(IC.gift, { style: { width: 28, height: 28, color: "#fff" } })}
-          </motion.div>
-        </motion.div>
+        {user && (
+          <button onClick={onLogout} style={{ flexShrink: 0, marginTop: 18, height: 34, padding: "0 14px", borderRadius: 999, border: "1px solid var(--ku-border, #E2E0DB)", background: "transparent", color: "var(--ku-text-2, #6E6E73)", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+            {t.logout}
+          </button>
+        )}
       </div>
-      {/* Гостю реф. код не показываем: без аккаунта бонус начислить некуда. */}
+
+      {/* Карта клуба */}
+      <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: iosEase }}
+        style={{ display: "flex", justifyContent: "center", padding: "26px 20px 28px" }}>
+        {user
+          ? <KuClubCard shine label={t.bonusBalance} amount={<NumberCounter value={bonusBalance} duration={1.0} format={(v) => Math.round(v).toLocaleString("ru-RU")} />} />
+          : <KuClubCard shine label={welcome > 0 ? (kg ? "Белек бонус" : "Приветственный бонус") : null} amount={welcome > 0 ? Number(welcome).toLocaleString("ru-RU") : null} />}
+      </motion.div>
+
+      {/* Гостю — одна понятная кнопка входа. Реф. код не показываем: без аккаунта бонус начислить некуда. */}
       {!user && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "18px 20px" }) }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ku-text, #111111)", marginBottom: 6 }}>
-            {lang === 'kg' ? 'Катталыңыз — бонустар сизде калат' : 'Зарегистрируйтесь — бонусы будут копиться'}
+        <div style={{ padding: "0 20px 26px" }}>
+          <div style={{ fontSize: 15, lineHeight: 1.5, color: "var(--ku-text, #111111)", textAlign: "center", textWrap: "balance" }}>
+            {welcome > 0
+              ? (kg ? <>Катталыңыз — биринчи заказга <b>{formatSum(welcome)}</b>, андан кийин ар бир сатып алуудан бонус.</> : <>Зарегистрируйтесь — <b>{formatSum(welcome)}</b> на первый заказ, дальше бонусы с каждой покупки.</>)
+              : (kg ? 'Катталыңыз — бонустар ар бир сатып алуудан топтолот.' : 'Зарегистрируйтесь — бонусы будут копиться с каждой покупки.')}
           </div>
-          <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--ku-text-2, #6E6E73)", marginBottom: 14 }}>
-            {lang === 'kg' ? 'Ар бир заказдан бонус, досторуңузга шилтеме жана заказдардын тарыхы.' : 'Бонусы с каждого заказа, ссылка для друзей и история заказов.'}
-          </div>
-          <button onClick={onLogout} style={{ height: 42, padding: "0 18px", borderRadius: 999, border: "none", background: "var(--ku-text, #111111)", color: "#fff", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
-            {lang === 'kg' ? 'Кирүү / катталуу' : 'Войти или зарегистрироваться'}
+          <button onClick={onLogout} style={{ marginTop: 16, width: "100%", height: 50, borderRadius: 14, border: "none", background: "#111111", color: "#fff", fontSize: 14.5, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            {kg ? 'Кирүү же катталуу' : 'Войти или зарегистрироваться'}
+            <KuIcon name="arrow" size={16} stroke={1.8} />
           </button>
         </div>
       )}
+
+      {/* Вошедшему — код для друзей. */}
       {referralCode && user && (
-        <div style={{ margin: "0 16px 16px", ...card({ padding: "20px" }) }}>
-          <div style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: T.textMuted,
-            textTransform: "uppercase",
-            letterSpacing: 1.5,
-            textAlign: "center",
-            marginBottom: 14
-          }}>
-            {t.referralCode}
-          </div>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            background: T.bg,
-            borderRadius: 14,
-            padding: "12px 16px",
-            marginBottom: 12
-          }}>
-            <div style={{
-              flex: 1,
-              fontSize: 20,
-              fontWeight: 900,
-              color: T.text,
-              letterSpacing: 3,
-              textAlign: "center",
-              fontFamily: "monospace"
-            }}>
-              {referralCode}
-            </div>
-            <button
-              onClick={handleCopyReferralLocal}
-              style={{
-                background: T.accent,
-                color: "#fff",
-                border: "none",
-                borderRadius: 10,
-                padding: "10px 18px",
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: "pointer",
-                flexShrink: 0
-              }}
-            >
+        <div style={{ margin: "0 16px 22px", padding: "18px 18px 16px", borderRadius: 18, background: "#F1EFEA" }}>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: "0.2em", textTransform: "uppercase", color: "var(--ku-text-2, #6E6E73)" }}>{t.referralCode}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10 }}>
+            <div style={{ flex: 1, fontSize: 22, letterSpacing: 3, color: "var(--ku-text, #111111)", fontFamily: "var(--ku-font-display)" }}>{referralCode}</div>
+            <button onClick={handleCopyReferralLocal} style={{ height: 38, padding: "0 16px", borderRadius: 999, border: "none", background: "#111111", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
               {copied ? t.copied : t.copy}
             </button>
           </div>
-          <div style={{
-            fontSize: 13,
-            color: T.textMuted,
-            textAlign: "center"
-          }}>
-            {t.referralHint} {settings?.referralBonus || 100} {t.sum || "сом"}
-          </div>
+          <div style={{ fontSize: 13, color: "var(--ku-text-2, #6E6E73)", marginTop: 8, lineHeight: 1.4 }}>{t.referralHint} {settings?.referralBonus || 100} {t.sum || "сом"}</div>
         </div>
       )}
-      <div style={{ margin: "0 16px 14px", display: "flex", gap: 8 }}>
-        {[{ id: "bonus", label: t.bonusHistory }, { id: "info", label: t.accountInfo }].map(tb => (
-          <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, padding: "10px", borderRadius: 12, border: tab === tb.id ? "none" : `1px solid ${T.border}`, background: tab === tb.id ? "var(--ku-accent, #111111)" : "transparent", color: tab === tb.id ? "#fff" : T.textSecond, fontWeight: 700, fontSize: 13, cursor: "pointer" }}>{tb.label}</button>
-        ))}
-      </div>
-      {tab === "bonus" ? (
-        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-          {!bonusHistory.length
-            ? <div style={{ color: T.textMuted, textAlign: "center", padding: 40 }}>{t.noBonusHistory}</div>
-            : bonusHistory.slice().reverse().map((h, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, x: -12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.32, delay: Math.min(i, 8) * 0.04, ease: iosEase }}
-                style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14 }}
-              >
-                <div style={{ width: 40, height: 40, borderRadius: 14, background: h.type === "spent" ? "rgba(224,85,85,0.10)" : T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {React.cloneElement(h.type === "spent" ? IC.cart : IC.gift, { style: { width: 18, height: 18, color: h.type === "spent" ? T.danger : T.accent } })}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: T.text, fontWeight: 600, fontSize: 13 }}>{h.label || (h.type === "spent" ? t.bonusSpent : t.bonusEarned)}</div>
-                  <div style={{ color: T.textMuted, fontSize: 11 }}>{h.date}</div>
-                </div>
-                <div style={{ color: h.type === "spent" ? T.danger : T.accent, fontWeight: 800, fontSize: 15 }}>
-                  {h.type === "spent" ? "−" : "+"}{formatSum(Math.abs(h.amount))}
-                </div>
-              </motion.div>
+
+      {/* История бонусов / данные аккаунта — только вошедшему (у гостя всегда пусто). */}
+      {user && (
+        <div style={{ padding: "0 16px 6px" }}>
+          <div style={{ display: "flex", gap: 6, padding: 4, borderRadius: 14, background: "rgba(17,17,17,0.05)" }}>
+            {[{ id: "bonus", label: t.bonusHistory }, { id: "info", label: t.accountInfo }].map(tb => (
+              <button key={tb.id} onClick={() => setTab(tb.id)} style={{ flex: 1, height: 36, borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                background: tab === tb.id ? "#FFFFFF" : "transparent", color: tab === tb.id ? "var(--ku-text, #111111)" : "var(--ku-text-2, #6E6E73)",
+                boxShadow: tab === tb.id ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>{tb.label}</button>
             ))}
-        </div>
-      ) : (
-        <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-          {[{ label: t.name, val: user?.name }, { label: t.phone, val: user?.phone }, { label: t.registrationDate, val: user?.registrationDate }].map(row => (
-            <div key={row.label} style={{ ...card({ padding: "14px 16px" }), display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: T.textSecond, fontSize: 13 }}>{row.label}</span>
-              <span style={{ color: T.text, fontWeight: 700, fontSize: 13 }}>{row.val || "—"}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {/* ──────────────────────────────────────────────────────────────────
-          ADDED SECTIONS — independent blocks below the existing content.
-          Each section uses the same `card()` helper, `T` colour tokens
-          and 8/12/16/20 spacing as the rest of the screen.
-          ────────────────────────────────────────────────────────────── */}
-
-      {/* ── Orders section ─────────────────────────────────────────────── */}
-      <div style={{ padding: "24px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.5, paddingLeft: 4, marginBottom: 4 }}>
-          {lang === 'kg' ? 'Заказтар' : 'Заказы'}
-        </div>
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => goToOrders && goToOrders()}
-          style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.orders, { style: { width: 18, height: 18, color: T.text } })}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Менин заказтарым' : 'Мои заказы'}</div>
-            <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>{lang === 'kg' ? 'Тарых жана статус' : 'История и статусы'}</div>
-          </div>
-          {React.cloneElement(IC.chevron, { style: { width: 16, height: 16, color: T.textMuted, flexShrink: 0 } })}
-        </motion.div>
-      </div>
-
-      {/* ── Settings section ───────────────────────────────────────────── */}
-      <div style={{ padding: "20px 16px 0", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.5, paddingLeft: 4, marginBottom: 4 }}>
-          {lang === 'kg' ? 'Жөндөөлөр' : 'Настройки'}
-        </div>
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => { haptic('light'); if (onOpenNotifications) onOpenNotifications(); }}
-          style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, position: "relative" }}>
-            {React.cloneElement(IC.bell, { style: { width: 18, height: 18, color: T.text } })}
-            {unreadNotifCount > 0 && (
-              <div style={{ position: "absolute", top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 8, background: "#FF3B30", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px", border: "2px solid #fff" }}>
-                {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-              </div>
+          <div style={{ ...groupBox, marginTop: 10 }}>
+            {tab === "bonus" ? (
+              !bonusHistory.length
+                ? <div style={{ color: "var(--ku-text-2, #6E6E73)", textAlign: "center", padding: "26px 16px", fontSize: 13.5 }}>{t.noBonusHistory}</div>
+                : bonusHistory.slice().reverse().map((h, i, arr) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: i < arr.length - 1 ? hair : "none" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ color: "var(--ku-text, #111111)", fontSize: 14 }}>{h.label || (h.type === "spent" ? t.bonusSpent : t.bonusEarned)}</div>
+                      <div style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 12, marginTop: 2 }}>{h.date}</div>
+                    </div>
+                    <div style={{ color: h.type === "spent" ? "#C0392B" : "var(--ku-text, #111111)", fontWeight: 600, fontSize: 14.5, fontVariantNumeric: "tabular-nums" }}>
+                      {h.type === "spent" ? "−" : "+"}{formatSum(Math.abs(h.amount))}
+                    </div>
+                  </div>
+                ))
+            ) : (
+              [{ label: t.name, val: user?.name }, { label: t.phone, val: user?.phone }, { label: t.registrationDate, val: user?.registrationDate }].map((row, i) => (
+                <div key={row.label} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "13px 16px", borderBottom: i < 2 ? hair : "none" }}>
+                  <span style={{ color: "var(--ku-text-2, #6E6E73)", fontSize: 14 }}>{row.label}</span>
+                  <span style={{ color: "var(--ku-text, #111111)", fontWeight: 600, fontSize: 14 }}>{row.val || "—"}</span>
+                </div>
+              ))
             )}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Билдирүүлөр' : 'Уведомления'}</div>
-            <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>
-              {unreadNotifCount > 0
-                ? (lang === 'kg' ? `${unreadNotifCount} жаңы билдирүү` : `${unreadNotifCount} новых`)
-                : (lang === 'kg' ? 'Заказ статусу жөнүндө' : 'О статусах заказа')}
-            </div>
-          </div>
-          {React.cloneElement(IC.chevron, { style: { width: 16, height: 16, color: T.textMuted, flexShrink: 0 } })}
-        </motion.div>
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => { haptic('light'); setLangSheetOpen(true); }}
-          style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.settings, { style: { width: 18, height: 18, color: T.text } })}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Тил' : 'Язык'}</div>
-            <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>{lang === 'ru' ? 'Русский' : 'Кыргызча'}</div>
-          </div>
-          {React.cloneElement(IC.chevron, { style: { width: 16, height: 16, color: T.textMuted, flexShrink: 0 } })}
-        </motion.div>
+        </div>
+      )}
+
+      {/* Меню — списками, как настройки в iPhone, но в цветах витрины. */}
+      <div style={{ padding: "18px 16px 0" }}>
+        <div style={groupHead}>{kg ? 'Заказдар' : 'Покупки'}</div>
+        <div style={groupBox}>
+          <MenuRow icon={IC.orders} title={kg ? 'Менин заказдарым' : 'Мои заказы'} sub={kg ? 'Тарых жана статус' : 'История и статусы'} onClick={() => goToOrders && goToOrders()} />
+          <MenuRow icon={IC.bell} title={kg ? 'Билдирүүлөр' : 'Уведомления'} badge={unreadNotifCount}
+            sub={unreadNotifCount > 0 ? (kg ? `${unreadNotifCount} жаңы билдирүү` : `${unreadNotifCount} новых`) : (kg ? 'Заказ статусу жөнүндө' : 'О статусах заказа')}
+            onClick={() => { haptic('light'); onOpenNotifications?.(); }} />
+          <MenuRow icon={IC.settings} title={kg ? 'Тил' : 'Язык'} sub={lang === 'ru' ? 'Русский' : 'Кыргызча'} onClick={() => { haptic('light'); setLangSheetOpen(true); }} last />
+        </div>
       </div>
 
-      {/* ── Support section ────────────────────────────────────────────── */}
-      <div style={{ padding: "20px 16px 24px", display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: 1.5, paddingLeft: 4, marginBottom: 4 }}>
-          {lang === 'kg' ? 'Колдоо' : 'Поддержка'}
+      <div style={{ padding: "22px 16px 28px" }}>
+        <div style={groupHead}>{kg ? 'Колдоо' : 'Поддержка'}</div>
+        <div style={groupBox}>
+          {settings?.whatsappPhone && (
+            <MenuRow icon={IC.chat} title="WhatsApp" sub={settings.whatsappPhone}
+              onClick={() => { haptic('light'); const num = String(settings.whatsappPhone).replace(/\D/g, ''); if (num) window.open(`https://wa.me/${num}`, '_blank'); }} />
+          )}
+          <MenuRow icon={IC.phone} title={kg ? 'Колдоо борбору' : 'Связаться с поддержкой'} sub={kg ? 'Чалуу' : 'Позвонить'} last
+            onClick={() => { haptic('light'); const num = String(settings?.supportPhone || settings?.whatsappPhone || '').replace(/\D/g, ''); if (num) window.open(`tel:+${num}`, '_self'); }} />
         </div>
-        {settings?.whatsappPhone && (
-          <motion.div
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              haptic('light');
-              const num = String(settings.whatsappPhone).replace(/\D/g, '');
-              if (num) window.open(`https://wa.me/${num}`, '_blank');
-            }}
-            style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
-          >
-            <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              {React.cloneElement(IC.chat, { style: { width: 18, height: 18, color: T.text } })}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>WhatsApp</div>
-              <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>{settings.whatsappPhone}</div>
-            </div>
-            {React.cloneElement(IC.chevron, { style: { width: 16, height: 16, color: T.textMuted, flexShrink: 0 } })}
-          </motion.div>
-        )}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptic('light');
-            const num = String(settings?.supportPhone || settings?.whatsappPhone || '').replace(/\D/g, '');
-            if (num) window.open(`tel:+${num}`, '_self');
-          }}
-          style={{ ...card({ padding: "14px 16px" }), display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}
-        >
-          <div style={{ width: 40, height: 40, borderRadius: 14, background: T.accentLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {React.cloneElement(IC.phone, { style: { width: 18, height: 18, color: T.text } })}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ color: T.text, fontWeight: 700, fontSize: 14 }}>{lang === 'kg' ? 'Колдоо борбору' : 'Связаться с поддержкой'}</div>
-            <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>{lang === 'kg' ? 'Чалуу' : 'Позвонить'}</div>
-          </div>
-          {React.cloneElement(IC.chevron, { style: { width: 16, height: 16, color: T.textMuted, flexShrink: 0 } })}
-        </motion.div>
       </div>
 
       {/* ── Language selection sheet — iOS Settings list with checkmark ── */}
@@ -7231,6 +7235,8 @@ export default function App() {
     // Kesh bo'lsa skeleton/yuklash ko'rsatmaymiz — katalog darrov ko'rinadi.
     try { const c = JSON.parse(localStorage.getItem('parfum_products_cache') || 'null'); return !(Array.isArray(c) && c.length > 0); } catch { return true; }
   });
+  // «Выбор Кемаля» — null, пока владелец ничего не сохранил (тогда фото по умолчанию).
+  const [kemalPicks, setKemalPicks] = useState(null);
   const [banners, setBanners] = useState(() => {
     try {
       const stored = localStorage.getItem('parfum_banners');
@@ -7700,6 +7706,9 @@ export default function App() {
         setBanners(pbBanners);
         localStorage.setItem('parfum_banners', JSON.stringify(pbBanners));
       }
+
+      const pbPicks = await api.loadKemalPicks().catch(() => null);
+      if (pbPicks) setKemalPicks(pbPicks);
     } catch (e) {
       console.warn("PocketBase background load error:", e);
     }
@@ -8574,7 +8583,7 @@ export default function App() {
                     <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />
                   )}
                   {safeAdminScreen === 'settings' && (
-                    <AdminSettingsScreen banners={banners} setBanners={setBanners} products={products} settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />
+                    <AdminSettingsScreen banners={banners} setBanners={setBanners} kemalPicks={kemalPicks} setKemalPicks={setKemalPicks} products={products} settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />
                   )}
                 </ErrorBoundary>
               );
@@ -8582,7 +8591,7 @@ export default function App() {
           </div>
         </div>
       ) : (
-      <div style={{ width: "100%", minHeight: "100vh", background: T.bg, position: "relative", overflowX: "hidden", color: T.text, fontFamily: "var(--ku-font)" }}>
+      <div style={{ width: "100%", minHeight: "100vh", background: T.bg, position: "relative", overflowX: "clip", color: T.text, fontFamily: "var(--ku-font)" }}>
         <div style={{ paddingBottom: 'calc(var(--nav-height) + 16px)', background: T.bg }}>
           {isAdmin ? (
             <>
@@ -8612,7 +8621,7 @@ export default function App() {
                     {safeAdminScreen === "notifications" && <AdminNotificationsScreen products={products} clients={registeredUsers} showToast={showToast} lang={lang} />}
                     {safeAdminScreen === "reviews" && <AdminReviewsScreen reviews={reviews} setReviews={setReviews} showToast={showToast} />}
                     {safeAdminScreen === "stats" && <AdminStatsScreen orders={orders} products={products} registeredUsers={registeredUsers} visitCount={visitCount} />}
-                    {safeAdminScreen === "settings" && <AdminSettingsScreen banners={banners} setBanners={setBanners} products={products} settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
+                    {safeAdminScreen === "settings" && <AdminSettingsScreen banners={banners} setBanners={setBanners} kemalPicks={kemalPicks} setKemalPicks={setKemalPicks} products={products} settings={settings} setSettings={setSettings} onLogout={handleLogout} showToast={showToast} lang={lang} />}
                   </ErrorBoundary>
                 );
               })()}
@@ -8637,7 +8646,7 @@ export default function App() {
                     aria-hidden={screen !== 'catalog'}
                     inert={screen !== 'catalog' ? '' : undefined}
                   >
-                    <ErrorBoundary><CatalogScreen products={products} settings={settings} addToCart={addToCart} banners={banners.filter(b => b.active)} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} setIsDetailOpen={setIsDetailOpen} reviews={reviews} /></ErrorBoundary>
+                    <ErrorBoundary><CatalogScreen products={products} settings={settings} addToCart={addToCart} banners={banners.filter(b => b.active)} kemalPicks={kemalPicks} showToast={showToast} onAdminLogin={() => { setShowAdminLogin(true); setAdminLoginPass(""); setAdminLoginErr(""); }} onRefresh={handleRefresh} setIsDetailOpen={setIsDetailOpen} reviews={reviews} /></ErrorBoundary>
                   </div>
                   <div
                     style={{ display: screen === 'cart' ? 'block' : 'none' }}

@@ -50,11 +50,22 @@ body, html {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
-  overflow-x: hidden;
   /* Native feel: no rubber-band bounce, no horizontal swipe-to-go-back hint. */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Страницу прокручивает сам документ (окно), а не <body>. Раньше у <body> была
+   высота 100 % и overflow — он становился отдельным прокручиваемым блоком:
+   window.scrollY всегда 0, липкая шапка не липла, «потянуть, чтобы обновить»
+   срабатывало посреди ленты, на iPhone не сворачивалась панель Safari.
+   overflow у <html> уходит окну, поэтому <html> сам блоком не становится. */
+html {
+  height: 100%;
+  overflow-x: hidden;
+}
+body {
+  min-height: 100%;
 }
 
 body {
@@ -108,7 +119,10 @@ html {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  /* clip обрезает, но не делает блок прокручиваемым (иначе липкая шапка не липнет).
+     Старый Safari (до 16) clip не знает и берёт hidden. */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ─── Universal native-feel button press ───────────────────────────────────── */
@@ -130,6 +144,70 @@ img {
 }
 img[data-loading="true"] {
   opacity: 0;
+}
+
+/* Витрина (ShelfRow): флакон в центре крупный, соседи меньше и бледнее. Где браузер
+   умеет анимацию от прокрутки (Chrome 115+, Safari 26+), это считает он сам — на
+   видеокарте, кадр в кадр с пальцем, без JavaScript. Остальные — запасной JS.
+   ±172 px = ширина одного флакона (SHELF_ITEM_W): дальше соседа — «далеко». */
+@supports (animation-timeline: view()) {
+  .ku-shelf-item {
+    animation: kuShelfFocus linear both;
+    animation-timeline: view(inline);
+    animation-range: cover calc(50% - 172px) cover calc(50% + 172px);
+  }
+  .ku-shelf-item [data-floor] {
+    animation: kuShelfFloor linear both;
+    animation-timeline: view(inline);
+    animation-range: cover calc(50% - 172px) cover calc(50% + 172px);
+  }
+  /* Подпись видна только у центрального флакона. */
+  .ku-shelf-item [data-caption] {
+    animation: kuShelfCaption linear both;
+    animation-timeline: view(inline);
+    animation-range: cover calc(50% - 95px) cover calc(50% + 95px);
+  }
+}
+@keyframes kuShelfFocus {
+  0%, 100% { transform: scale(0.8); opacity: 0.65; }
+  50% { transform: scale(1); opacity: 1; }
+}
+@keyframes kuShelfFloor {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+@keyframes kuShelfCaption {
+  0%, 100% { opacity: 0; transform: translateY(8px); }
+  50% { opacity: 1; transform: none; }
+}
+
+/* Кнопка «Спросить» (AssistantChat): раз в 7 с мягкое кольцо расходится от кнопки
+   и пузырёк чата покачивается. Кольцо — тень одинаковой ширины со всех сторон
+   (и у круглой, и у вытянутой кнопки); перерисовка — только маленькая кнопка
+   и только первую секунду из семи. */
+.ku-ask-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: kuAskRing 7s ease-out 2.5s infinite;
+}
+.ku-ask-icon {
+  transform-origin: 50% 80%;
+  animation: kuAskNudge 7s ease-in-out 2.5s infinite;
+}
+@keyframes kuAskRing {
+  0% { box-shadow: 0 0 0 0 rgba(17, 17, 17, 0.35); }
+  16%, 100% { box-shadow: 0 0 0 11px rgba(17, 17, 17, 0); }
+}
+@keyframes kuAskNudge {
+  0%, 12%, 100% { transform: rotate(0); }
+  3% { transform: rotate(-12deg); }
+  6% { transform: rotate(10deg); }
+  9% { transform: rotate(-5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ku-ask-ring, .ku-ask-icon { animation: none; }
 }
 
 /* Hide scrollbars on horizontally-scrolling elements but keep momentum. */
