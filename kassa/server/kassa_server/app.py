@@ -308,7 +308,7 @@ def page():
 def manifest():
     return JSONResponse({
         "name": "Касса Kemal Usman", "short_name": "Касса", "start_url": "./", "scope": "./", "display": "standalone",
-        "background_color": "#ffffff", "theme_color": "#111111", "lang": "ru",
+        "background_color": "#ffffff", "theme_color": "#eaf500", "lang": "ru",
         "icons": [{"src": "icon-512.png", "sizes": "512x512", "type": "image/png"},
                   {"src": "icon-180.png", "sizes": "180x180", "type": "image/png"},
                   {"src": "icon.svg", "sizes": "any", "type": "image/svg+xml"}],
@@ -515,10 +515,10 @@ def op_retry(op_id: str, user: dict = Depends(owner_user), conn: sqlite3.Connect
 
 RECEIPT_HTML = """<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title><style>
-body{{margin:0;padding:16px;font:14px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif;color:#111;background:#fff}}
+body{{margin:0;padding:16px;font:14px/1.45 Manrope,"Segoe UI",sans-serif;color:#263244;background:#fff}}
 pre{{white-space:pre-wrap;font:inherit;margin:0 0 16px;max-width:360px}}
-button{{font:600 15px inherit;height:46px;padding:0 20px;border:0;border-radius:12px;background:#111;color:#fff;margin-right:8px}}
-.o{{background:#fff;color:#111;border:1px solid #c7c7cc}}
+button{{font:600 15px inherit;height:46px;padding:0 20px;border:0;border-radius:12px;background:#eaf500;color:#263244;margin-right:8px}}
+.o{{background:#fff;color:#263244;border:1px solid #c4cdd8}}
 @media print{{button{{display:none}}body{{padding:0}}}}
 </style></head><body><pre>{text}</pre><button onclick="window.print()">Печать</button><button class="o" onclick="history.length > 1 ? history.back() : window.close()">Назад</button></body></html>"""
 
