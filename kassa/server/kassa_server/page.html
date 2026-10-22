@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#eaf500">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Касса">
+<title>Касса Kemal Usman</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@450;650;700;800&display=swap" rel="stylesheet">
+<!--
+  Касса Kemal Usman — страница для телефона. Один HTML без сборки.
+  Как «Касса Smarket» у Smart Centr: вход по PIN, вкладки внизу, поиск сверху, крупные цели под палец.
+  Вид — как у «Кассы Smarket» (владелец 22.10): лимонная кнопка, кобальт для ссылок, графитовый текст, Manrope. Значки — только SVG.
+  Вкладки: «Продажа» (магазин, товары в мл или шт, цена, наличные / перевод / две части), «Сегодня» (итоги по магазинам,
+  продажи, чек, отмена), «Остаток» (по магазинам), «Сотрудники» (владелец: имя, PIN, магазин, включить/выключить).
+-->
+<style>
+/* Вид — как у «Кассы Smarket» (владелец 22.10: «styleni smarketni stylesida qil»): белый фон, лимонная кнопка действия,
+   кобальт для ссылок и отметок, графитовый текст, Manrope. */
+:root{
+  --lemon:#eaf500;--lemon-hover:#dce600;--lemon-soft:#f9fbdc;--white:#ffffff;--cloud:#f7f9fc;
+  --cobalt:#2563eb;--ink:#263244;--ink-2:#4b5b70;--muted:#5d6d7e;--soft:#8593a3;--line:#e3e8ee;--line-2:#c4cdd8;
+  --ok:#1e9e5a;--ok-soft:#e6f6ec;--ok-ink:#16723f;--warn:#5a5f00;--bad:#d33b2e;--bad-soft:#fdecea;--bad-ink:#b42d22;
+  --r:16px;--r-s:12px;--tabs-h:64px;--app-w:560px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--white);color:var(--ink);font:450 16px/1.5 Manrope,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums;touch-action:pan-x pan-y}
+::selection{background:var(--lemon);color:var(--ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+input{caret-color:var(--cobalt)}
+button{cursor:pointer;border:0;background:none;padding:0}
+a{color:inherit}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--cobalt);outline-offset:0;border-color:transparent}
+button:focus-visible,a:focus-visible{outline:2px solid var(--cobalt);outline-offset:2px}
+.hidden{display:none!important}
+svg.i{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+/* вход */
+#login{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px 16px;background:var(--cloud)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{width:44px;height:44px;border-radius:12px}
+.brand b{display:block;font-size:22px;font-weight:800;letter-spacing:-.025em;line-height:1.1}
+.brand span{display:block;color:var(--muted);font-size:13px;font-weight:650;letter-spacing:.02em;text-transform:uppercase}
+.dots{display:flex;gap:14px;height:20px}
+.dots i{width:16px;height:16px;border-radius:50%;border:2px solid var(--line-2)}
+.dots i.on{background:var(--ink);border-color:var(--ink)}
+.dots.err i{border-color:var(--bad);background:var(--bad-soft)}
+.keypad{display:grid;grid-template-columns:repeat(3,76px);gap:12px}
+.keypad button{height:64px;border-radius:var(--r);background:var(--white);border:1px solid var(--line);font-size:26px;font-weight:700;box-shadow:0 1px 2px rgba(38,50,68,.06)}
+.keypad button:active{background:var(--lemon-soft)}
+.keypad button.soft{background:transparent;border:0;box-shadow:none;font-size:15px;font-weight:650;color:var(--muted)}
+.login-msg{min-height:22px;color:var(--bad);font-size:14px;font-weight:650;text-align:center;max-width:300px}
+/* каркас */
+#app{display:flex;flex-direction:column;min-height:100%;max-width:var(--app-w);margin:0 auto;padding-bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom));background:var(--white)}
+@media (min-width:600px){html,body{background:var(--cloud)}#app{border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+header{position:sticky;top:0;z-index:5;background:var(--white);border-bottom:1px solid var(--line);padding:12px 16px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:32px}
+.logo{display:inline-flex;align-items:center;gap:8px;color:var(--ink);font-weight:800;font-size:18px;letter-spacing:-.03em;line-height:1;white-space:nowrap}
+.logo img{width:28px;height:28px;border-radius:7px}
+.logo small{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:var(--lemon);border-radius:6px;padding:4px 6px 3px;line-height:1}
+.who{display:inline-flex;align-items:center;gap:8px;min-width:0;font-size:13px;color:var(--ink-2);font-weight:650;white-space:nowrap}
+.who span{overflow:hidden;text-overflow:ellipsis}
+.who button{color:var(--cobalt);font-weight:650;min-height:36px}
+.sub{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
+.sub h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.status{display:inline-flex;align-items:center;gap:6px;min-width:0;height:28px;padding:0 10px 0 9px;border-radius:999px;background:var(--cloud);color:var(--muted);font-size:12px;font-weight:700;white-space:nowrap}
+.status span{overflow:hidden;text-overflow:ellipsis}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--line-2);flex:0 0 auto;box-shadow:0 0 0 3px rgba(93,109,126,.14)}
+.status.ok{background:var(--ok-soft);color:var(--ok-ink)}.status.ok i{background:var(--ok);box-shadow:0 0 0 3px rgba(30,158,90,.18)}
+.status.warn{background:var(--bad-soft);color:#a3271c}.status.warn i{background:var(--bad);box-shadow:0 0 0 3px rgba(211,59,46,.16)}
+main{flex:1;padding:12px 16px 24px}
+nav#tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;height:calc(var(--tabs-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--white);border-top:1px solid var(--line);display:flex;justify-content:center}
+nav#tabs .wrap{display:flex;width:100%;max-width:var(--app-w)}
+nav#tabs button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:650;color:var(--muted)}
+nav#tabs button.on{color:var(--ink)}
+nav#tabs button.on svg{background:var(--lemon);border-radius:10px;padding:2px 4px;width:34px;height:26px}
+nav#tabs button b{position:absolute;top:4px;left:calc(50% + 10px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px}
+/* элементы */
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding-bottom:4px;margin:0 0 8px}
+.chip{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line-2);background:var(--white);font-size:13px;font-weight:650;color:var(--ink-2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip:active{background:var(--lemon-soft)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.chip[disabled]{opacity:.45}
+.label{margin:16px 0 8px;font-size:12px;font-weight:650;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;background:var(--white)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;padding:0 16px;border-radius:var(--r-s);background:var(--lemon);color:var(--ink);font-size:15px;font-weight:650;text-decoration:none;text-align:center}
+.btn:active{background:var(--lemon-hover)}
+.btn:disabled{opacity:.5;pointer-events:none}
+.btn.line{background:var(--white);color:var(--ink);border:1px solid var(--line-2)}
+.btn.line:active{background:var(--cloud)}
+.btn.bad{background:var(--white);color:var(--bad);border:1px solid var(--line-2)}
+.btn + .btn{margin-top:10px}
+.add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border:1.5px dashed var(--line-2);border-radius:var(--r-s);color:var(--cobalt);font-weight:650}
+.field{display:block;margin-bottom:12px}
+.field span{display:block;font-size:12px;color:var(--muted);font-weight:650;margin:0 0 4px 2px}
+.field input,.field select{width:100%;height:46px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 14px;background:var(--white);font-size:16px;font-weight:650}
+.row{display:flex;gap:10px}.row > *{flex:1;min-width:0}
+.muted{color:var(--muted)}.small{font-size:13px}
+.empty{padding:40px 16px;text-align:center;color:var(--muted);font-weight:650}
+.err{color:var(--bad);font-weight:650;font-size:14px;margin:8px 0}
+.err:empty{display:none}
+/* строки продажи */
+.line{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(38,50,68,.04)}
+.line .name{display:flex;justify-content:space-between;gap:10px;font-size:15px;font-weight:700;line-height:1.3}
+.line .name button{color:var(--muted);flex:0 0 auto;width:44px;height:44px;margin:-12px -12px 0 0;display:grid;place-items:center}
+.line .meta{font-size:12px;color:var(--muted);font-weight:650;margin:2px 0 10px}
+.line .meta.warn{color:var(--bad-ink)}
+.qty{display:flex;align-items:center;gap:8px}
+.qty input{width:100%;min-width:0;height:46px;border:1px solid var(--line-2);border-radius:var(--r-s);text-align:center;font-size:18px;font-weight:800}
+.qty button{flex:0 0 46px;height:46px;border-radius:var(--r-s);border:1px solid var(--line-2);font-size:22px;font-weight:650;color:var(--ink-2)}
+.qty .unit{flex:0 0 auto;font-size:13px;color:var(--muted);font-weight:650;min-width:24px}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.presets button{height:36px;padding:0 12px;border-radius:999px;background:var(--cloud);border:1px solid var(--line);font-size:13px;font-weight:650;color:var(--ink-2)}
+.presets button:active{background:var(--lemon-soft)}
+.price{display:flex;align-items:flex-end;gap:10px;margin-top:10px}
+.price label{flex:1;font-size:12px;color:var(--muted);font-weight:650}
+.price input{display:block;width:100%;height:46px;margin-top:4px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 12px;font-size:16px;font-weight:700;color:var(--ink)}
+.price b{flex:0 0 auto;font-size:15px;font-weight:800;line-height:46px}
+.total{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0;font-size:14px;font-weight:650;color:var(--muted)}
+.total b{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-.03em}
+details.more{margin:10px 0 4px}
+details.more summary{list-style:none;cursor:pointer;color:var(--cobalt);font-weight:650;font-size:14px;padding:10px 0}
+details.more summary::-webkit-details-marker{display:none}
+/* списки */
+.search{position:relative;margin:4px 0 12px}
+.search input{width:100%;height:50px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 44px 0 16px;font-size:16px;font-weight:650;background:var(--white)}
+.search button{position:absolute;right:3px;top:3px;width:44px;height:44px;display:grid;place-items:center;color:var(--muted)}
+input[type=search]::-webkit-search-cancel-button,input[type=search]::-webkit-search-decoration{-webkit-appearance:none;display:none}
+input::placeholder{color:var(--muted);opacity:1;font-weight:450}
+.item{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 0;border-bottom:1px solid var(--line)}
+.item .t{font-size:15px;font-weight:700;line-height:1.3}
+.item .s{font-size:12px;color:var(--muted);font-weight:650;margin-top:2px}
+.item .r{text-align:right;flex:0 0 auto;font-size:15px;font-weight:800}
+.item .r small{display:block;font-weight:650;color:var(--muted);font-size:11px;margin-top:3px}
+.item.off .t,.item.off .r{color:var(--muted)}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:650;background:var(--cloud);color:var(--muted);white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok-ink)}.badge.warn{background:var(--lemon-soft);color:var(--warn)}.badge.bad{background:var(--bad-soft);color:var(--bad-ink)}
+.sum{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;font-weight:650;align-items:baseline}
+.sum > b{text-align:right;font-weight:800}
+.big{font-size:26px;font-weight:800;letter-spacing:-.03em}
+.shoprow{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+/* лист снизу */
+.sheet-back{position:fixed;inset:0;z-index:20;background:rgba(38,50,68,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:var(--app-w);max-height:88vh;overflow:auto;overscroll-behavior:contain;background:var(--white);border-radius:20px 20px 0 0;padding:12px 16px calc(16px + env(safe-area-inset-bottom))}
+.sheet.tall{height:88vh}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line-2);margin:0 auto 12px}
+.sheet h2{margin:0 0 12px;font-size:18px;font-weight:800;letter-spacing:-.02em;line-height:1.25}
+.sheet .head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sheet .head button{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;margin:-8px -10px 4px 0;color:var(--muted)}
+#toast{position:fixed;left:50%;bottom:calc(var(--tabs-h) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;max-width:calc(100% - 32px);padding:12px 16px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px;font-weight:650;box-shadow:0 6px 24px rgba(38,50,68,.2)}
+#toast.bad{background:var(--bad)}
+.switch{display:flex;align-items:center;justify-content:space-between;min-height:48px;font-weight:650;margin-bottom:8px}
+.switch input{width:22px;height:22px;accent-color:var(--cobalt)}
+</style>
+</head>
+<body>
+<section id="login" class="hidden">
+  <div class="brand"><img src="icon-180.png" alt=""><div><b>Kemal Usman</b><span>касса</span></div></div>
+  <div class="dots" id="dots"></div>
+  <div class="login-msg" id="loginMsg"></div>
+  <div class="keypad" id="keypad"></div>
+</section>
+<div id="app" class="hidden">
+  <header>
+    <div class="top">
+      <div class="logo"><img src="icon-180.png" alt="">Kemal Usman<small>касса</small></div>
+      <div class="who"><span id="whoName"></span><button id="logout">Выйти</button></div>
+    </div>
+    <div class="sub"><h1 id="title">Продажа</h1><span class="status" id="status"><i></i><span>…</span></span></div>
+  </header>
+  <main id="main"></main>
+</div>
+<nav id="tabs" class="hidden"><div class="wrap" id="tabsWrap"></div></nav>
+<div id="toast" class="hidden"></div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const ICON = {
+  sale: '<path d="M6 7h12l-1 13H7L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+  today: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  stock: '<path d="M4 8l8-4 8 4-8 4-8-4Z"/><path d="M4 8v8l8 4 8-4V8"/><path d="M12 12v8"/>',
+  staff: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"/>',
+  payment: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  out: '<path d="M12 4v12M7 11l5 5 5-5"/><path d="M5 20h14"/>', swap: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>',
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+};
+const icon = n => '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + '</svg>';
+const TABS = {sale: 'Продажа', payment: 'Оплата', today: 'Сегодня', stock: 'Остаток', staff: 'Сотрудники'};
+const KIND = {sale: 'Продажа', payment: 'Оплата долга', expense: 'Расход', transfer: 'Перевод между кассами'};
+const METHOD = {cash: 'Наличные', transfer: 'Перевод'};
+const STATUS = {new: ['ждёт 1С', 'warn'], done: ['в 1С', 'ok'], failed: ['ошибка 1С', 'bad'], cancelling: ['отмена ждёт 1С', 'warn'], cancelled: ['отменено', '']};
+
+let state = null, tab = 'sale', items = [], itemsV = '', taken = {};
+let cart = newCart('');
+
+function newCart(shop){ return {id: uuid(), shop: shop || '', lines: [], pay: 'cash', cashPart: '', buyer: {name: '', phone: ''}, note: '', sending: false,
+  debt: {paid: '', method: 'cash', plan: 'date', date: '', months: 3}, bonus: '', club: null}; }
+function uuid(){ return crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }); }
+function num(x){ const n = Number(String(x == null ? '' : x).replace(',', '.').replace(/\s/g, '')); return isFinite(n) ? n : 0; }
+function round2(x){ return Math.round(x * 100) / 100; }
+function round3(x){ return Math.round(x * 1000) / 1000; }
+function fmt(x){ return round2(num(x)).toLocaleString('ru-RU', {maximumFractionDigits: 2}).replace(/ /g, ' '); }
+function som(x){ return fmt(x) + ' сом'; }
+function qtyText(q, unit){ return fmt(q) + (unit ? ' ' + unit : ''); }
+function shortShop(s){ const t = String(s || '').replace(/^Kemal Usman Parfume\s*/i, '').trim(); return t || 'Kemal Usman'; }
+function toast(msg, bad){ const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; clearTimeout(t._h); t._h = setTimeout(() => t.className = 'hidden', bad ? 5000 : 2500); }
+
+async function api(path, opts){
+  const o = opts || {};
+  const r = await fetch(path, {method: o.body ? 'POST' : 'GET', credentials: 'same-origin',
+    headers: o.body ? {'Content-Type': 'application/json'} : {}, body: o.body ? JSON.stringify(o.body) : undefined});
+  let data = {};
+  try { data = await r.json(); } catch (e) { data = {}; }
+  if (r.status === 401 && !o.login) { showLogin(); }
+  if (!r.ok) { const e = new Error(data.error || data.detail || ('ошибка ' + r.status)); e.status = r.status; throw e; }
+  return data;
+}
+
+/* ── вход ── */
+let pin = '';
+function showLogin(){ state = null; $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#tabs').classList.add('hidden'); pin = ''; drawDots(); }
+function drawDots(err){ $('#dots').innerHTML = Array.from({length: Math.max(4, pin.length)}, (_, i) => '<i class="' + (i < pin.length ? 'on' : '') + '"></i>').join(''); $('#dots').classList.toggle('err', !!err); }
+function keypad(){
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'ok'];
+  $('#keypad').innerHTML = keys.map(k => '<button class="' + (k.length > 1 ? 'soft' : '') + '" data-k="' + k + '">' + (k === 'del' ? 'Стереть' : k === 'ok' ? 'Войти' : k) + '</button>').join('');
+  $('#keypad').onclick = e => { const b = e.target.closest('button'); if (b) press(b.dataset.k); };
+  document.addEventListener('keydown', e => { if ($('#login').classList.contains('hidden')) return; if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('del'); else if (e.key === 'Enter') press('ok'); });
+}
+function press(k){
+  $('#loginMsg').textContent = '';
+  if (k === 'ok') return submitPin();
+  if (k === 'del') pin = pin.slice(0, -1); else if (pin.length < 6) pin += k;
+  drawDots();
+  if (pin.length === 6) submitPin();
+}
+async function submitPin(){
+  if (pin.length < 4) { $('#loginMsg').textContent = 'PIN — от 4 до 6 цифр'; return; }
+  try { await api('login', {body: {pin}, login: true}); pin = ''; await boot(); }
+  catch (e) { $('#loginMsg').textContent = e.message; pin = ''; drawDots(true); }
+}
+
+/* ── каркас ── */
+async function boot(){
+  try { state = await api('api/state'); }
+  catch (e) { showLogin(); if (e.status !== 401) $('#loginMsg').textContent = e.message; return; }
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#tabs').classList.remove('hidden');
+  $('#whoName').textContent = state.user.name + (state.user.shop ? ' · ' + shortShop(state.user.shop) : '');
+  if (!state.tabs.includes(tab)) tab = 'sale';
+  if (!canPickShop()) cart.shop = state.user.shop;
+  else if (!state.shops.includes(cart.shop)) { let saved = ''; try { saved = localStorage.getItem('kassa.shop') || ''; } catch (e) {} cart.shop = state.shops.length === 1 ? state.shops[0] : (state.shops.includes(saved) ? saved : ''); }
+  drawTabs(); syncLine(); await loadItems(); render();
+}
+function canPickShop(){ return state.user.role === 'owner' || !state.user.shop; }
+function drawTabs(){
+  const bad = (state.ops || []).filter(o => o.status === 'failed').length;
+  $('#tabsWrap').innerHTML = state.tabs.map(t => '<button data-t="' + t + '" class="' + (t === tab ? 'on' : '') + '">' + icon(t) + TABS[t] + (t === 'today' && bad ? '<b>' + bad + '</b>' : '') + '</button>').join('');
+  $('#tabsWrap').onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; drawTabs(); render(); window.scrollTo(0, 0); };
+}
+function syncLine(){
+  const s = (state && state.sync) || {}, el = $('#status'), age = s.seenAgeSec;
+  let text = '1С ещё не подключалась', cls = 'warn';
+  if (age != null) {
+    if (age < 120) { text = '1С на связи'; cls = 'ok'; }
+    else { const m = Math.round(age / 60); text = '1С была ' + (m < 60 ? m + ' мин' : Math.round(m / 60) + ' ч') + ' назад'; }
+  }
+  if (state && state.pending) text += ' · ждут ' + state.pending;
+  el.className = 'status ' + cls; el.querySelector('span').textContent = text;
+}
+async function refresh(){ try { state = await api('api/state'); syncLine(); drawTabs(); if (tab === 'today' && !document.querySelector('.sheet-back')) render(); } catch (e) {} }
+async function loadItems(){
+  try {
+    const r = await api('api/items' + (itemsV ? '?v=' + encodeURIComponent(itemsV) : ''));
+    if (!r.same) { items = r.items; itemsV = r.v; }
+    taken = r.taken || {};
+  } catch (e) { if (!items.length) toast('Товары не загрузились: ' + e.message, true); }
+}
+function free(i, shop){ return Math.max(round3(num((i.stock1c || {})[shop]) - num((taken[shop] || {})[i.id])), 0); }
+function render(){ $('#title').textContent = TABS[tab]; ({sale: renderSale, payment: renderPayment, today: renderToday, stock: renderStock, staff: renderStaff})[tab](); }
+
+/* ── поиск: латиница и кириллица (продавец пишет «шанель», в 1С «Chanel») ── */
+const CYR = {'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': '', 'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'қ': 'k', 'ў': 'u', 'ғ': 'g', 'ҳ': 'h', 'ң': 'n', 'ү': 'u', 'ө': 'o'};
+function norm(s){ return String(s || '').toLowerCase().replace(/[а-яёқўғҳңүө]/g, c => CYR[c] || c).replace(/[^a-z0-9]+/g, ' ').replace(/(.)\1+/g, '$1').trim(); }
+function loose(s){ return s.replace(/sh|ch|[cszjx]/g, 's').replace(/[eiy]/g, 'i').replace(/[ou]/g, 'o').replace(/[ae]/g, 'a').replace(/[kq]/g, 'k').replace(/ /g, ''); }
+function matches(i, q){
+  const ws = norm(q).split(' ').filter(Boolean);
+  if (!ws.length) return true;
+  const hay = i._n || (i._n = norm([i.name, i.article, i.code, i.group].join(' '))), hayL = i._l || (i._l = loose(hay));
+  return ws.every(w => hay.includes(w) || hayL.includes(loose(w)));
+}
+
+/* ── лист снизу ── */
+function sheet(html, tall){
+  const back = document.createElement('div');
+  back.className = 'sheet-back';
+  back.innerHTML = '<div class="sheet' + (tall ? ' tall' : '') + '" role="dialog"><div class="grab"></div>' + html + '</div>';
+  document.body.appendChild(back);
+  const close = () => { back.remove(); document.body.style.overflow = ''; };
+  back.onclick = e => { if (e.target === back) close(); };
+  back.querySelectorAll('[data-close]').forEach(b => b.onclick = close);
+  document.body.style.overflow = 'hidden';
+  return {root: back.querySelector('.sheet'), close};
+}
+const sheetHead = t => '<div class="head"><h2>' + esc(t) + '</h2><button data-close aria-label="Закрыть">' + icon('x') + '</button></div>';
+
+/* ── Продажа ── */
+function itemById(id){ return items.find(i => i.id === id); }
+function cartTotal(){ return round2(cart.lines.reduce((s, l) => s + round2(num(l.qty) * num(l.price)), 0)); }
+function bonusNow(){ return cart.pay === 'debt' || !cart.club || !cart.club.found ? 0 : Math.floor(num(cart.bonus)); }
+function payable(){ return round2(cartTotal() - bonusNow()); }
+function renderSale(){
+  const m = $('#main');
+  if (!state.shops.length) { m.innerHTML = '<div class="empty">1С ещё не прислала товары. Включите программу кассы на компьютере магазина.</div>'; return; }
+  let h = '<div class="label">Магазин</div><div class="chips" id="shops">' + state.shops.map(s =>
+    '<button class="chip' + (s === cart.shop ? ' on' : '') + '" data-s="' + esc(s) + '"' + (canPickShop() || s === cart.shop ? '' : ' disabled') + '>' + esc(shortShop(s)) + '</button>').join('') + '</div>';
+  if (!cart.shop) { m.innerHTML = h + '<div class="empty">Выберите магазин — остаток и цены у каждого свои.</div>'; bindShops(); return; }
+  h += '<div class="label">Товары</div><div id="lines"></div><button class="add" id="addItem">' + icon('plus') + 'Добавить товар</button>' +
+    '<div id="payBox"></div><div id="bonusBox"></div>' +
+    '<details class="more"' + (cart.buyer.name || cart.buyer.phone || cart.note ? ' open' : '') + '><summary>Покупатель и заметка</summary>' +
+    '<div class="row"><label class="field"><span>Имя</span><input id="bName" autocomplete="off" value="' + esc(cart.buyer.name) + '"></label>' +
+    '<label class="field"><span>Телефон</span><input id="bPhone" inputmode="tel" autocomplete="off" placeholder="555 123 456" value="' + esc(cart.buyer.phone) + '"></label></div>' +
+    '<label class="field"><span>Заметка</span><input id="note" autocomplete="off" value="' + esc(cart.note) + '"></label></details>' +
+    '<div class="total"><span>Итого</span><b id="total"></b></div><div class="err" id="saleErr"></div><button class="btn" id="sell"></button>';
+  m.innerHTML = h;
+  bindShops(); drawLines(); drawPay(); drawTotal();
+  $('#addItem').onclick = itemPicker;
+  $('#bName').oninput = e => { cart.buyer.name = e.target.value; };
+  $('#bPhone').oninput = e => { cart.buyer.phone = e.target.value; lookupBonus(); };
+  drawBonus();
+  $('#note').oninput = e => { cart.note = e.target.value; };
+  $('#sell').onclick = sell;
+}
+function bindShops(){
+  $('#shops').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b || b.disabled || b.dataset.s === cart.shop) return;
+    if (cart.lines.length && !confirm('Сменить магазин? Товары из продажи уберутся — у магазинов свой остаток.')) return;
+    cart.shop = b.dataset.s; cart.lines = [];
+    try { localStorage.setItem('kassa.shop', cart.shop); } catch (e) {}
+    renderSale();
+  };
+}
+function presetsFor(unit){ return unit === 'мл' ? [1, 3, 5, 10, 30, 50] : ['гр', 'г'].includes(unit) ? [5, 10, 50, 100] : []; }
+function drawLines(){
+  const box = $('#lines');
+  box.innerHTML = cart.lines.map((l, k) => {
+    const i = itemById(l.itemId) || {name: l.name, unit: l.unit, price: {}};
+    const list = num((i.price || {})[cart.shop]);
+    return '<div class="line" data-k="' + k + '"><div class="name"><span>' + esc(i.name) + '</span><button data-del aria-label="Убрать">' + icon('x') + '</button></div>' +
+      '<div class="meta">есть ' + esc(qtyText(free(i, cart.shop), i.unit)) + (list ? ' · цена ' + som(list) + (i.unit ? ' за 1 ' + esc(i.unit) : '') : ' · цены в 1С нет') + '</div>' +
+      '<div class="qty"><button data-minus aria-label="Меньше">−</button><input data-qty aria-label="Количество" inputmode="' + (i.fraction ? 'decimal' : 'numeric') + '" value="' + esc(String(l.qty).replace('.', ',')) + '"><span class="unit">' + esc(i.unit || '') + '</span><button data-plus aria-label="Больше">+</button></div>' +
+      (presetsFor(i.unit).length ? '<div class="presets">' + presetsFor(i.unit).map(p => '<button data-p="' + p + '">' + p + ' ' + esc(i.unit) + '</button>').join('') + '</div>' : '') +
+      '<div class="price"><label>Цена за 1 ' + esc(i.unit || 'шт') + '<input data-price inputmode="decimal" value="' + esc(String(l.price).replace('.', ',')) + '"></label><b data-sum></b></div></div>';
+  }).join('');
+  box.querySelectorAll('.line').forEach(row => {
+    const l = cart.lines[+row.dataset.k];
+    const q = row.querySelector('[data-qty]'), p = row.querySelector('[data-price]');
+    const setQty = v => { l.qty = Math.max(round3(v), 0); q.value = String(l.qty).replace('.', ','); drawLineSum(row, l); drawTotal(); };
+    row.querySelector('[data-del]').onclick = () => { cart.lines.splice(+row.dataset.k, 1); drawLines(); drawTotal(); };
+    row.querySelector('[data-minus]').onclick = () => setQty(Math.max(num(l.qty) - 1, 0));
+    row.querySelector('[data-plus]').onclick = () => setQty(num(l.qty) + 1);
+    row.querySelectorAll('[data-p]').forEach(b => b.onclick = () => setQty(num(b.dataset.p)));
+    [q, p].forEach(inp => inp.onfocus = () => setTimeout(() => inp.select(), 0));
+    q.oninput = () => { l.qty = q.value; drawLineSum(row, l); drawTotal(); };
+    p.oninput = () => { l.price = p.value; drawLineSum(row, l); drawTotal(); };
+    drawLineSum(row, l);
+  });
+}
+function drawLineSum(row, l){
+  const i = itemById(l.itemId) || {}, over = num(l.qty) > free(i, cart.shop) + 1e-9;
+  row.querySelector('[data-sum]').textContent = som(round2(num(l.qty) * num(l.price)));
+  row.querySelector('.meta').classList.toggle('warn', over);
+}
+function isoDate(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function chips(id, list, current){ return '<div class="chips" id="' + id + '">' + list.map(([k, n]) => '<button class="chip' + (String(current) === String(k) ? ' on' : '') + '" data-k="' + esc(k) + '">' + esc(n) + '</button>').join('') + '</div>'; }
+function onChip(id, fn){ const el = $('#' + id); if (el) el.onclick = e => { const b = e.target.closest('.chip'); if (b && !b.disabled) fn(b.dataset.k); }; }
+function drawPay(){
+  const d = cart.debt;
+  let h = '<div class="label">Оплата</div>' + chips('pay', [['cash', 'Наличные'], ['transfer', 'Перевод'], ['split', 'Две части'], ['debt', 'В долг']], cart.pay);
+  if (cart.pay === 'split') h += '<div class="row"><label class="field"><span>Наличными</span><input id="cashPart" inputmode="decimal" autocomplete="off" value="' + esc(cart.cashPart) + '"></label>' +
+    '<label class="field"><span>Переводом</span><input id="trPart" readonly tabindex="-1"></label></div>';
+  if (cart.pay === 'debt') {
+    // В долг (как в Smart Centr): сколько заплатил сейчас, остаток — до даты или рассрочкой по месяцам; покупатель обязателен.
+    if (!d.date) { const x = new Date(); x.setDate(x.getDate() + 14); d.date = isoDate(x); }
+    h += '<div class="card"><div class="row"><label class="field"><span>Сейчас заплатил</span><input id="dPaid" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(d.paid) + '"></label>' +
+      '<div class="field"><span>Чем</span>' + chips('dMethod', [['cash', 'Нал'], ['transfer', 'Перевод']], d.method) + '</div></div>' +
+      '<div class="field"><span>Остаток</span>' + chips('dPlan', [['date', 'До даты'], ['months', 'Рассрочка']], d.plan) + '</div>' +
+      (d.plan === 'date' ? '<label class="field"><span>До какого числа</span><input id="dDate" type="date" value="' + esc(d.date) + '"></label>'
+        : '<div class="field"><span>На сколько месяцев</span>' + chips('dMonths', [[2, '2'], [3, '3'], [4, '4'], [6, '6'], [10, '10'], [12, '12']], d.months) + '</div><div class="small muted" id="dPlanText"></div>') +
+      '</div>';
+  }
+  $('#payBox').innerHTML = h;
+  onChip('pay', k => { cart.pay = k; if (k === 'debt') { const det = document.querySelector('details.more'); if (det) det.open = true; } drawPay(); drawBonus(); drawTotal(); });
+  const c = $('#cashPart');
+  if (c) { c.oninput = () => { cart.cashPart = c.value; drawTotal(); }; c.onfocus = () => setTimeout(() => c.select(), 0); }
+  if (cart.pay === 'debt') {
+    $('#dPaid').oninput = e => { d.paid = e.target.value; drawTotal(); };
+    onChip('dMethod', k => { d.method = k; drawPay(); drawTotal(); });
+    onChip('dPlan', k => { d.plan = k; drawPay(); drawTotal(); });
+    onChip('dMonths', k => { d.months = +k; drawPay(); drawTotal(); });
+    const dd = $('#dDate'); if (dd) dd.onchange = e => { d.date = e.target.value; drawTotal(); };
+  }
+}
+function planText(){
+  const left = cartTotal() - num(cart.debt.paid), n = cart.debt.months;
+  if (left <= 0 || !n) return '';
+  const monthly = Math.ceil(left / n / 10) * 10;
+  return n + ' платежей по ' + som(monthly) + ' (последний ' + som(Math.max(left - monthly * (n - 1), 0)) + '), первый через месяц';
+}
+function saleProblem(){
+  if (!cart.lines.length) return 'Добавьте товар';
+  for (const l of cart.lines) {
+    const i = itemById(l.itemId) || {name: l.name}, q = num(l.qty);
+    if (q <= 0) return 'Укажите количество';
+    if (!i.fraction && q !== Math.round(q)) return 'Только целыми: ' + i.name;
+    if (q > free(i, cart.shop) + 1e-9) return 'Не хватает: есть ' + qtyText(free(i, cart.shop), i.unit);
+    if (num(l.price) <= 0) return 'Укажите цену';
+  }
+  if (cart.pay === 'split') { const c = num(cart.cashPart); if (c <= 0 || c >= payable()) return 'Наличными — меньше суммы'; }
+  if (bonusNow() > bonusLimit()) return 'Бонусами — не больше ' + som(bonusLimit());
+  if (cart.pay === 'debt') {
+    if (!cart.buyer.name.trim() || String(cart.buyer.phone).replace(/\D/g, '').length < 9) return 'В долг: имя и телефон покупателя';
+    if (num(cart.debt.paid) < 0 || num(cart.debt.paid) >= cartTotal()) return 'Сейчас — меньше суммы продажи';
+    if (cart.debt.plan === 'date' && (!cart.debt.date || cart.debt.date < isoDate(new Date()))) return 'Выберите дату долга';
+  }
+  return '';
+}
+function drawTotal(){
+  const el = $('#total'); if (!el) return;
+  const t = payable();
+  el.innerHTML = esc(som(t)) + (bonusNow() ? '<small style="display:block;font-size:13px;font-weight:650;color:var(--muted);text-align:right;letter-spacing:0">−' + esc(fmt(bonusNow())) + ' бонусами</small>' : '');
+  const tr = $('#trPart'); if (tr) tr.value = num(cart.cashPart) > 0 ? fmt(Math.max(t - num(cart.cashPart), 0)) : '';
+  const bl = $('#bonusLimit'); if (bl) bl.textContent = 'можно до ' + som(bonusLimit());
+  const pt = $('#dPlanText'); if (pt) pt.textContent = planText();
+  const why = saleProblem(), b = $('#sell');
+  b.disabled = !!why || cart.sending;
+  b.textContent = cart.sending ? 'Отправляю…' : why || (cart.pay === 'debt' ? 'Продать в долг · ' : 'Продать · ') + som(t);
+}
+function itemPicker(){
+  const sh = sheet(sheetHead('Товар') + '<div class="search"><input type="search" id="q" placeholder="Название, артикул, код" autocomplete="off" enterkeyhint="search"><button id="qx" aria-label="Очистить">' + icon('x') + '</button></div><div id="res"></div>', true);
+  const q = sh.root.querySelector('#q'), res = sh.root.querySelector('#res');
+  const draw = () => {
+    const list = items.filter(i => matches(i, q.value)).sort((a, b) => (free(b, cart.shop) > 0) - (free(a, cart.shop) > 0)).slice(0, 80);
+    res.innerHTML = list.length ? list.map(i => {
+      const f = free(i, cart.shop), p = num((i.price || {})[cart.shop]);
+      return '<button class="item' + (f > 0 ? '' : ' off') + '" data-id="' + i.id + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + esc([i.code, i.group].filter(Boolean).join(' · ')) + '</div></div>' +
+        '<div class="r">' + (f > 0 ? esc(qtyText(f, i.unit)) : 'нет') + '<small>' + (p ? som(p) + (i.unit ? ' / ' + esc(i.unit) : '') : 'без цены') + '</small></div></button>';
+    }).join('') : '<div class="empty">Ничего не нашлось</div>';
+  };
+  let timer = 0; q.oninput = () => { clearTimeout(timer); timer = setTimeout(draw, 60); };
+  q.onkeydown = e => { if (e.key === 'Enter') q.blur(); };
+  sh.root.querySelector('#qx').onclick = () => { q.value = ''; draw(); q.focus(); };
+  res.onclick = e => {
+    const b = e.target.closest('.item'); if (!b) return;
+    const i = itemById(b.dataset.id), f = free(i, cart.shop);
+    if (f <= 0) { toast('Нет в магазине «' + shortShop(cart.shop) + '»', true); return; }
+    const had = cart.lines.find(l => l.itemId === i.id);
+    if (had) had.qty = round3(num(had.qty) + 1);
+    else cart.lines.push({itemId: i.id, name: i.name, unit: i.unit, qty: i.unit === 'мл' ? Math.min(5, f) : 1, price: num((i.price || {})[cart.shop]) || ''});
+    sh.close(); drawLines(); drawTotal();
+  };
+  draw(); setTimeout(() => q.focus(), 60);
+}
+function payments(){
+  const t = payable();
+  if (cart.pay === 'debt') return [];
+  if (cart.pay === 'split') { const c = round2(num(cart.cashPart)); return [{method: 'cash', amount: c}, {method: 'transfer', amount: round2(t - c)}]; }
+  return [{method: cart.pay, amount: t}];
+}
+async function sell(){
+  if (saleProblem() || cart.sending) return;
+  cart.sending = true; drawTotal(); $('#saleErr').textContent = '';
+  const d = cart.debt;
+  const body = {id: cart.id, kind: 'sale', payload: {shop: cart.shop, payments: payments(), note: cart.note, buyer: cart.buyer,
+    lines: cart.lines.map(l => ({itemId: l.itemId, qty: num(l.qty), price: num(l.price)}))}};
+  if (bonusNow()) body.payload.bonus = bonusNow();
+  if (cart.pay === 'debt') body.payload.debt = d.plan === 'date' ? {paid: num(d.paid), method: d.method, dueDate: d.date} : {paid: num(d.paid), method: d.method, months: d.months};
+  try {
+    const r = await api('api/ops', {body});
+    cart = newCart(body.payload.shop);
+    state.ops.unshift(r.op); await loadItems(); refresh(); renderSale(); opSheet(r.op, false);
+  } catch (e) {
+    cart.sending = false;
+    // Сеть моргнула — id продажи тот же: повторное нажатие не создаст дубль.
+    $('#saleErr').textContent = e.status ? e.message : 'Нет связи с сервером — нажмите ещё раз';
+    if (e.status === 409) { await loadItems(); drawLines(); }
+    drawTotal();
+  }
+}
+
+/* ── операция: чек, отмена, повтор ── */
+function payText(p){
+  const parts = p.payments || [];
+  if (p.debt) return (p.debt.months ? 'рассрочка ' + p.debt.months + ' мес.' : 'в долг до ' + dmy(p.debt.dueDate)) + (parts.length ? ', сейчас ' + som(p.debt.paid) : '');
+  return parts.length > 1 ? parts.map(x => METHOD[x.method] + ' ' + som(x.amount)).join(' + ') : (METHOD[(parts[0] || {}).method] || '');
+}
+function dmy(iso){ const s = String(iso || ''); return s.length >= 10 ? s.slice(8, 10) + '.' + s.slice(5, 7) + '.' + s.slice(0, 4) : ''; }
+function badge(op){ const [t, c] = STATUS[op.status] || [op.status, '']; return '<span class="badge ' + c + '">' + t + '</span>'; }
+function opAmount(o){ const p = o.payload || {}; return o.kind === 'sale' ? p.total : p.amount; }
+function opTitle(o){
+  const p = o.payload || {};
+  if (o.kind === 'sale') { const first = (p.lines || [])[0] || {}, n = (p.lines || []).length; return (first.name || 'Продажа') + (n > 1 ? ' и ещё ' + (n - 1) : ''); }
+  if (o.kind === 'payment') return 'Оплата долга · ' + (p.clientName || '');
+  if (o.kind === 'expense') return 'Расход · ' + (p.article || '');
+  return 'Перевод · ' + (p.fromDesk || '') + ' → ' + (p.toDesk || '');
+}
+function opSub(o){
+  const p = o.payload || {}, when = (o.createdAt || '').slice(11, 16), who = state.allOps ? ' · ' + o.user : '';
+  if (o.kind === 'sale') return when + ' · ' + shortShop(p.shop) + who + ' · ' + payText(p);
+  if (o.kind === 'payment') return when + ' · ' + shortShop(p.shop) + who + ' · ' + (METHOD[p.method] || '') + ' · продажа ' + (p.doc || '');
+  if (o.kind === 'expense') return when + who + ' · из «' + (p.desk || '') + '»' + (p.note ? ' · ' + p.note : '');
+  return when + who + (p.note ? ' · ' + p.note : '');
+}
+function opSheet(op, fromList){
+  const p = op.payload || {}, owner = state.user.role === 'owner', sale = op.kind === 'sale';
+  const docs = (op.docs || []).map(d => d.type + ' ' + d.number).join(', ');
+  let body = '';
+  if (sale) {
+    body = (p.lines || []).map(l => '<div class="sum"><span>' + esc(l.name) + '<br><span class="muted small">' + esc(qtyText(l.qty, l.unit)) + ' × ' + som(l.price) + '</span></span><b>' + som(l.sum) + '</b></div>').join('<div style="height:8px"></div>') +
+      '<div style="height:12px"></div><div class="sum"><span>Итого</span><b class="big">' + som(p.total) + '</b><span class="muted">Оплата</span><b>' + esc(payText(p)) + '</b></div>' +
+      (p.debt ? '<div class="small muted" style="margin-top:8px">' + (p.debt.schedule || []).map(x => dmy(x.date) + ' — ' + som(x.sum)).join('<br>') + '</div>' : '') +
+      (p.buyer && (p.buyer.name || p.buyer.phone) ? '<div class="small muted" style="margin-top:8px">Покупатель: ' + esc([p.buyer.name, p.buyer.phone ? '+' + p.buyer.phone : ''].filter(Boolean).join(' ')) + '</div>' : '');
+  } else {
+    body = '<div class="sum"><span>' + esc(KIND[op.kind]) + '</span><b class="big">' + som(p.amount) + '</b></div><div class="small muted" style="margin-top:8px">' + esc(opTitle(op)) + '<br>' + esc(opSub(op)) + '</div>' +
+      (op.kind === 'payment' ? '<div class="small muted">Осталось по продаже: ' + som(p.leftAfter) + '</div>' : '');
+  }
+  let h = sheetHead(fromList ? KIND[op.kind] : sale ? 'Продано' : 'Принято') +
+    '<div class="card"><div class="sum"><span class="muted">' + esc((op.createdAt || '').slice(11, 16)) + ' · ' + esc(op.user) + '</span>' + badge(op) + '</div><div style="height:12px"></div>' + body +
+    (p.note && sale ? '<div class="small muted">Заметка: ' + esc(p.note) + '</div>' : '') +
+    (docs ? '<div class="small muted" style="margin-top:8px">1С: ' + esc(docs) + '</div>' : '') +
+    (op.error && op.status === 'failed' ? '<div class="err">' + esc(op.error) + '</div>' : '') + '</div>' +
+    extrasHtml(op) + '<div class="row"><a class="btn line" href="api/receipt/' + op.id + '" target="_blank" rel="noopener">Чек — печать</a>' +
+    (op.kind === 'sale' || op.kind === 'payment' ? '<button class="btn line" data-wa>Чек в WhatsApp</button>' : '') + '</div>';
+  if (owner && op.status === 'failed') h += '<button class="btn" data-a="retry">Провести в 1С ещё раз</button>';
+  if (['new', 'done', 'failed'].includes(op.status) && (owner || op.mine)) h += '<button class="btn bad" data-a="cancel">Отменить</button>';
+  if (!fromList) h += '<button class="btn" data-close>Готово</button>';
+  const sh = sheet(h);
+  const wa = sh.root.querySelector('[data-wa]'); if (wa) wa.onclick = () => sendWa(op, wa);
+  sh.root.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.a;
+    if (a === 'cancel' && !confirm('Отменить: ' + KIND[op.kind].toLowerCase() + ' на ' + som(opAmount(op)) + '?' + (op.status === 'new' ? '' : ' Документы в 1С распроведутся.'))) return;
+    b.disabled = true;
+    try {
+      const r = await api('api/ops/' + op.id + '/' + a, {body: {}});
+      toast(a === 'retry' ? 'Отправлено в 1С ещё раз' : r.status === 'cancelling' ? 'Отменено — 1С распроведёт документы' : 'Отменено');
+      sh.close(); await refresh(); await loadItems(); render();
+    } catch (e) { b.disabled = false; toast(e.message, true); }
+  });
+}
+async function sendOp(kind, payload, id){
+  const r = await api('api/ops', {body: {id, kind, payload}});
+  state.ops.unshift(r.op); refresh();
+  return r.op;
+}
+
+/* ── этап 3: бонусы клуба, WhatsApp, договор ── */
+let bonusTimer = 0;
+function lookupBonus(){
+  clearTimeout(bonusTimer);
+  const digits = String(cart.buyer.phone || '').replace(/\D/g, '');
+  if (digits.length < 9) { cart.club = null; cart.bonus = ''; drawBonus(); drawTotal(); return; }
+  bonusTimer = setTimeout(async () => {
+    try { cart.club = await api('api/bonus?phone=' + encodeURIComponent(cart.buyer.phone)); } catch (e) { cart.club = null; }
+    drawBonus(); drawTotal();
+  }, 400);
+}
+function bonusLimit(){ const c = cart.club; return c && c.found ? Math.max(0, Math.min(Math.floor(c.balance), Math.floor(cartTotal() * (c.maxPct || 0) / 100))) : 0; }
+function drawBonus(){
+  const box = $('#bonusBox'); if (!box) return;
+  const c = cart.club;
+  if (!c || c.on === false || cart.pay === 'debt') { box.innerHTML = ''; return; }
+  if (!c.found) { box.innerHTML = '<div class="small muted" style="margin:-4px 0 10px">Бонусы клуба: покупателя с этим номером в клубе нет' + (c.error ? ' (' + esc(c.error) + ')' : '') + '</div>'; return; }
+  box.innerHTML = '<div class="card"><div class="sum"><span class="muted">Бонусы клуба' + (c.name ? ' · ' + esc(c.name) : '') + '</span><b>' + som(c.balance) + '</b></div>' +
+    '<div class="row" style="margin-top:8px;align-items:flex-end"><label class="field" style="margin:0"><span>Списать бонусами <span id="bonusLimit"></span></span>' +
+    '<input id="bonusIn" inputmode="numeric" autocomplete="off" placeholder="0" value="' + esc(cart.bonus) + '"></label>' +
+    '<button class="btn line" id="bonusMax" style="flex:0 0 auto;width:auto;min-height:46px">Всё</button></div>' +
+    '<div class="small muted" style="margin-top:6px">После продажи покупателю начислится ' + fmt(c.earnPct || 0) + ' % от оплаты.</div></div>';
+  $('#bonusIn').oninput = e => { cart.bonus = e.target.value; drawTotal(); };
+  $('#bonusMax').onclick = () => { cart.bonus = String(bonusLimit()); $('#bonusIn').value = cart.bonus; drawTotal(); };
+}
+function extrasHtml(op){
+  const p = op.payload || {}, rows = [];
+  if (p.bonus) rows.push('Бонусами клуба: ' + som(p.bonus));
+  if (p.bonusEarned) rows.push('Начислено бонусов: ' + som(p.bonusEarned));
+  if (p.contractUrl) rows.push('Договор: ' + (p.contractAcceptedAt ? 'покупатель согласился ' + dmy(p.contractAcceptedAt) + ' ' + p.contractAcceptedAt.slice(11, 16) : 'ждёт согласия покупателя') +
+    ' · <a href="' + esc(p.contractUrl.replace(/^https?:\/\/[^/]+/, '')) + '" target="_blank" rel="noopener" style="color:var(--cobalt)">открыть</a>');
+  if (p.waSentAt) rows.push('Чек в WhatsApp: +' + esc(p.waPhone) + ' в ' + esc(p.waSentAt.slice(11, 16)) + (p.waDry ? ' (пробный режим — ключа WhatsApp нет)' : ''));
+  return rows.length ? '<div class="small muted" style="margin:-2px 0 10px">' + rows.join('<br>') + '</div>' : '';
+}
+async function sendWa(op, btn, phone){
+  btn.disabled = true;
+  try {
+    const r = await api('api/ops/' + op.id + '/whatsapp', {body: phone ? {phone} : {}});
+    toast(r.dry ? 'Пробный режим: ключа WhatsApp нет — сообщение не ушло' : 'Чек отправлен на +' + r.phone);
+    btn.textContent = r.dry ? 'Пробный режим' : 'Отправлено';
+    refresh();
+  } catch (e) {
+    btn.disabled = false;
+    if (e.status === 422) { const n = prompt('Телефон покупателя (9 цифр):'); if (n) sendWa(op, btn, n); }
+    else toast(e.message, true);
+  }
+}
+
+/* ── Сегодня ── */
+function profitCard(){
+  const pr = state.profit || {};
+  const cell = (k, n) => { const x = pr[k] || {}; return '<div class="card" style="margin:0;padding:10px 12px"><div class="small muted">' + n + '</div><b style="font-size:18px">' + som(x.profit || 0) + '</b><div class="small muted">выручка ' + som(x.revenue || 0) + '</div></div>'; };
+  const nc = (pr.month || {}).noCost || 0;
+  return '<div class="label">Прибыль</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' + cell('today', 'Сегодня') + cell('week', '7 дней') + cell('month', '30 дней') + '</div>' +
+    (nc ? '<div class="small muted" style="margin-top:6px">Строк без себестоимости в 1С: ' + nc + ' — их выручка в прибыль не вошла.</div>' : '');
+}
+function desksCard(){
+  const desks = (state.desks || []).filter(d => Math.abs(d.amount) > 0.004 || state.shops.some(s => d.desk.endsWith(s)));
+  const total = desks.reduce((s, d) => s + d.amount, 0);
+  return '<div class="label">Деньги в кассах</div><div class="card">' + desks.map(d => '<div class="sum" style="padding:4px 0"><span>' + esc(d.desk) + (d.pending ? '<br><span class="small muted">ещё не в 1С: ' + (d.pending > 0 ? '+' : '') + som(d.pending) + '</span>' : '') + '</span><b>' + som(d.amount) + '</b></div>').join('') +
+    '<div class="sum shoprow"><span class="muted">Всего</span><b class="big">' + som(total) + '</b></div></div>' +
+    '<div class="row" style="margin-bottom:6px"><button class="btn line" id="doExpense">' + icon('out') + 'Расход</button><button class="btn line" id="doTransfer">' + icon('swap') + 'Перевод</button></div>';
+}
+function capitalCard(){
+  const c = state.capital;
+  if (!c) return '';
+  return '<div class="label">Общий капитал</div><div class="card"><div class="sum"><span class="muted">Всего</span><b class="big">' + som(c.total) + '</b>' +
+    '<span class="muted small">товар по себестоимости</span><span class="small" style="text-align:right">' + som(c.goods) + '</span>' +
+    '<span class="muted small">деньги в кассах</span><span class="small" style="text-align:right">' + som(c.cash) + '</span>' +
+    '<span class="muted small">долги покупателей</span><span class="small" style="text-align:right">' + som(c.debts) + '</span></div>' +
+    (c.noCost ? '<div class="small muted" style="margin-top:6px">Товаров без себестоимости в 1С: ' + c.noCost + ' — в капитал не вошли.</div>' : '') + '</div>';
+}
+function myBonusCard(){
+  const m = state.myRating || {}, t = m.today || {}, mo = m.month || {};
+  if (!mo.userId) return '';
+  return '<div class="card"><div class="sum"><span class="muted">Мой бонус за месяц (' + fmt(mo.pct) + ' % от прибыли)</span><b class="big" style="color:var(--ok-ink)">' + som(mo.bonus) + '</b>' +
+    '<span class="muted small">продаж за месяц</span><span class="small" style="text-align:right">' + mo.sales + ' · ' + som(mo.revenue) + '</span>' +
+    '<span class="muted small">сегодня</span><span class="small" style="text-align:right">' + (t.sales || 0) + ' · бонус ' + som(t.bonus || 0) + '</span></div></div>';
+}
+function renderToday(){
+  const t = state.totals || {shops: [], total: 0, sales: 0}, ops = state.ops || [], owner = state.user.role === 'owner';
+  let h = '<div class="card"><div class="sum"><span class="muted">Сегодня продано' + (state.allOps ? '' : ' вами') + '</span><b class="big">' + som(t.total) + '</b><span class="muted">Продаж</span><b>' + t.sales + '</b></div>';
+  t.shops.forEach(s => {
+    h += '<div class="sum shoprow"><b style="text-align:left">' + esc(shortShop(s.shop)) + '</b><b>' + som(s.total) + '</b>' +
+      '<span class="muted small">наличные</span><span class="small" style="text-align:right">' + som(s.cash) + '</span>' +
+      '<span class="muted small">перевод</span><span class="small" style="text-align:right">' + som(s.transfer) + '</span></div>';
+  });
+  h += '</div>';
+  h += owner ? desksCard() + profitCard() + capitalCard() : myBonusCard();
+  const failed = ops.filter(o => o.status === 'failed').length;
+  if (failed) h += '<div class="err">Не провелось в 1С: ' + failed + '. Нажмите на операцию — там причина.</div>';
+  h += '<div class="label">Операции</div>' + (ops.length ? ops.map(o =>
+    '<button class="item" data-id="' + o.id + '"><div><div class="t">' + esc(opTitle(o)) + '</div><div class="s">' + esc(opSub(o)) + '</div></div>' +
+    '<div class="r"><span' + (o.status === 'cancelled' ? ' style="color:var(--soft);text-decoration:line-through"' : '') + '>' + (o.kind === 'expense' ? '−' : '') + som(opAmount(o)) + '</span><small>' + badge(o) + '</small></div></button>').join('')
+    : '<div class="empty">Сегодня операций пока нет</div>');
+  $('#main').innerHTML = h;
+  $('#main').querySelectorAll('.item').forEach(b => b.onclick = () => opSheet(ops.find(o => o.id === b.dataset.id), true));
+  if (owner) { $('#doExpense').onclick = () => cashForm('expense'); $('#doTransfer').onclick = () => cashForm('transfer'); }
+}
+function deskNames(){ return (state.desks || []).map(d => d.desk); }
+function cashForm(kind){
+  const f = {id: uuid(), desk: '', to: '', article: null, amount: '', note: ''};
+  const desks = deskNames();
+  const sh = sheet(sheetHead(kind === 'expense' ? 'Расход' : 'Перевод между кассами') + '<div id="cf"></div>');
+  const draw = () => {
+    let h = '<div class="field"><span>' + (kind === 'expense' ? 'Из кассы' : 'Откуда') + '</span>' + chips('cfFrom', desks.map(d => [d, d]), f.desk) + '</div>';
+    if (kind === 'transfer') h += '<div class="field"><span>Куда</span>' + chips('cfTo', desks.filter(d => d !== f.desk).map(d => [d, d]), f.to) + '</div>';
+    else h += '<div class="field"><span>Статья</span><button class="btn line" id="cfArt" style="justify-content:flex-start">' + esc(f.article ? f.article.name : 'Выбрать статью') + '</button></div>';
+    h += '<label class="field"><span>Сумма</span><input id="cfSum" inputmode="decimal" autocomplete="off" value="' + esc(f.amount) + '"></label>' +
+      '<label class="field"><span>Заметка</span><input id="cfNote" autocomplete="off" value="' + esc(f.note) + '"></label><div class="err" id="cfErr"></div><button class="btn" id="cfGo">Записать</button>';
+    sh.root.querySelector('#cf').innerHTML = h;
+    onChip('cfFrom', k => { f.desk = k; if (f.to === k) f.to = ''; draw(); });
+    onChip('cfTo', k => { f.to = k; draw(); });
+    const art = sh.root.querySelector('#cfArt'); if (art) art.onclick = () => articlePicker(a => { f.article = a; draw(); });
+    sh.root.querySelector('#cfSum').oninput = e => { f.amount = e.target.value; };
+    sh.root.querySelector('#cfNote').oninput = e => { f.note = e.target.value; };
+    sh.root.querySelector('#cfGo').onclick = async e => {
+      e.target.disabled = true;
+      const payload = kind === 'expense' ? {desk: f.desk, articleId: f.article ? f.article.id : '', amount: num(f.amount), note: f.note}
+        : {fromDesk: f.desk, toDesk: f.to, amount: num(f.amount), note: f.note};
+      try { const op = await sendOp(kind, payload, f.id); sh.close(); toast(KIND[kind] + ' записан: ' + som(op.payload.amount)); render(); }
+      catch (er) { e.target.disabled = false; sh.root.querySelector('#cfErr').textContent = er.status ? er.message : 'Нет связи — нажмите ещё раз'; }
+    };
+  };
+  draw();
+}
+function articlePicker(onPick){
+  const sh = sheet(sheetHead('Статья расхода') + '<div class="search"><input type="search" id="aq" placeholder="Поиск статьи" autocomplete="off"></div><div id="ares"></div>', true);
+  const q = sh.root.querySelector('#aq');
+  const draw = () => {
+    const list = (state.articles || []).filter(a => matches({name: a.name, article: '', code: '', group: ''}, q.value));
+    sh.root.querySelector('#ares').innerHTML = list.map(a => '<button class="item" data-id="' + a.id + '"><div class="t">' + esc(a.name) + '</div></button>').join('') || '<div class="empty">Ничего не нашлось</div>';
+  };
+  q.oninput = draw;
+  sh.root.querySelector('#ares').onclick = e => { const b = e.target.closest('.item'); if (!b) return; onPick(state.articles.find(a => a.id === b.dataset.id)); sh.close(); };
+  draw();
+}
+
+/* ── Оплата долга ── */
+let debts = [], debtQ = '', debtFilter = 'due';
+async function loadDebts(){ try { debts = (await api('api/debts')).debts; } catch (e) { toast('Долги не загрузились: ' + e.message, true); } }
+function nextDue(d){ return (d.schedule || [])[0] || null; }
+function clients(){
+  const by = {};
+  debts.forEach(d => { const k = d.clientId || d.clientName; (by[k] = by[k] || {id: k, name: d.clientName, phones: d.phones, left: 0, debts: []}); by[k].left += d.left; by[k].debts.push(d); });
+  return Object.values(by).map(c => { c.next = c.debts.map(nextDue).filter(Boolean).sort((a, b) => a.date < b.date ? -1 : 1)[0] || null; return c; });
+}
+async function renderPayment(){
+  if (!debts.length) { $('#main').innerHTML = '<div class="empty">Загружаю…</div>'; await loadDebts(); }
+  const today = isoDate(new Date());
+  const all = clients();
+  const list = all.filter(c => matches({name: c.name, article: c.phones, code: c.debts.map(d => d.doc).join(' '), group: ''}, debtQ))
+    .filter(c => debtQ || debtFilter === 'all' || (c.next && c.next.date <= today))
+    .sort((a, b) => ((a.next || {}).date || '9') < ((b.next || {}).date || '9') ? -1 : 1);
+  const total = all.reduce((s, c) => s + c.left, 0);
+  $('#main').innerHTML = '<div class="card"><div class="sum"><span class="muted">Долги покупателей</span><b class="big">' + som(total) + '</b><span class="muted">Покупателей</span><b>' + all.length + '</b></div></div>' +
+    '<div class="search"><input type="search" id="dq" placeholder="Имя, телефон, номер продажи" autocomplete="off" value="' + esc(debtQ) + '"><button id="dqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
+    chips('df', [['due', 'Сегодня и просрочено'], ['all', 'Все']], debtFilter) +
+    (list.length ? list.map(c => {
+      const over = c.next && c.next.date < today, due = c.next && c.next.date === today;
+      return '<button class="item" data-id="' + esc(c.id) + '"><div><div class="t">' + esc(c.name) + '</div><div class="s"' + (over ? ' style="color:var(--bad-ink)"' : '') + '>' +
+        esc(c.next ? (over ? 'просрочено с ' : due ? 'сегодня ' : 'до ') + dmy(c.next.date) + ' — ' + som(c.next.sum) : '') + (c.phones ? ' · ' + esc(c.phones) : '') + '</div></div><div class="r">' + som(c.left) + '<small>' + c.debts.length + ' прод.</small></div></button>';
+    }).join('') : '<div class="empty">' + (debtQ || debtFilter === 'all' ? 'Долгов нет' : 'Сегодня оплат по графику нет. «Все» — весь список.') + '</div>');
+  let timer = 0; $('#dq').oninput = e => { debtQ = e.target.value; clearTimeout(timer); timer = setTimeout(renderPayment, 250); };
+  $('#dqx').onclick = () => { debtQ = ''; renderPayment(); };
+  onChip('df', k => { debtFilter = k; renderPayment(); });
+  $('#main').querySelectorAll('.item').forEach(b => b.onclick = () => payForm(all.find(c => c.id === b.dataset.id)));
+}
+function payForm(c){
+  const f = {id: uuid(), debt: c.debts[0], amount: '', method: 'cash', shop: state.user.shop || (state.shops.includes(c.debts[0].shop) ? c.debts[0].shop : state.shops[0])};
+  const phone = String(c.phones || '').replace(/\D/g, '');
+  const sh = sheet(sheetHead(c.name) + (phone ? '<div class="row" style="margin-bottom:10px"><a class="btn line" href="tel:+' + phone + '">' + icon('phone') + 'Позвонить</a><a class="btn line" href="https://wa.me/' + phone + '" target="_blank" rel="noopener">WhatsApp</a></div>' : '') + '<div id="pf"></div>');
+  const draw = () => {
+    const d = f.debt, n = nextDue(d);
+    if (f.amount === '') f.amount = n ? String(Math.min(n.sum, d.left)) : String(d.left);
+    let h = (c.debts.length > 1 ? '<div class="field"><span>Продажа</span>' + chips('pfDebt', c.debts.map(x => [x.id, x.doc + ' · ' + som(x.left)]), d.id) + '</div>' : '') +
+      '<div class="card"><div class="sum"><span class="muted">Продажа ' + esc(d.doc) + ' от ' + dmy(d.date) + '</span><b>' + som(d.total) + '</b><span class="muted">Осталось</span><b style="color:var(--bad-ink)">' + som(d.left) + '</b></div>' +
+      '<div class="small muted" style="margin-top:6px">' + (d.schedule || []).map(x => dmy(x.date) + ' — ' + som(x.sum)).join('<br>') + '</div></div>' +
+      '<label class="field"><span>Сумма оплаты</span><input id="pfSum" inputmode="decimal" autocomplete="off" value="' + esc(f.amount) + '"></label>' +
+      '<div class="field"><span>Чем</span>' + chips('pfMethod', [['cash', 'Наличные'], ['transfer', 'Перевод']], f.method) + '</div>' +
+      (canPickShop() ? '<div class="field"><span>В какой магазин</span>' + chips('pfShop', state.shops.map(s => [s, shortShop(s)]), f.shop) + '</div>' : '') +
+      '<div class="err" id="pfErr"></div><button class="btn" id="pfGo">Принять ' + som(f.amount) + '</button>';
+    sh.root.querySelector('#pf').innerHTML = h;
+    onChip('pfDebt', k => { f.debt = c.debts.find(x => x.id === k); f.amount = ''; draw(); });
+    onChip('pfMethod', k => { f.method = k; draw(); });
+    onChip('pfShop', k => { f.shop = k; draw(); });
+    const inp = sh.root.querySelector('#pfSum');
+    inp.onfocus = () => setTimeout(() => inp.select(), 0);
+    inp.oninput = e => { f.amount = e.target.value; sh.root.querySelector('#pfGo').textContent = 'Принять ' + som(f.amount); };
+    sh.root.querySelector('#pfGo').onclick = async e => {
+      e.target.disabled = true;
+      try {
+        const op = await sendOp('payment', {debtId: f.debt.id, amount: num(f.amount), method: f.method, shop: f.shop}, f.id);
+        sh.close(); await loadDebts(); renderPayment(); opSheet(op, false);
+      } catch (er) { e.target.disabled = false; sh.root.querySelector('#pfErr').textContent = er.status ? er.message : 'Нет связи — нажмите ещё раз'; }
+    };
+  };
+  draw();
+}
+
+/* ── Остаток ── */
+let stockShop = 'all', stockQ = '';
+function renderStock(){
+  const shops = state.shops;
+  $('#main').innerHTML = (state.user.role === 'owner' ? '<button class="btn line" id="siteBtn" style="margin-bottom:10px">Сайт ↔ 1С: наличие на kemalusman.kg</button>' : '') +
+    '<div class="search"><input type="search" id="sq" placeholder="Поиск товара" autocomplete="off" enterkeyhint="search" value="' + esc(stockQ) + '"><button id="sqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
+    '<div class="chips" id="ss">' + [['all', 'Все']].concat(shops.map(s => [s, shortShop(s)])).concat([['none', 'Нет в наличии']]).map(([k, n]) =>
+      '<button class="chip' + (stockShop === k ? ' on' : '') + '" data-k="' + esc(k) + '">' + esc(n) + '</button>').join('') + '</div><div id="slist"></div>';
+  const draw = () => {
+    const one = shops.includes(stockShop);
+    const list = items.filter(i => matches(i, stockQ)).filter(i => {
+      const total = shops.reduce((s, sh) => s + free(i, sh), 0);
+      return stockShop === 'none' ? total <= 0 : one ? free(i, stockShop) > 0 : true;
+    });
+    $('#slist').innerHTML = (list.length ? '<div class="muted small">' + list.length + ' товаров</div>' : '<div class="empty">Ничего не нашлось</div>') + list.slice(0, 200).map(i => {
+      const total = shops.reduce((s, sh) => s + free(i, sh), 0);
+      const parts = (one ? [stockShop] : shops).map(sh => shortShop(sh) + ': ' + qtyText(free(i, sh), i.unit) + (num((i.price || {})[sh]) ? ' · ' + som((i.price || {})[sh]) : ''));
+      return '<div class="item' + (total > 0 ? '' : ' off') + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + parts.map(esc).join('<br>') + '</div></div>' +
+        '<div class="r">' + esc(qtyText(one ? free(i, stockShop) : total, i.unit)) + '<small>' + esc(i.code) + '</small></div></div>';
+    }).join('') + (list.length > 200 ? '<div class="empty">Показаны первые 200 — уточните поиск</div>' : '');
+  };
+  let timer = 0; $('#sq').oninput = e => { stockQ = e.target.value; clearTimeout(timer); timer = setTimeout(draw, 60); };
+  $('#sq').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); };
+  $('#sqx').onclick = () => { stockQ = ''; $('#sq').value = ''; draw(); };
+  $('#ss').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; stockShop = b.dataset.k; renderStock(); };
+  const sb = $('#siteBtn'); if (sb) sb.onclick = siteSheet;
+  draw();
+}
+
+/* ── Сайт ↔ 1С: только наличие (владелец) ── */
+let siteData = null, siteFilter = 'todo', siteQ = '';
+async function siteSheet(){
+  const sh = sheet(sheetHead('Сайт ↔ 1С') + '<div id="sw"><div class="empty">Загружаю…</div></div>', true);
+  const box = sh.root.querySelector('#sw');
+  const load = async () => { try { siteData = await api('api/site/links'); } catch (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return false; } return true; };
+  const action = async (btn, path, body, ok) => {
+    btn.disabled = true;
+    try { const r = await api(path, {body: body || {}}); toast(ok(r)); await load(); draw(); }
+    catch (e) { btn.disabled = false; toast(e.message, true); }
+  };
+  const draw = () => {
+    const d = siteData, list = d.products;
+    const linked = list.filter(p => p.status === 'linked').length, none = list.filter(p => p.status === 'none').length, todo = list.length - linked - none;
+    const exact = list.filter(p => !p.status && (p.suggest || [])[0] && p.suggest[0].score >= 0.99).length;
+    const shown = list.filter(p => siteFilter === 'todo' ? !p.status : siteFilter === 'linked' ? p.status === 'linked' : p.status === 'none')
+      .filter(p => matches({name: p.brand + ' ' + p.name, article: p.item ? p.item.name : '', code: '', group: p.category}, siteQ))
+      .sort((a, b) => siteFilter === 'todo' ? (((b.suggest || [])[0] || {}).score || 0) - (((a.suggest || [])[0] || {}).score || 0) : 0);
+    let h = '<div class="small muted" style="margin-bottom:8px">Касса ставит на сайте галочку «в наличии» по остатку 1С (' + esc(d.shops.map(shortShop).join(' + ')) +
+      '). Цены и описания на сайте не меняются. Вариант «10 мл» — в наличии, если в 1С есть 10 мл и больше.</div>';
+    if (!d.on) h += '<div class="err">Адрес сайта не настроен на сервере кассы — это делается при выкладке (этап 4).</div>';
+    h += '<div class="card"><div class="sum"><span class="muted">Товаров на сайте</span><b>' + list.length + '</b><span class="muted">Связано с 1С</span><b>' + linked + '</b>' +
+      '<span class="muted">Нет в 1С</span><b>' + none + '</b><span class="muted">Не разобрано</span><b>' + todo + '</b></div>' +
+      (d.last ? '<div class="small muted" style="margin-top:6px">Последняя отправка ' + esc((d.last.at || '').slice(11, 16)) + ': ' + (d.last.ok ? 'изменено товаров ' + d.last.products : 'ошибка — ' + esc(d.last.error)) + '</div>' : '') + '</div>' +
+      '<div class="row" style="margin-bottom:8px"><button class="btn line" id="swRefresh">Обновить каталог</button><button class="btn" id="swPush">Отправить наличие</button></div>' +
+      (exact ? '<button class="btn line" id="swAuto" style="margin-bottom:8px">Связать точные совпадения (' + exact + ')</button>' : '') +
+      '<div class="search"><input type="search" id="swq" placeholder="Поиск товара сайта" autocomplete="off" value="' + esc(siteQ) + '"></div>' +
+      chips('swf', [['todo', 'Не разобрано ' + todo], ['linked', 'Связано ' + linked], ['none', 'Нет в 1С ' + none]], siteFilter) +
+      (shown.length ? shown.slice(0, 150).map(p => {
+        const vars = (p.variants || []).map(v => (v.inStock ? '' : '<s>') + esc(v.label) + (v.inStock ? '' : '</s>')).join(', ');
+        const sub = p.status === 'linked' && p.item ? '1С: ' + esc(p.item.name) + ' · есть ' + esc(qtyText(p.item.free, p.item.unit)) + (p.pkgItem ? ' · упаковка: ' + esc(p.pkgItem.name) + ' (' + fmt(p.pkgItem.free) + ' шт)' : '')
+          : p.status === 'none' ? 'нет в 1С — галочки не трогаем'
+          : (p.suggest || []).length ? 'похоже: ' + esc(p.suggest[0].name) + ' (' + Math.round(p.suggest[0].score * 100) + ' %)' : 'похожих в 1С нет';
+        return '<button class="item" data-id="' + esc(p.id) + '"><div><div class="t">' + esc((p.brand ? p.brand + ' ' : '') + p.name) + '</div><div class="s">' + sub + '</div><div class="s">' + vars + '</div></div></button>';
+      }).join('') + (shown.length > 150 ? '<div class="empty">Показаны первые 150 — уточните поиск</div>' : '') : '<div class="empty">' + (list.length ? 'Здесь пусто' : 'Каталог сайта ещё не загружен — нажмите «Обновить каталог»') + '</div>');
+    box.innerHTML = h;
+    box.querySelector('#swRefresh').onclick = e => action(e.target, 'api/site/refresh', {}, r => 'Каталог сайта: ' + r.products + ' товаров');
+    box.querySelector('#swPush').onclick = e => action(e.target, 'api/site/push', {}, r => 'На сайте изменено: ' + r.products + ' товаров, ' + r.variants + ' вариантов');
+    const auto = box.querySelector('#swAuto'); if (auto) auto.onclick = e => action(e.target, 'api/site/links', {auto: true}, r => 'Связано: ' + r.linked);
+    let timer = 0; box.querySelector('#swq').oninput = e => { siteQ = e.target.value; clearTimeout(timer); timer = setTimeout(draw, 250); };
+    box.querySelector('#swf').onclick = e => { const b = e.target.closest('.chip'); if (b) { siteFilter = b.dataset.k; draw(); } };
+    box.querySelectorAll('.item').forEach(b => b.onclick = () => siteLinkForm(list.find(p => p.id === b.dataset.id), async () => { await load(); draw(); }));
+  };
+  if (await load()) draw();
+}
+function siteLinkForm(p, done){
+  const f = {itemId: p.itemId || ((p.suggest || [])[0] || {}).id || '', pkgItemId: p.pkgItemId || '', q: ''};
+  const sh = sheet(sheetHead((p.brand ? p.brand + ' ' : '') + p.name) + '<div id="slf"></div>', true);
+  const draw = () => {
+    const pick = id => items.find(i => i.id === id);
+    const found = f.q ? items.filter(i => matches(i, f.q)).slice(0, 30) : (p.suggest || []).map(s => pick(s.id)).filter(Boolean);
+    const cur = pick(f.itemId), pkg = pick(f.pkgItemId);
+    let h = '<div class="small muted">Варианты на сайте: ' + esc((p.variants || []).map(v => v.label).join(', ')) + '</div>' +
+      '<div class="label">Товар 1С (в мл)</div>' + (cur ? '<div class="card"><b>' + esc(cur.name) + '</b><div class="small muted">' + esc(state.shops.map(s => shortShop(s) + ': ' + qtyText(free(cur, s), cur.unit)).join(' · ')) + '</div></div>' : '<div class="small muted">не выбран</div>') +
+      '<div class="search"><input type="search" id="slq" placeholder="Найти товар 1С" autocomplete="off" value="' + esc(f.q) + '"></div>' +
+      found.map(i => '<button class="item" data-id="' + i.id + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + esc(i.code + ' · ' + (i.unit || '')) + '</div></div><div class="r">' + (i.id === f.itemId ? 'выбран' : '') + '</div></button>').join('') +
+      '<div class="label">Упаковка (необязательно)</div><div class="small muted">Если «Упаковка 50 мл» — это отдельный флакон в 1С (шт), выберите его: галочка упаковки будет по его остатку.</div>' +
+      (pkg ? '<div class="card"><b>' + esc(pkg.name) + '</b> <button class="chip" id="slPkgX" style="min-height:32px">убрать</button></div>' : '') +
+      (cur && !pkg ? '<button class="btn line" id="slPkg">Выбрать флакон для упаковки</button>' : '') +
+      '<div class="err" id="slErr"></div><button class="btn" id="slSave"' + (cur ? '' : ' disabled') + '>Связать</button>' +
+      '<div class="row" style="margin-top:10px"><button class="btn line" id="slNone">Нет в 1С</button>' + (p.status ? '<button class="btn bad" id="slDrop">Разорвать связь</button>' : '') + '</div>';
+    sh.root.querySelector('#slf').innerHTML = h;
+    const q = sh.root.querySelector('#slq'); let timer = 0;
+    q.oninput = e => { f.q = e.target.value; clearTimeout(timer); timer = setTimeout(() => { draw(); const n = sh.root.querySelector('#slq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300); };
+    sh.root.querySelectorAll('#slf .item').forEach(b => b.onclick = () => { if (f.pickPkg) { f.pkgItemId = b.dataset.id; f.pickPkg = false; } else f.itemId = b.dataset.id; f.q = ''; draw(); });
+    const pb = sh.root.querySelector('#slPkg'); if (pb) pb.onclick = () => { f.pickPkg = true; toast('Найдите флакон в поиске и нажмите на него'); sh.root.querySelector('#slq').focus(); };
+    const px = sh.root.querySelector('#slPkgX'); if (px) px.onclick = () => { f.pkgItemId = ''; draw(); };
+    const save = async body => {
+      try { await api('api/site/links', {body: Object.assign({productId: p.id}, body)}); sh.close(); toast('Сохранено'); done(); }
+      catch (e) { sh.root.querySelector('#slErr').textContent = e.message; }
+    };
+    sh.root.querySelector('#slSave').onclick = () => save({status: 'linked', itemId: f.itemId, pkgItemId: f.pkgItemId});
+    sh.root.querySelector('#slNone').onclick = () => save({status: 'none'});
+    const dr = sh.root.querySelector('#slDrop'); if (dr) dr.onclick = () => save({status: ''});
+  };
+  draw();
+}
+
+/* ── Сотрудники (владелец) ── */
+function ratingHtml(){
+  const r = (state.rating || {}).month || [];
+  if (!r.length) return '';
+  return '<div class="label">Рейтинг продавцов за месяц</div><div class="card">' + r.map((x, i) => '<div class="sum" style="padding:6px 0"><span><b style="text-align:left">' + (i + 1) + '. ' + esc(x.name) + '</b><br><span class="small muted">' + x.sales + ' продаж · ' + som(x.revenue) + ' · прибыль ' + som(x.profit) + '</span></span>' +
+    '<b style="color:var(--ok-ink)">' + som(x.bonus) + '<br><span class="small muted" style="font-weight:650">' + fmt(x.pct) + ' %</span></b></div>').join('') + '</div>';
+}
+async function renderStaff(){
+  $('#main').innerHTML = '<div class="empty">Загружаю…</div>';
+  let r;
+  try { r = await api('api/users'); } catch (e) { $('#main').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return; }
+  const seen = u => u.lastSeen ? 'заходил ' + u.lastSeen.slice(8, 10) + '.' + u.lastSeen.slice(5, 7) + ' ' + u.lastSeen.slice(11, 16) : 'ещё не заходил';
+  $('#main').innerHTML = ratingHtml() + '<div class="label">Сотрудники</div><button class="add" id="newUser">' + icon('plus') + 'Новый сотрудник</button><div style="height:8px"></div>' + r.users.map(u =>
+    '<button class="item' + (u.active ? '' : ' off') + '" data-id="' + u.id + '"><div><div class="t">' + esc(u.name) + (u.role === 'owner' && u.name !== 'Владелец' ? ' · владелец' : '') + '</div>' +
+    '<div class="s">' + esc(u.role === 'owner' ? 'все магазины' : (u.shop ? 'магазин ' + shortShop(u.shop) : 'любой магазин') + ' · бонус ' + fmt(u.bonusPct) + ' %') + ' · ' + esc(seen(u)) + '</div></div>' +
+    '<div class="r">' + (u.active ? '' : '<span class="badge">выключен</span>') + '</div></button>').join('') +
+    '<p class="muted small" style="margin-top:14px">Вход — только по PIN, у каждого свой. PIN владельца меняется на компьютере магазина.</p>';
+  $('#newUser').onclick = () => userForm(null, r.shops);
+  $('#main').querySelectorAll('.item').forEach(b => b.onclick = () => userForm(r.users.find(u => u.id === +b.dataset.id), r.shops));
+}
+function userForm(u, shops){
+  const owner = u && u.role === 'owner';
+  const sh = sheet(sheetHead(u ? u.name : 'Новый сотрудник') +
+    '<label class="field"><span>Имя</span><input id="uName" autocomplete="off" value="' + esc(u ? u.name : '') + '"></label>' +
+    (owner ? '' : '<label class="field"><span>' + (u ? 'Новый PIN (пусто — не менять)' : 'PIN — от 4 до 6 цифр') + '</span><input id="uPin" inputmode="numeric" maxlength="6" autocomplete="off"></label>' +
+      '<label class="field"><span>Магазин</span><select id="uShop"><option value="">Любой магазин</option>' + shops.map(s => '<option value="' + esc(s) + '"' + (u && u.shop === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></label>' +
+      '<label class="field"><span>Бонус, % от прибыли его продаж</span><input id="uBonus" inputmode="decimal" autocomplete="off" value="' + esc(u ? u.bonusPct : 10) + '"></label>' +
+      (u ? '<label class="switch">Может входить<input type="checkbox" id="uActive"' + (u.active ? ' checked' : '') + '></label>' : '')) +
+    '<div class="err" id="uErr"></div><button class="btn" id="uSave">Сохранить</button>');
+  sh.root.querySelector('#uSave').onclick = async () => {
+    const body = {name: sh.root.querySelector('#uName').value.trim()};
+    if (u) body.id = u.id;
+    if (!owner) {
+      body.pin = sh.root.querySelector('#uPin').value.trim();
+      body.shop = sh.root.querySelector('#uShop').value;
+      body.bonusPct = num(sh.root.querySelector('#uBonus').value);
+      if (u) body.active = sh.root.querySelector('#uActive').checked;
+    }
+    try { await api('api/users', {body}); sh.close(); toast('Сохранено'); renderStaff(); }
+    catch (e) { sh.root.querySelector('#uErr').textContent = e.message; }
+  };
+}
+
+/* ── старт ── */
+$('#logout').onclick = async () => { if (!confirm('Выйти из кассы?')) return; try { await api('logout', {body: {}}); } catch (e) {} showLogin(); };
+keypad(); drawDots(); boot();
+setInterval(() => { if (state && !document.hidden) { refresh(); loadItems(); } }, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state) { refresh(); loadItems(); } });
+</script>
+</body>
+</html>

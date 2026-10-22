@@ -1,0 +1,12 @@
+# Касса Kemal Usman на сервере: docker compose up -d --build (в папке /root/kemal-kassa).
+# Наружу — только 127.0.0.1:8095; https://kassa.kemalusman.kg отдаёт веб-сервер (Caddy/nginx) — этап 4.
+services:
+  kassa:
+    build: .
+    container_name: kemal-kassa
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8095:8095"
+    volumes:
+      - ./data:/data
