@@ -34,6 +34,20 @@
 | `agent/onec_kemal.py` | что программа читает из 1С и какие документы создаёт |
 | `agent/install-agent.ps1` | задача Windows «Kemal касса» (запуск при входе в Windows) |
 
+## Выкладка (этап 4, делает владелец)
+
+Всё — из папки `kemal-usman` после `git pull` (касса должна быть в `main`):
+
+1. Cloudflare → DNS → запись **A** `kassa` → `145.223.100.16`, облако **серое** (DNS only) — так сертификат выдастся сразу.
+2. `bash kassa/deploy/deploy-kassa.sh check` — только посмотреть сервер (можно пропустить).
+3. `bash kassa/deploy/deploy-kassa.sh` — касса на сервер: служба `kemal-kassa` (127.0.0.1:8095, не Docker), секреты в
+   `/root/kemal-kassa/.env`, ключ клуба в `pb_data/kassa_credentials.json`, адрес в Caddy, секрет 1С → `kassa/agent/agent.env`.
+4. `./deploy-odengi.sh` — обычная выкладка сайта; заодно ставит `pb_hooks/kassa.pb.js` (бонусы, наличие на сайте). Потом Cloudflare → Purge Everything.
+5. На ПК магазина: вписать в `kassa/agent/agent.env` пользователя и пароль 1С Kemal (`ONEC_USER`, `ONEC_PASSWORD`), затем
+   `python kassa/agent/kassa_agent.py setup --apply` (кассы «Перевод <магазин>» в 1С), `python kassa/agent/kassa_agent.py owner-pin`,
+   `powershell -ExecutionPolicy Bypass -File kassa/agent/install-agent.ps1` (задача Windows «Kemal касса»).
+6. Телефон: `https://kassa.kemalusman.kg/kassa/` → PIN владельца → «Сотрудники» → продавцы; «Остаток» → «Сайт ↔ 1С».
+
 ## Проверки
 
 ```bash
