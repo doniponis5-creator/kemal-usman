@@ -18,7 +18,7 @@ import re
 import secrets
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP
 
 ROLES = ("owner", "staff")
 KINDS = ("sale", "payment", "expense", "transfer")
@@ -247,7 +247,7 @@ def build_payments(raw, total: Decimal) -> dict:
 
 
 def check_sale(op: dict, user: dict, items: dict[str, dict], shops: list[str], taken: dict[str, dict[str, Decimal]],
-               today: date | None = None) -> dict:
+               today: date | None = None, club: dict | None = None) -> dict:
     """
     Продажа с телефона до записи. {'ok': True, 'payload': …} — нормализованная продажа; {'ok': False, 'error': …} — почему нет.
     items — {id: {id, code, name, unit, stock: {магазин: кол-во}, price: {магазин: цена}}} из 1С;
@@ -298,6 +298,18 @@ def check_sale(op: dict, user: dict, items: dict[str, dict], shops: list[str], t
     buyer = {"name": _text(buyer_raw.get("name"), 100), "phone": phone_digits(buyer_raw.get("phone"))}
     if str(buyer_raw.get("phone") or "").strip() and not buyer["phone"]:
         return {"ok": False, "error": "номер покупателя: 9 цифр, например 555 123 456"}
+    # Бонусы клуба Kemal (этап 3): списать можно не больше баланса и не больше maxPct % суммы, только при оплате сразу.
+    bonus = money(payload.get("bonus")).to_integral_value(rounding=ROUND_HALF_UP) if money(payload.get("bonus")) > 0 else Decimal(0)
+    if bonus > 0:
+        if isinstance(payload.get("debt"), dict) and payload.get("debt"):
+            return {"ok": False, "error": "бонусами — только при оплате сразу, не в долг"}
+        if not buyer["phone"]:
+            return {"ok": False, "error": "бонусами — нужен телефон покупателя"}
+        if not club or not club.get("found"):
+            return {"ok": False, "error": "бонусы клуба сейчас недоступны — продайте без бонусов"}
+        limit = min(money(club.get("balance")), money(total * money(club.get("maxPct") or 0) / 100)).to_integral_value(rounding=ROUND_FLOOR)
+        if bonus > limit:
+            return {"ok": False, "error": f"бонусами можно не больше {_som(limit)}"}
     debt = None
     if isinstance(payload.get("debt"), dict) and payload.get("debt"):
         # В долг: покупатель с именем и телефоном обязателен — по нему 1С находит или заводит карточку, долг виден в «Оплате».
@@ -309,11 +321,13 @@ def check_sale(op: dict, user: dict, items: dict[str, dict], shops: list[str], t
         debt = built["debt"]
         paid = {"ok": True, "payments": [{"method": debt["method"], "amount": debt["paid"]}] if debt["paid"] > 0 else []}
     else:
-        paid = build_payments(payload.get("payments"), total)
+        paid = build_payments(payload.get("payments"), total - bonus)
         if not paid["ok"]:
             return paid
     clean = {"shop": shop, "lines": lines, "total": float(total), "payments": paid["payments"],
              "note": _text(payload.get("note"), NOTE_MAX)}
+    if bonus > 0:
+        clean["bonus"] = float(bonus)
     if debt:
         clean["debt"] = debt
     if buyer["name"] or buyer["phone"]:
@@ -465,7 +479,7 @@ def check_op(op: dict, user: dict, ctx: dict) -> dict:
         return {"ok": False, "error": "это может только владелец"}
     payload = op.get("payload") if isinstance(op.get("payload"), dict) else {}
     if kind == "sale":
-        return check_sale(op, user, ctx.get("items") or {}, ctx.get("shops") or [], ctx.get("taken") or {}, ctx.get("today"))
+        return check_sale(op, user, ctx.get("items") or {}, ctx.get("shops") or [], ctx.get("taken") or {}, ctx.get("today"), ctx.get("club"))
     if kind == "payment":
         return check_payment(op_id, payload, user, ctx.get("debts") or {}, ctx.get("paid") or {}, ctx.get("shops") or [])
     if kind == "expense":
@@ -513,7 +527,7 @@ PERIODS = (("today", 1), ("week", 7), ("month", 30))
 
 def sale_profit(payload: dict) -> dict:
     """Выручка и прибыль продажи по себестоимости на момент продажи (строка cost); строки без себестоимости не считаем в прибыль."""
-    revenue = money(payload.get("total"))
+    revenue = money(payload.get("total")) - money(payload.get("bonus"))     # бонусы клуба — скидка, денег за них нет
     cost, no_cost = Decimal(0), 0
     for line in payload.get("lines") or []:
         unit_cost = money(line.get("cost"))
@@ -522,7 +536,7 @@ def sale_profit(payload: dict) -> dict:
             revenue -= money(line.get("sum"))
             continue
         cost += money(unit_cost * quantity(line.get("qty")))
-    return {"revenue": money(payload.get("total")), "profit": revenue - cost, "noCost": no_cost}
+    return {"revenue": money(payload.get("total")) - money(payload.get("bonus")), "profit": revenue - cost, "noCost": no_cost}
 
 
 def _op_day(op: dict) -> date | None:
@@ -701,6 +715,8 @@ def receipt_text(op: dict, shop_title: str = "Kemal Usman Parfume") -> str:
             lines.append(f"• {line.get('name')} — {num(line.get('qty'))} {line.get('unit') or ''} × {_som(line.get('price'))} = {_som(line.get('sum'))}"
                          .replace("  ×", " ×"))
         lines.append(f"*Итого: {_som(payload.get('total'))}*")
+        if money(payload.get("bonus")) > 0:
+            lines.append(f"Бонусами клуба: {_som(payload.get('bonus'))}, к оплате {_som(money(payload.get('total')) - money(payload.get('bonus')))}")
         parts = payload.get("payments") or []
         debt = payload.get("debt") or {}
         if debt:
@@ -715,6 +731,10 @@ def receipt_text(op: dict, shop_title: str = "Kemal Usman Parfume") -> str:
             lines.append("Оплата: " + "; ".join(f"{METHODS.get(p.get('method'), '')} — {_som(p.get('amount'))}" for p in parts))
         elif parts:
             lines.append("Оплата: " + METHODS.get(parts[0].get("method"), ""))
+        if payload.get("contractUrl"):
+            lines.append(f"Договор (откройте и нажмите «Согласен»): {payload['contractUrl']}")
+        if payload.get("bonusEarned"):
+            lines.append(f"Начислено бонусов клуба: {_som(payload['bonusEarned'])}")
         buyer = payload.get("buyer") or {}
         if buyer.get("name") or buyer.get("phone"):
             lines.append("Покупатель: " + " ".join(x for x in (buyer.get("name"), "+" + buyer["phone"] if buyer.get("phone") else "") if x))

@@ -275,5 +275,144 @@ class Stage2Flow(Flow):
         self.assertEqual({o["kind"] for o in w["ops"]} >= {"payment", "expense", "transfer", "sale"}, True)
 
 
+class Stage3Flow(Flow):
+    """Бонусы клуба (PocketBase подменён) и чек в WhatsApp (пробный режим — ключей Green API нет)."""
+
+    def test_flow(self):
+        pass
+
+    def test_stage3(self):
+        from kassa_server import notify
+        calls = []
+        balance = {"v": 500}
+
+        def fake_club(action, **data):
+            calls.append((action, data.get("opId"), data.get("amount") or data.get("total")))
+            if action == "balance":
+                return {"ok": True, "found": True, "balance": balance["v"], "maxPct": 30, "earnPct": 5}
+            if action == "spend":
+                if data["amount"] > balance["v"]:
+                    return {"ok": False, "error": "not_enough"}
+                balance["v"] -= data["amount"]
+                return {"ok": True, "amount": -data["amount"]}
+            if action == "earn":
+                return {"ok": True, "amount": int(data["total"] * 5 / 100)}
+            return {"ok": True}
+
+        old = (notify.club, notify.club_on)
+        notify.club, notify.club_on = fake_club, (lambda: True)
+        os.environ["KASSA_CLUB_URL"], os.environ["KASSA_CLUB_KEY"] = "http://club.test", "k"
+        try:
+            c = self.c
+            shops = [{"name": SHOP_A, "cashDesk": "Касса " + SHOP_A, "transferDesk": "Перевод " + SHOP_A}]
+            self.signed("/api/1c/sync", {"shops": shops, "items": [
+                {"id": OIL, "name": "Chanel Chance Maslo", "unit": "мл", "stock": {SHOP_A: 50}, "price": {SHOP_A: 160}, "cost": 40}]})
+            self.signed("/api/1c/owner-pin", {"pin": "9753"})
+            self.assertEqual(c.post("/kassa/login", json={"pin": "9753"}).status_code, 200)
+            b = c.get("/kassa/api/bonus", params={"phone": "555 123 456"}).json()
+            self.assertEqual((b["found"], b["balance"], b["maxPct"]), (True, 500, 30))
+            buyer = {"name": "Айжан", "phone": "555123456"}
+            # 10 мл × 160 = 1600: предел 30 % = 480; 490 — отказ, 400 — можно, оплата 1200.
+            too = sale([{"itemId": OIL, "qty": 10, "price": 160}], payments=[{"method": "cash"}], buyer=buyer, bonus=490)
+            r = c.post("/kassa/api/ops", json=too)
+            self.assertEqual(r.status_code, 409, r.text)
+            self.assertIn("480", r.json()["error"])
+            ok = sale([{"itemId": OIL, "qty": 10, "price": 160}], payments=[{"method": "cash"}], buyer=buyer, bonus=400)
+            r = c.post("/kassa/api/ops", json=ok)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertEqual(r.json()["op"]["payload"]["payments"], [{"method": "cash", "amount": 1200.0}])
+            self.assertEqual(balance["v"], 100)
+            self.signed(f"/api/1c/ops/{ok['id']}/done", {"docs": []})
+            receipt = c.get(f"/kassa/api/receipt/{ok['id']}").text
+            self.assertIn("Бонусами клуба: 400 сом", receipt)
+            self.assertIn("Начислено бонусов клуба: 60 сом", receipt)        # 5 % от 1200
+            w = c.post(f"/kassa/api/ops/{ok['id']}/whatsapp", json={})
+            self.assertEqual(w.json(), {"ok": True, "phone": "996555123456", "dry": True})
+            # Отмена непроведённой продажи с бонусами → бонусы назад.
+            again = sale([{"itemId": OIL, "qty": 1, "price": 160}], payments=[{"method": "cash"}], buyer=buyer, bonus=40)
+            c.post("/kassa/api/ops", json=again)
+            c.post(f"/kassa/api/ops/{again['id']}/cancel")
+            self.assertIn(("refund", again["id"], None), calls)
+            # Продажа в долг — чек в WhatsApp уходит сам.
+            debt = sale([{"itemId": OIL, "qty": 2, "price": 160}], payments=[], buyer=buyer, debt={"paid": 0, "dueDate": "2099-01-01"})
+            debt["payload"]["debt"]["dueDate"] = (date_today() + __import__("datetime").timedelta(days=10)).isoformat()
+            r = c.post("/kassa/api/ops", json=debt)
+            self.assertEqual(r.status_code, 200, r.text)
+            self.assertTrue(r.json()["op"]["payload"].get("waSentAt"))
+            # Онлайн договор: ссылка в продаже, страница без входа, «Согласен» записывает время.
+            url = r.json()["op"]["payload"]["contractUrl"]
+            path = "/kassa/c/" + url.rsplit("/", 1)[1]
+            anon = TestClient(app)
+            page = anon.get(path)
+            self.assertEqual(page.status_code, 200)
+            self.assertIn("Айжан", page.text)
+            self.assertIn("Согласен с условиями", page.text)
+            self.assertEqual(anon.post(path + "/accept").json(), {"ok": True})
+            self.assertIn("согласился с условиями", anon.get(path).text)
+            self.assertEqual(anon.get("/kassa/c/" + "x" * 24).status_code, 404)
+            self.assertIn("Договор", c.get(f"/kassa/api/receipt/{debt['id']}").text)
+        finally:
+            notify.club, notify.club_on = old
+            os.environ.pop("KASSA_CLUB_URL", None)
+            os.environ.pop("KASSA_CLUB_KEY", None)
+
+
+class SiteSync(Flow):
+    """Сайт ↔ 1С, только наличие: связь товаров, галочки «в наличии», отправка только изменений (сайт подменён)."""
+
+    def test_flow(self):
+        pass
+
+    def test_rules(self):
+        from kassa_server import site
+        product = {"variants": [{"id": 1, "label": "5 мл", "type": "ml", "inStock": False}, {"id": 2, "label": "20 мл", "type": "ml", "inStock": True},
+                                {"id": 3, "label": "Упаковка 50 мл", "type": "pkg", "inStock": True}, {"id": 4, "label": "Полный", "type": "full", "inStock": True}]}
+        items = {OIL: {"id": OIL, "stock": {SHOP_A: 12.8, SHOP_B: 3}}, BOX: {"id": BOX, "stock": {}}}
+        got = site.availability(product, {"itemId": OIL}, items, [SHOP_A, SHOP_B], {})
+        self.assertEqual(got, [{"id": 1, "inStock": True}, {"id": 2, "inStock": False}])            # 15.8 мл: 5 есть, 20 нет; pkg не трогаем
+        got = site.availability(product, {"itemId": OIL, "pkgItemId": BOX}, items, [SHOP_A], {SHOP_A: {OIL: Decimal("10")}})
+        self.assertEqual(got, [{"id": 1, "inStock": False}, {"id": 2, "inStock": False}, {"id": 3, "inStock": False}])   # 2.8 мл свободно
+        self.assertEqual(site.variant_ml({"label": "Упаковка 100 мл"}), Decimal("100"))
+        self.assertGreaterEqual(site.similarity("MFK Baccarat Rouge 540", "Baccarat rouge 540 (maslo)"), 0.6)
+
+    def test_api(self):
+        from kassa_server import notify
+        pushed = []
+        catalog = [{"id": "p1", "name": "Chance", "brand": "Chanel", "variants": [{"id": 1, "label": "5 мл", "type": "ml", "inStock": False},
+                                                                              {"id": 2, "label": "100 мл", "type": "ml", "inStock": True}]},
+                   {"id": "p2", "name": "Неизвестный", "brand": "X", "variants": [{"id": 1, "label": "5 мл", "type": "ml", "inStock": True}]}]
+        old = (notify.site_catalog, notify.site_stock, notify.club_on)
+        notify.site_catalog = lambda: catalog
+        notify.site_stock = lambda updates: (pushed.append(updates), {"ok": True, "products": len(updates), "variants": sum(len(u["variants"]) for u in updates)})[1]
+        notify.club_on = lambda: True
+        try:
+            c = self.c
+            shops = [{"name": SHOP_A, "cashDesk": "Касса " + SHOP_A, "transferDesk": "Перевод " + SHOP_A}]
+            self.signed("/api/1c/sync", {"shops": shops, "items": [
+                {"id": OIL, "name": "Chanel Chance Maslo", "unit": "мл", "stock": {SHOP_A: 50}, "price": {SHOP_A: 160}}]})
+            self.signed("/api/1c/owner-pin", {"pin": "1470"})
+            self.assertEqual(c.post("/kassa/login", json={"pin": "1470"}).status_code, 200)
+            self.assertEqual(c.post("/kassa/api/site/refresh").json()["products"], 2)
+            links = c.get("/kassa/api/site/links").json()
+            p1 = next(p for p in links["products"] if p["id"] == "p1")
+            self.assertEqual(p1["suggest"][0]["id"], OIL)
+            self.assertEqual(c.post("/kassa/api/site/links", json={"productId": "p1", "status": "linked", "itemId": OIL}).json(), {"ok": True})
+            self.assertEqual(c.post("/kassa/api/site/links", json={"productId": "p2", "status": "none"}).json(), {"ok": True})
+            r = c.post("/kassa/api/site/push").json()
+            self.assertEqual((r["products"], r["variants"]), (1, 2))                       # 50 мл: 5 мл — есть, 100 мл — нет
+            self.assertEqual(pushed[-1], [{"productId": "p1", "variants": [{"id": 1, "inStock": True}, {"id": 2, "inStock": False}]}])
+            self.assertEqual(c.post("/kassa/api/site/push").json()["products"], 0)          # без изменений — ничего не шлём
+            self.assertEqual(len(pushed), 1)
+            staff_free = c.get("/kassa/api/site/links").json()["products"]
+            self.assertEqual(next(p for p in staff_free if p["id"] == "p1")["item"]["free"], 50)
+        finally:
+            notify.site_catalog, notify.site_stock, notify.club_on = old
+
+
+def date_today():
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) + timedelta(hours=6)).date()
+
+
 if __name__ == "__main__":
     unittest.main()

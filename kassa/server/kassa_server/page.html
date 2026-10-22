@@ -202,7 +202,7 @@ let state = null, tab = 'sale', items = [], itemsV = '', taken = {};
 let cart = newCart('');
 
 function newCart(shop){ return {id: uuid(), shop: shop || '', lines: [], pay: 'cash', cashPart: '', buyer: {name: '', phone: ''}, note: '', sending: false,
-  debt: {paid: '', method: 'cash', plan: 'date', date: '', months: 3}}; }
+  debt: {paid: '', method: 'cash', plan: 'date', date: '', months: 3}, bonus: '', club: null}; }
 function uuid(){ return crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }); }
 function num(x){ const n = Number(String(x == null ? '' : x).replace(',', '.').replace(/\s/g, '')); return isFinite(n) ? n : 0; }
 function round2(x){ return Math.round(x * 100) / 100; }
@@ -313,6 +313,8 @@ const sheetHead = t => '<div class="head"><h2>' + esc(t) + '</h2><button data-cl
 /* ── Продажа ── */
 function itemById(id){ return items.find(i => i.id === id); }
 function cartTotal(){ return round2(cart.lines.reduce((s, l) => s + round2(num(l.qty) * num(l.price)), 0)); }
+function bonusNow(){ return cart.pay === 'debt' || !cart.club || !cart.club.found ? 0 : Math.floor(num(cart.bonus)); }
+function payable(){ return round2(cartTotal() - bonusNow()); }
 function renderSale(){
   const m = $('#main');
   if (!state.shops.length) { m.innerHTML = '<div class="empty">1С ещё не прислала товары. Включите программу кассы на компьютере магазина.</div>'; return; }
@@ -320,7 +322,7 @@ function renderSale(){
     '<button class="chip' + (s === cart.shop ? ' on' : '') + '" data-s="' + esc(s) + '"' + (canPickShop() || s === cart.shop ? '' : ' disabled') + '>' + esc(shortShop(s)) + '</button>').join('') + '</div>';
   if (!cart.shop) { m.innerHTML = h + '<div class="empty">Выберите магазин — остаток и цены у каждого свои.</div>'; bindShops(); return; }
   h += '<div class="label">Товары</div><div id="lines"></div><button class="add" id="addItem">' + icon('plus') + 'Добавить товар</button>' +
-    '<div id="payBox"></div>' +
+    '<div id="payBox"></div><div id="bonusBox"></div>' +
     '<details class="more"' + (cart.buyer.name || cart.buyer.phone || cart.note ? ' open' : '') + '><summary>Покупатель и заметка</summary>' +
     '<div class="row"><label class="field"><span>Имя</span><input id="bName" autocomplete="off" value="' + esc(cart.buyer.name) + '"></label>' +
     '<label class="field"><span>Телефон</span><input id="bPhone" inputmode="tel" autocomplete="off" placeholder="555 123 456" value="' + esc(cart.buyer.phone) + '"></label></div>' +
@@ -330,7 +332,8 @@ function renderSale(){
   bindShops(); drawLines(); drawPay(); drawTotal();
   $('#addItem').onclick = itemPicker;
   $('#bName').oninput = e => { cart.buyer.name = e.target.value; };
-  $('#bPhone').oninput = e => { cart.buyer.phone = e.target.value; };
+  $('#bPhone').oninput = e => { cart.buyer.phone = e.target.value; lookupBonus(); };
+  drawBonus();
   $('#note').oninput = e => { cart.note = e.target.value; };
   $('#sell').onclick = sell;
 }
@@ -393,7 +396,7 @@ function drawPay(){
       '</div>';
   }
   $('#payBox').innerHTML = h;
-  onChip('pay', k => { cart.pay = k; if (k === 'debt') { const det = document.querySelector('details.more'); if (det) det.open = true; } drawPay(); drawTotal(); });
+  onChip('pay', k => { cart.pay = k; if (k === 'debt') { const det = document.querySelector('details.more'); if (det) det.open = true; } drawPay(); drawBonus(); drawTotal(); });
   const c = $('#cashPart');
   if (c) { c.oninput = () => { cart.cashPart = c.value; drawTotal(); }; c.onfocus = () => setTimeout(() => c.select(), 0); }
   if (cart.pay === 'debt') {
@@ -419,7 +422,8 @@ function saleProblem(){
     if (q > free(i, cart.shop) + 1e-9) return 'Не хватает: есть ' + qtyText(free(i, cart.shop), i.unit);
     if (num(l.price) <= 0) return 'Укажите цену';
   }
-  if (cart.pay === 'split') { const c = num(cart.cashPart); if (c <= 0 || c >= cartTotal()) return 'Наличными — меньше суммы'; }
+  if (cart.pay === 'split') { const c = num(cart.cashPart); if (c <= 0 || c >= payable()) return 'Наличными — меньше суммы'; }
+  if (bonusNow() > bonusLimit()) return 'Бонусами — не больше ' + som(bonusLimit());
   if (cart.pay === 'debt') {
     if (!cart.buyer.name.trim() || String(cart.buyer.phone).replace(/\D/g, '').length < 9) return 'В долг: имя и телефон покупателя';
     if (num(cart.debt.paid) < 0 || num(cart.debt.paid) >= cartTotal()) return 'Сейчас — меньше суммы продажи';
@@ -429,9 +433,10 @@ function saleProblem(){
 }
 function drawTotal(){
   const el = $('#total'); if (!el) return;
-  const t = cartTotal();
-  el.textContent = som(t);
+  const t = payable();
+  el.innerHTML = esc(som(t)) + (bonusNow() ? '<small style="display:block;font-size:13px;font-weight:650;color:var(--muted);text-align:right;letter-spacing:0">−' + esc(fmt(bonusNow())) + ' бонусами</small>' : '');
   const tr = $('#trPart'); if (tr) tr.value = num(cart.cashPart) > 0 ? fmt(Math.max(t - num(cart.cashPart), 0)) : '';
+  const bl = $('#bonusLimit'); if (bl) bl.textContent = 'можно до ' + som(bonusLimit());
   const pt = $('#dPlanText'); if (pt) pt.textContent = planText();
   const why = saleProblem(), b = $('#sell');
   b.disabled = !!why || cart.sending;
@@ -463,7 +468,7 @@ function itemPicker(){
   draw(); setTimeout(() => q.focus(), 60);
 }
 function payments(){
-  const t = cartTotal();
+  const t = payable();
   if (cart.pay === 'debt') return [];
   if (cart.pay === 'split') { const c = round2(num(cart.cashPart)); return [{method: 'cash', amount: c}, {method: 'transfer', amount: round2(t - c)}]; }
   return [{method: cart.pay, amount: t}];
@@ -474,6 +479,7 @@ async function sell(){
   const d = cart.debt;
   const body = {id: cart.id, kind: 'sale', payload: {shop: cart.shop, payments: payments(), note: cart.note, buyer: cart.buyer,
     lines: cart.lines.map(l => ({itemId: l.itemId, qty: num(l.qty), price: num(l.price)}))}};
+  if (bonusNow()) body.payload.bonus = bonusNow();
   if (cart.pay === 'debt') body.payload.debt = d.plan === 'date' ? {paid: num(d.paid), method: d.method, dueDate: d.date} : {paid: num(d.paid), method: d.method, months: d.months};
   try {
     const r = await api('api/ops', {body});
@@ -529,11 +535,13 @@ function opSheet(op, fromList){
     (p.note && sale ? '<div class="small muted">Заметка: ' + esc(p.note) + '</div>' : '') +
     (docs ? '<div class="small muted" style="margin-top:8px">1С: ' + esc(docs) + '</div>' : '') +
     (op.error && op.status === 'failed' ? '<div class="err">' + esc(op.error) + '</div>' : '') + '</div>' +
-    '<a class="btn line" href="api/receipt/' + op.id + '" target="_blank" rel="noopener">Чек — печать</a>';
+    extrasHtml(op) + '<div class="row"><a class="btn line" href="api/receipt/' + op.id + '" target="_blank" rel="noopener">Чек — печать</a>' +
+    (op.kind === 'sale' || op.kind === 'payment' ? '<button class="btn line" data-wa>Чек в WhatsApp</button>' : '') + '</div>';
   if (owner && op.status === 'failed') h += '<button class="btn" data-a="retry">Провести в 1С ещё раз</button>';
   if (['new', 'done', 'failed'].includes(op.status) && (owner || op.mine)) h += '<button class="btn bad" data-a="cancel">Отменить</button>';
   if (!fromList) h += '<button class="btn" data-close>Готово</button>';
   const sh = sheet(h);
+  const wa = sh.root.querySelector('[data-wa]'); if (wa) wa.onclick = () => sendWa(op, wa);
   sh.root.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
     const a = b.dataset.a;
     if (a === 'cancel' && !confirm('Отменить: ' + KIND[op.kind].toLowerCase() + ' на ' + som(opAmount(op)) + '?' + (op.status === 'new' ? '' : ' Документы в 1С распроведутся.'))) return;
@@ -549,6 +557,54 @@ async function sendOp(kind, payload, id){
   const r = await api('api/ops', {body: {id, kind, payload}});
   state.ops.unshift(r.op); refresh();
   return r.op;
+}
+
+/* ── этап 3: бонусы клуба, WhatsApp, договор ── */
+let bonusTimer = 0;
+function lookupBonus(){
+  clearTimeout(bonusTimer);
+  const digits = String(cart.buyer.phone || '').replace(/\D/g, '');
+  if (digits.length < 9) { cart.club = null; cart.bonus = ''; drawBonus(); drawTotal(); return; }
+  bonusTimer = setTimeout(async () => {
+    try { cart.club = await api('api/bonus?phone=' + encodeURIComponent(cart.buyer.phone)); } catch (e) { cart.club = null; }
+    drawBonus(); drawTotal();
+  }, 400);
+}
+function bonusLimit(){ const c = cart.club; return c && c.found ? Math.max(0, Math.min(Math.floor(c.balance), Math.floor(cartTotal() * (c.maxPct || 0) / 100))) : 0; }
+function drawBonus(){
+  const box = $('#bonusBox'); if (!box) return;
+  const c = cart.club;
+  if (!c || c.on === false || cart.pay === 'debt') { box.innerHTML = ''; return; }
+  if (!c.found) { box.innerHTML = '<div class="small muted" style="margin:-4px 0 10px">Бонусы клуба: покупателя с этим номером в клубе нет' + (c.error ? ' (' + esc(c.error) + ')' : '') + '</div>'; return; }
+  box.innerHTML = '<div class="card"><div class="sum"><span class="muted">Бонусы клуба' + (c.name ? ' · ' + esc(c.name) : '') + '</span><b>' + som(c.balance) + '</b></div>' +
+    '<div class="row" style="margin-top:8px;align-items:flex-end"><label class="field" style="margin:0"><span>Списать бонусами <span id="bonusLimit"></span></span>' +
+    '<input id="bonusIn" inputmode="numeric" autocomplete="off" placeholder="0" value="' + esc(cart.bonus) + '"></label>' +
+    '<button class="btn line" id="bonusMax" style="flex:0 0 auto;width:auto;min-height:46px">Всё</button></div>' +
+    '<div class="small muted" style="margin-top:6px">После продажи покупателю начислится ' + fmt(c.earnPct || 0) + ' % от оплаты.</div></div>';
+  $('#bonusIn').oninput = e => { cart.bonus = e.target.value; drawTotal(); };
+  $('#bonusMax').onclick = () => { cart.bonus = String(bonusLimit()); $('#bonusIn').value = cart.bonus; drawTotal(); };
+}
+function extrasHtml(op){
+  const p = op.payload || {}, rows = [];
+  if (p.bonus) rows.push('Бонусами клуба: ' + som(p.bonus));
+  if (p.bonusEarned) rows.push('Начислено бонусов: ' + som(p.bonusEarned));
+  if (p.contractUrl) rows.push('Договор: ' + (p.contractAcceptedAt ? 'покупатель согласился ' + dmy(p.contractAcceptedAt) + ' ' + p.contractAcceptedAt.slice(11, 16) : 'ждёт согласия покупателя') +
+    ' · <a href="' + esc(p.contractUrl.replace(/^https?:\/\/[^/]+/, '')) + '" target="_blank" rel="noopener" style="color:var(--cobalt)">открыть</a>');
+  if (p.waSentAt) rows.push('Чек в WhatsApp: +' + esc(p.waPhone) + ' в ' + esc(p.waSentAt.slice(11, 16)) + (p.waDry ? ' (пробный режим — ключа WhatsApp нет)' : ''));
+  return rows.length ? '<div class="small muted" style="margin:-2px 0 10px">' + rows.join('<br>') + '</div>' : '';
+}
+async function sendWa(op, btn, phone){
+  btn.disabled = true;
+  try {
+    const r = await api('api/ops/' + op.id + '/whatsapp', {body: phone ? {phone} : {}});
+    toast(r.dry ? 'Пробный режим: ключа WhatsApp нет — сообщение не ушло' : 'Чек отправлен на +' + r.phone);
+    btn.textContent = r.dry ? 'Пробный режим' : 'Отправлено';
+    refresh();
+  } catch (e) {
+    btn.disabled = false;
+    if (e.status === 422) { const n = prompt('Телефон покупателя (9 цифр):'); if (n) sendWa(op, btn, n); }
+    else toast(e.message, true);
+  }
 }
 
 /* ── Сегодня ── */
@@ -707,7 +763,8 @@ function payForm(c){
 let stockShop = 'all', stockQ = '';
 function renderStock(){
   const shops = state.shops;
-  $('#main').innerHTML = '<div class="search"><input type="search" id="sq" placeholder="Поиск товара" autocomplete="off" enterkeyhint="search" value="' + esc(stockQ) + '"><button id="sqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
+  $('#main').innerHTML = (state.user.role === 'owner' ? '<button class="btn line" id="siteBtn" style="margin-bottom:10px">Сайт ↔ 1С: наличие на kemalusman.kg</button>' : '') +
+    '<div class="search"><input type="search" id="sq" placeholder="Поиск товара" autocomplete="off" enterkeyhint="search" value="' + esc(stockQ) + '"><button id="sqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
     '<div class="chips" id="ss">' + [['all', 'Все']].concat(shops.map(s => [s, shortShop(s)])).concat([['none', 'Нет в наличии']]).map(([k, n]) =>
       '<button class="chip' + (stockShop === k ? ' on' : '') + '" data-k="' + esc(k) + '">' + esc(n) + '</button>').join('') + '</div><div id="slist"></div>';
   const draw = () => {
@@ -727,6 +784,85 @@ function renderStock(){
   $('#sq').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); };
   $('#sqx').onclick = () => { stockQ = ''; $('#sq').value = ''; draw(); };
   $('#ss').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; stockShop = b.dataset.k; renderStock(); };
+  const sb = $('#siteBtn'); if (sb) sb.onclick = siteSheet;
+  draw();
+}
+
+/* ── Сайт ↔ 1С: только наличие (владелец) ── */
+let siteData = null, siteFilter = 'todo', siteQ = '';
+async function siteSheet(){
+  const sh = sheet(sheetHead('Сайт ↔ 1С') + '<div id="sw"><div class="empty">Загружаю…</div></div>', true);
+  const box = sh.root.querySelector('#sw');
+  const load = async () => { try { siteData = await api('api/site/links'); } catch (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return false; } return true; };
+  const action = async (btn, path, body, ok) => {
+    btn.disabled = true;
+    try { const r = await api(path, {body: body || {}}); toast(ok(r)); await load(); draw(); }
+    catch (e) { btn.disabled = false; toast(e.message, true); }
+  };
+  const draw = () => {
+    const d = siteData, list = d.products;
+    const linked = list.filter(p => p.status === 'linked').length, none = list.filter(p => p.status === 'none').length, todo = list.length - linked - none;
+    const exact = list.filter(p => !p.status && (p.suggest || [])[0] && p.suggest[0].score >= 0.99).length;
+    const shown = list.filter(p => siteFilter === 'todo' ? !p.status : siteFilter === 'linked' ? p.status === 'linked' : p.status === 'none')
+      .filter(p => matches({name: p.brand + ' ' + p.name, article: p.item ? p.item.name : '', code: '', group: p.category}, siteQ))
+      .sort((a, b) => siteFilter === 'todo' ? (((b.suggest || [])[0] || {}).score || 0) - (((a.suggest || [])[0] || {}).score || 0) : 0);
+    let h = '<div class="small muted" style="margin-bottom:8px">Касса ставит на сайте галочку «в наличии» по остатку 1С (' + esc(d.shops.map(shortShop).join(' + ')) +
+      '). Цены и описания на сайте не меняются. Вариант «10 мл» — в наличии, если в 1С есть 10 мл и больше.</div>';
+    if (!d.on) h += '<div class="err">Адрес сайта не настроен на сервере кассы — это делается при выкладке (этап 4).</div>';
+    h += '<div class="card"><div class="sum"><span class="muted">Товаров на сайте</span><b>' + list.length + '</b><span class="muted">Связано с 1С</span><b>' + linked + '</b>' +
+      '<span class="muted">Нет в 1С</span><b>' + none + '</b><span class="muted">Не разобрано</span><b>' + todo + '</b></div>' +
+      (d.last ? '<div class="small muted" style="margin-top:6px">Последняя отправка ' + esc((d.last.at || '').slice(11, 16)) + ': ' + (d.last.ok ? 'изменено товаров ' + d.last.products : 'ошибка — ' + esc(d.last.error)) + '</div>' : '') + '</div>' +
+      '<div class="row" style="margin-bottom:8px"><button class="btn line" id="swRefresh">Обновить каталог</button><button class="btn" id="swPush">Отправить наличие</button></div>' +
+      (exact ? '<button class="btn line" id="swAuto" style="margin-bottom:8px">Связать точные совпадения (' + exact + ')</button>' : '') +
+      '<div class="search"><input type="search" id="swq" placeholder="Поиск товара сайта" autocomplete="off" value="' + esc(siteQ) + '"></div>' +
+      chips('swf', [['todo', 'Не разобрано ' + todo], ['linked', 'Связано ' + linked], ['none', 'Нет в 1С ' + none]], siteFilter) +
+      (shown.length ? shown.slice(0, 150).map(p => {
+        const vars = (p.variants || []).map(v => (v.inStock ? '' : '<s>') + esc(v.label) + (v.inStock ? '' : '</s>')).join(', ');
+        const sub = p.status === 'linked' && p.item ? '1С: ' + esc(p.item.name) + ' · есть ' + esc(qtyText(p.item.free, p.item.unit)) + (p.pkgItem ? ' · упаковка: ' + esc(p.pkgItem.name) + ' (' + fmt(p.pkgItem.free) + ' шт)' : '')
+          : p.status === 'none' ? 'нет в 1С — галочки не трогаем'
+          : (p.suggest || []).length ? 'похоже: ' + esc(p.suggest[0].name) + ' (' + Math.round(p.suggest[0].score * 100) + ' %)' : 'похожих в 1С нет';
+        return '<button class="item" data-id="' + esc(p.id) + '"><div><div class="t">' + esc((p.brand ? p.brand + ' ' : '') + p.name) + '</div><div class="s">' + sub + '</div><div class="s">' + vars + '</div></div></button>';
+      }).join('') + (shown.length > 150 ? '<div class="empty">Показаны первые 150 — уточните поиск</div>' : '') : '<div class="empty">' + (list.length ? 'Здесь пусто' : 'Каталог сайта ещё не загружен — нажмите «Обновить каталог»') + '</div>');
+    box.innerHTML = h;
+    box.querySelector('#swRefresh').onclick = e => action(e.target, 'api/site/refresh', {}, r => 'Каталог сайта: ' + r.products + ' товаров');
+    box.querySelector('#swPush').onclick = e => action(e.target, 'api/site/push', {}, r => 'На сайте изменено: ' + r.products + ' товаров, ' + r.variants + ' вариантов');
+    const auto = box.querySelector('#swAuto'); if (auto) auto.onclick = e => action(e.target, 'api/site/links', {auto: true}, r => 'Связано: ' + r.linked);
+    let timer = 0; box.querySelector('#swq').oninput = e => { siteQ = e.target.value; clearTimeout(timer); timer = setTimeout(draw, 250); };
+    box.querySelector('#swf').onclick = e => { const b = e.target.closest('.chip'); if (b) { siteFilter = b.dataset.k; draw(); } };
+    box.querySelectorAll('.item').forEach(b => b.onclick = () => siteLinkForm(list.find(p => p.id === b.dataset.id), async () => { await load(); draw(); }));
+  };
+  if (await load()) draw();
+}
+function siteLinkForm(p, done){
+  const f = {itemId: p.itemId || ((p.suggest || [])[0] || {}).id || '', pkgItemId: p.pkgItemId || '', q: ''};
+  const sh = sheet(sheetHead((p.brand ? p.brand + ' ' : '') + p.name) + '<div id="slf"></div>', true);
+  const draw = () => {
+    const pick = id => items.find(i => i.id === id);
+    const found = f.q ? items.filter(i => matches(i, f.q)).slice(0, 30) : (p.suggest || []).map(s => pick(s.id)).filter(Boolean);
+    const cur = pick(f.itemId), pkg = pick(f.pkgItemId);
+    let h = '<div class="small muted">Варианты на сайте: ' + esc((p.variants || []).map(v => v.label).join(', ')) + '</div>' +
+      '<div class="label">Товар 1С (в мл)</div>' + (cur ? '<div class="card"><b>' + esc(cur.name) + '</b><div class="small muted">' + esc(state.shops.map(s => shortShop(s) + ': ' + qtyText(free(cur, s), cur.unit)).join(' · ')) + '</div></div>' : '<div class="small muted">не выбран</div>') +
+      '<div class="search"><input type="search" id="slq" placeholder="Найти товар 1С" autocomplete="off" value="' + esc(f.q) + '"></div>' +
+      found.map(i => '<button class="item" data-id="' + i.id + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + esc(i.code + ' · ' + (i.unit || '')) + '</div></div><div class="r">' + (i.id === f.itemId ? 'выбран' : '') + '</div></button>').join('') +
+      '<div class="label">Упаковка (необязательно)</div><div class="small muted">Если «Упаковка 50 мл» — это отдельный флакон в 1С (шт), выберите его: галочка упаковки будет по его остатку.</div>' +
+      (pkg ? '<div class="card"><b>' + esc(pkg.name) + '</b> <button class="chip" id="slPkgX" style="min-height:32px">убрать</button></div>' : '') +
+      (cur && !pkg ? '<button class="btn line" id="slPkg">Выбрать флакон для упаковки</button>' : '') +
+      '<div class="err" id="slErr"></div><button class="btn" id="slSave"' + (cur ? '' : ' disabled') + '>Связать</button>' +
+      '<div class="row" style="margin-top:10px"><button class="btn line" id="slNone">Нет в 1С</button>' + (p.status ? '<button class="btn bad" id="slDrop">Разорвать связь</button>' : '') + '</div>';
+    sh.root.querySelector('#slf').innerHTML = h;
+    const q = sh.root.querySelector('#slq'); let timer = 0;
+    q.oninput = e => { f.q = e.target.value; clearTimeout(timer); timer = setTimeout(() => { draw(); const n = sh.root.querySelector('#slq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300); };
+    sh.root.querySelectorAll('#slf .item').forEach(b => b.onclick = () => { if (f.pickPkg) { f.pkgItemId = b.dataset.id; f.pickPkg = false; } else f.itemId = b.dataset.id; f.q = ''; draw(); });
+    const pb = sh.root.querySelector('#slPkg'); if (pb) pb.onclick = () => { f.pickPkg = true; toast('Найдите флакон в поиске и нажмите на него'); sh.root.querySelector('#slq').focus(); };
+    const px = sh.root.querySelector('#slPkgX'); if (px) px.onclick = () => { f.pkgItemId = ''; draw(); };
+    const save = async body => {
+      try { await api('api/site/links', {body: Object.assign({productId: p.id}, body)}); sh.close(); toast('Сохранено'); done(); }
+      catch (e) { sh.root.querySelector('#slErr').textContent = e.message; }
+    };
+    sh.root.querySelector('#slSave').onclick = () => save({status: 'linked', itemId: f.itemId, pkgItemId: f.pkgItemId});
+    sh.root.querySelector('#slNone').onclick = () => save({status: 'none'});
+    const dr = sh.root.querySelector('#slDrop'); if (dr) dr.onclick = () => save({status: ''});
+  };
   draw();
 }
 

@@ -101,6 +101,23 @@ CREATE TABLE IF NOT EXISTS articles (
     name        TEXT NOT NULL,
     uses        INTEGER NOT NULL DEFAULT 0
 );
+-- Сайт ↔ 1С (только наличие): копия каталога сайта и связи «товар сайта → товар 1С», их подтверждает владелец.
+CREATE TABLE IF NOT EXISTS site_products (
+    id          TEXT PRIMARY KEY,               -- id товара в PocketBase сайта
+    name        TEXT NOT NULL DEFAULT '',
+    brand       TEXT NOT NULL DEFAULT '',
+    category    TEXT NOT NULL DEFAULT '',
+    variants    TEXT NOT NULL DEFAULT '[]',
+    fetched_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS site_links (
+    product_id  TEXT PRIMARY KEY,
+    status      TEXT NOT NULL DEFAULT 'linked',  -- linked | none (в 1С такого нет — не трогать)
+    item_id     TEXT NOT NULL DEFAULT '',        -- товар 1С в мл (варианты «5 мл», «10 мл»…)
+    pkg_item_id TEXT NOT NULL DEFAULT '',        -- штучный товар 1С для «Упаковки» (необязательно)
+    user_name   TEXT NOT NULL DEFAULT '',
+    updated_at  TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS balances (
     name        TEXT PRIMARY KEY,               -- касса 1С
     amount      REAL NOT NULL DEFAULT 0

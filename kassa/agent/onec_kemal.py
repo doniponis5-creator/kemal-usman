@@ -244,7 +244,8 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
     seller = op.get("user") or ""
     note = " | ".join(x for x in (f"продавец: {seller}" if seller else "", (payload.get("buyer") or {}).get("name") or "",
                                   ("+" + payload["buyer"]["phone"]) if (payload.get("buyer") or {}).get("phone") else "",
-                                  payload.get("note") or "") if x)
+                                  payload.get("note") or "",
+                                  ("договор: " + payload["contractUrl"]) if payload.get("contractUrl") else "") if x)
     desks = {"cash": shop["cashDesk"], "transfer": shop["transferDesk"]}
     payments = payload.get("payments") or []
     docs = []
@@ -267,8 +268,10 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
         manager = _manager(s, seller)
         if manager is not None:
             doc.Менеджер = manager
-        doc.Комментарий = f"{LABEL}{op_id} | " + (note or "касса с телефона")
-        for line in lines:
+        bonus = float(payload.get("bonus") or 0)
+        doc.Комментарий = f"{LABEL}{op_id} | " + (note or "касса с телефона") + (f" | бонусами клуба {bonus:g}" if bonus else "")
+        shares = bonus_shares([float(l["sum"]) for l in lines], bonus)
+        for line, share in zip(lines, shares):
             row = doc.Товары.Добавить()
             row.Номенклатура = line["_ref"]
             row.Количество = line["qty"]
@@ -276,8 +279,12 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
             if abs(float(line.get("listPrice") or 0) - float(line["price"])) < 0.005:
                 row.ВидЦены = price_type          # цена прайса; другая цена — ручная, без вида цен
             row.Цена = line["price"]
-            row.Сумма = line["sum"]
-            row.СуммаСНДС = line["sum"]
+            # Бонусы клуба (этап 3) — ручная скидка строки, как «Списать бонус» в 1С Smart Centr: сумма строки меньше на долю бонуса.
+            if share:
+                row.СуммаРучнойСкидки = share
+                row.ПроцентРучнойСкидки = round(share / float(line["sum"]) * 100, 2)
+            row.Сумма = round(float(line["sum"]) - share, 2)
+            row.СуммаСНДС = round(float(line["sum"]) - share, 2)
             row.СтавкаНДС = no_vat
             row.Склад = warehouse
         doc.СкидкиРассчитаны = True
@@ -310,6 +317,16 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
         raise
     s.ЗафиксироватьТранзакцию()
     return [_doc_entry(t, ref) for t, ref in docs]
+
+
+def bonus_shares(sums: list[float], bonus: float) -> list[float]:
+    """Бонус по строкам пропорционально суммам (до тийина), остаток округления — в последнюю строку."""
+    total = sum(sums)
+    if bonus <= 0 or total <= 0:
+        return [0.0] * len(sums)
+    shares = [round(bonus * s / total, 2) for s in sums]
+    shares[-1] = round(bonus - sum(shares[:-1]), 2)
+    return shares
 
 
 def post_op(s, op: dict, shops: dict[str, dict]) -> list[dict]:

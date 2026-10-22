@@ -26,6 +26,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
@@ -40,7 +41,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-from . import db, rules
+from . import db, notify, rules, site
 
 logger = logging.getLogger("kassa")
 HERE = Path(__file__).resolve().parent
@@ -49,6 +50,8 @@ COOKIE = "kassa_session"
 COOKIE_PATH = "/kassa"
 OWNER_NAME = "Владелец"
 SHOP_TITLE = os.environ.get("KASSA_SHOP_TITLE", "Kemal Usman Parfume")
+SELLER = os.environ.get("KASSA_SELLER", "Kemal Usman Parfume")          # продавец в онлайн договоре
+PUBLIC_URL = os.environ.get("KASSA_PUBLIC_URL", "https://kassa.kemalusman.kg").rstrip("/")
 WAIT_MAX_SEC = 50
 MAX_BATCH = 5000
 
@@ -226,6 +229,7 @@ async def sync_from_1c(request: Request, conn: sqlite3.Connection = Depends(get_
             conn.executemany("INSERT OR REPLACE INTO balances (name, amount) VALUES (?, ?)", [(b["name"], b["amount"]) for b in cash])
             accepted["cash"] = len(cash)
         _note_seen(conn, "sync", len(items))
+    asyncio.create_task(site_push_background())       # наличие на сайт — в фоне, программе 1С ждать не нужно
     return {"ok": True, "items": len(items), "changed": changed, "removed": len(before) if data.get("full", True) else 0,
             "rejected": len(raw_items) - len(items), **accepted}
 
@@ -295,10 +299,14 @@ async def op_result(op_id: str, result: str, request: Request, conn: sqlite3.Con
             raise HTTPException(404, "операция не найдена")
         status = row[0]
         if result == "cancelled":
-            if status == "cancelling":
-                conn.execute("UPDATE ops SET status = 'cancelled', done_at = ? WHERE id = ?", (_utc_iso(), op_id))
-                return {"ok": True, "status": "cancelled"}
-            return {"ok": True, "status": status}
+            if status != "cancelling":
+                return {"ok": True, "status": status}
+            conn.execute("UPDATE ops SET status = 'cancelled', done_at = ? WHERE id = ?", (_utc_iso(), op_id))
+    if result == "cancelled":
+        await _club_undo(conn, op_id, unearn=True)    # проведённую отменили: списанные бонусы — назад, начисленные — снять
+        return {"ok": True, "status": "cancelled"}
+    with db.tx(conn):
+        status = conn.execute("SELECT status FROM ops WHERE id = ?", (op_id,)).fetchone()[0]
         if status == "cancelled" and result == "done":
             # Телефон отменил, пока 1С проводила: 1С получает отказ и сама распроводит документы.
             return JSONResponse({"ok": False, "error": "продажу отменили с телефона — распроведите документы"}, status_code=409)
@@ -308,6 +316,8 @@ async def op_result(op_id: str, result: str, request: Request, conn: sqlite3.Con
         conn.execute("UPDATE ops SET status = ?, docs = ?, error = ?, done_at = ? WHERE id = ?",
                      (result, db.dumps(docs) if docs is not None else None,
                       None if result == "done" else (str(data.get("reason") or "")[:900] or "ошибка 1С"), _utc_iso(), op_id))
+    if result == "done":
+        await _club_earn(conn, op_id)
     return {"ok": True, "status": result}
 
 
@@ -526,27 +536,63 @@ async def create_op(request: Request, user: dict = Depends(current_user), conn: 
         # Телефон отправил ещё раз (сеть моргнула) — та же операция, без дубля.
         return {"ok": True, "repeated": True, "op": _public(_op_row(existing), user)}
     payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+    kind = str(data.get("kind") or "")
+    bonus = kind == "sale" and rules.money(payload.get("bonus")) > 0
+    club = None
+    if bonus:   # бонусы клуба: баланс и предел — из PocketBase сайта
+        club = await asyncio.to_thread(notify.club, "balance", phone=rules.phone_digits((payload.get("buyer") or {}).get("phone")))
+        club = club if club.get("ok") else None
+    verdict = _check(conn, op_id, kind, payload, user, club, insert=not bonus)
+    if verdict["ok"] and bonus:
+        # Списываем в клубе до записи продажи (повтор того же id второй раз не спишет); не записалась — возвращаем.
+        spent = await asyncio.to_thread(notify.club, "spend", phone=verdict["payload"]["buyer"]["phone"], opId=op_id,
+                                        amount=verdict["payload"]["bonus"], who=user["name"])
+        if not spent.get("ok"):
+            why = "бонусов не хватает" if spent.get("error") == "not_enough" else "клуб бонусов не ответил — продайте без бонусов"
+            return JSONResponse({"ok": False, "error": why}, status_code=409)
+        verdict = _check(conn, op_id, kind, payload, user, club, insert=True)
+        if not verdict["ok"]:
+            await asyncio.to_thread(notify.club, "refund", phone=payload["buyer"]["phone"], opId=op_id)
+    if not verdict["ok"]:
+        return JSONResponse({"ok": False, "error": verdict["error"]}, status_code=409)
+    op = _op_row(conn.execute("SELECT * FROM ops WHERE id = ?", (op_id,)).fetchone())
+    # Долг и оплата долга — покупателю сразу чек в WhatsApp (сколько осталось и до какого числа); сбой операцию не трогает.
+    if (kind == "sale" and op["payload"].get("debt")) or kind == "payment":
+        phone = _op_phone(conn, op)
+        if phone:
+            try:
+                await _send_receipt(conn, op, phone)
+            except Exception as error:  # noqa: BLE001
+                logger.warning("чек в WhatsApp %s: %s", op_id, error)
+    return {"ok": True, "op": _public(op, user)}
+
+
+def _check(conn: sqlite3.Connection, op_id: str, kind: str, payload: dict, user: dict, club: dict | None, insert: bool) -> dict:
+    """Проверка операции и (insert) запись — одной транзакцией: два телефона не продадут последний флакон дважды."""
     ids = [str(l.get("itemId") or "").lower() for l in (payload.get("lines") or []) if isinstance(l, dict)]
-    with db.tx(conn):     # проверка и запись — одной транзакцией: два телефона не продадут последний флакон дважды
+    with db.tx(conn):
+        if conn.execute("SELECT 1 FROM ops WHERE id = ?", (op_id,)).fetchone():
+            return {"ok": True, "payload": payload}
         new_ops = _new_ops(conn)
         shops = _shops(conn)
         ctx = {"items": _items_map(conn, ids), "shops": [s["name"] for s in shops], "taken": rules.reserved_by_ops(new_ops),
-               "paid": rules.paid_by_ops(new_ops), "today": (utcnow() + BISHKEK).date(),
+               "paid": rules.paid_by_ops(new_ops), "today": (utcnow() + BISHKEK).date(), "club": club,
                "desks": sorted({r[0] for r in conn.execute("SELECT name FROM balances")}
                                | {d for s in shops for d in (s["cashDesk"], s["transferDesk"]) if d}),
                "articles": {r["id"]: {"id": r["id"], "name": r["name"]} for r in conn.execute("SELECT id, name FROM articles")}}
         debt_id = str(payload.get("debtId") or "").lower()
         row = conn.execute("SELECT id, doc, client_name, left_sum FROM debts WHERE id = ?", (debt_id,)).fetchone() if debt_id else None
         ctx["debts"] = {row["id"]: {"id": row["id"], "doc": row["doc"], "clientName": row["client_name"], "left": row["left_sum"]}} if row else {}
-        kind = str(data.get("kind") or "")
         verdict = rules.check_op({"id": op_id, "kind": kind, "payload": payload}, user, ctx)
-        if not verdict["ok"]:
-            return JSONResponse({"ok": False, "error": verdict["error"]}, status_code=409)
-        clean = verdict["payload"]
-        conn.execute("INSERT INTO ops (id, kind, payload, user_id, user_name, shop, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                     (op_id, kind, db.dumps(clean), user["id"], user["name"], clean.get("shop") or "", _utc_iso()))
-        row = conn.execute("SELECT * FROM ops WHERE id = ?", (op_id,)).fetchone()
-    return {"ok": True, "op": _public(_op_row(row), user)}
+        if verdict["ok"] and insert:
+            clean = verdict["payload"]
+            if kind == "sale" and clean.get("debt"):
+                # Онлайн договор (этап 3): ссылка покупателю в чеке WhatsApp, он открывает и нажимает «Согласен».
+                clean["contractToken"] = rules.new_token()[:24]
+                clean["contractUrl"] = PUBLIC_URL + "/kassa/c/" + clean["contractToken"]
+            conn.execute("INSERT INTO ops (id, kind, payload, user_id, user_name, shop, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                         (op_id, kind, db.dumps(clean), user["id"], user["name"], clean.get("shop") or "", _utc_iso()))
+    return verdict
 
 
 def _op_for(conn: sqlite3.Connection, op_id: str, user: dict) -> dict:
@@ -560,7 +606,14 @@ def _op_for(conn: sqlite3.Connection, op_id: str, user: dict) -> dict:
 
 
 @app.post("/kassa/api/ops/{op_id}/cancel")
-def op_cancel(op_id: str, user: dict = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
+async def op_cancel(op_id: str, user: dict = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
+    answer = _cancel(op_id, user, conn)
+    if isinstance(answer, dict) and answer.get("status") == "cancelled":
+        await _club_undo(conn, op_id.lower(), unearn=False)     # не проведена — вернуть списанные бонусы
+    return answer
+
+
+def _cancel(op_id: str, user: dict, conn: sqlite3.Connection):
     """Не проведена (new) — отмена сразу: остаток освобождается сам. Проведена или с ошибкой — cancelling: программа 1С
     распроводит документы, помечает на удаление и ответит /cancelled."""
     with db.tx(conn):
@@ -665,3 +718,303 @@ def health(conn: sqlite3.Connection = Depends(get_db)):
     conn.execute("SELECT 1").fetchone()
     return {"ok": True}
 
+
+# ── этап 3: бонусы клуба и WhatsApp ──────────────────────────────────────────
+
+def _patch(conn: sqlite3.Connection, op_id: str, patch: dict) -> dict:
+    """Дописать поля в payload операции (что ушло в WhatsApp, сколько бонусов начислено)."""
+    with db.tx(conn):
+        row = conn.execute("SELECT payload FROM ops WHERE id = ?", (op_id,)).fetchone()
+        payload = {**db.loads(row[0] if row else None, {}), **patch}
+        conn.execute("UPDATE ops SET payload = ? WHERE id = ?", (db.dumps(payload), op_id))
+    return payload
+
+
+async def _club_earn(conn: sqlite3.Connection, op_id: str) -> None:
+    """Продажа проведена в 1С и у неё есть телефон покупателя — начислить бонус клуба с оплаченной суммы (повтор не начислит дважды)."""
+    row = conn.execute("SELECT kind, payload FROM ops WHERE id = ?", (op_id,)).fetchone()
+    payload = db.loads(row["payload"], {}) if row else {}
+    phone = (payload.get("buyer") or {}).get("phone")
+    if not row or row["kind"] != "sale" or not phone or payload.get("bonusEarned") is not None or not notify.club_on():
+        return
+    answer = await asyncio.to_thread(notify.club, "earn", phone=phone, opId=op_id,
+                                     total=float(rules.money(payload.get("total")) - rules.money(payload.get("bonus"))))
+    if answer.get("ok"):
+        _patch(conn, op_id, {"bonusEarned": abs(float(answer.get("amount") or 0))})
+    elif answer.get("error") != "no_client":
+        logger.warning("бонус за продажу %s не начислен: %s", op_id, answer.get("error"))
+
+
+async def _club_undo(conn: sqlite3.Connection, op_id: str, unearn: bool) -> None:
+    row = conn.execute("SELECT kind, payload FROM ops WHERE id = ?", (op_id,)).fetchone()
+    payload = db.loads(row["payload"], {}) if row else {}
+    phone = (payload.get("buyer") or {}).get("phone")
+    if not row or row["kind"] != "sale" or not phone or not notify.club_on():
+        return
+    if payload.get("bonus"):
+        await asyncio.to_thread(notify.club, "refund", phone=phone, opId=op_id)
+    if unearn and payload.get("bonusEarned"):
+        await asyncio.to_thread(notify.club, "unearn", phone=phone, opId=op_id)
+
+
+def _op_phone(conn: sqlite3.Connection, op: dict) -> str:
+    """Телефон для чека: покупатель продажи или карточка долга (оплата)."""
+    payload = op.get("payload") or {}
+    phone = (payload.get("buyer") or {}).get("phone") or ""
+    if not phone and op.get("kind") == "payment":
+        row = conn.execute("SELECT phones FROM debts WHERE id = ?", (payload.get("debtId") or "",)).fetchone()
+        phone = rules.phone_digits((row[0] if row else "").split("/")[0])
+    return phone
+
+
+async def _send_receipt(conn: sqlite3.Connection, op: dict, phone: str) -> dict:
+    answer = await asyncio.to_thread(notify.whatsapp, phone, rules.receipt_text(op, SHOP_TITLE))
+    if answer.get("ok"):
+        op["payload"] = _patch(conn, op["id"], {"waPhone": phone, "waSentAt": (utcnow() + BISHKEK).isoformat(timespec="seconds"),
+                                                "waDry": bool(answer.get("dry"))})
+    return answer
+
+
+@app.get("/kassa/api/bonus")
+async def bonus_balance(phone: str = "", user: dict = Depends(current_user)):
+    """Бонусы клуба покупателя по телефону: {on, found, balance, maxPct, earnPct, name}."""
+    digits = rules.phone_digits(phone)
+    if not notify.club_on():
+        return {"on": False}
+    if not digits:
+        return {"on": True, "found": False}
+    answer = await asyncio.to_thread(notify.club, "balance", phone=digits)
+    if not answer.get("ok"):
+        return {"on": True, "found": False, "error": "клуб не ответил"}
+    return {"on": True, "found": bool(answer.get("found")), "balance": answer.get("balance", 0), "maxPct": answer.get("maxPct", 0),
+            "earnPct": answer.get("earnPct", 0), "name": answer.get("name") or ""}
+
+
+@app.post("/kassa/api/ops/{op_id}/whatsapp")
+async def op_whatsapp(op_id: str, request: Request, user: dict = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
+    """Чек в WhatsApp покупателю: номер из продажи / долга или введённый {phone}."""
+    data = _json(await request.body())
+    op = _op_for(conn, op_id, user)
+    phone = rules.phone_digits(data.get("phone")) or _op_phone(conn, op)
+    if not phone:
+        return JSONResponse({"ok": False, "needPhone": True, "error": "Нет номера покупателя — введите телефон"}, status_code=422)
+    answer = await _send_receipt(conn, op, phone)
+    if not answer.get("ok"):
+        return JSONResponse({"ok": False, "error": answer.get("error") or "WhatsApp не принял сообщение"}, status_code=502)
+    return {"ok": True, "phone": phone, "dry": bool(answer.get("dry"))}
+
+
+# ── онлайн договор (этап 3): страница по ссылке, без входа ───────────────────
+
+def _contract_op(conn: sqlite3.Connection, token: str) -> dict:
+    if not token or len(token) < 16:
+        raise HTTPException(404)
+    row = conn.execute("SELECT * FROM ops WHERE kind = 'sale' AND json_extract(payload, '$.contractToken') = ?", (token,)).fetchone()
+    if not row:
+        raise HTTPException(404, "договор не найден")
+    return _op_row(row)
+
+
+def _h(value) -> str:
+    return str(value if value is not None else "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+@app.get("/kassa/c/{token}", response_class=HTMLResponse)
+def contract_page(token: str, conn: sqlite3.Connection = Depends(get_db)):
+    op = _contract_op(conn, token)
+    p = op["payload"]
+    debt, buyer = p.get("debt") or {}, p.get("buyer") or {}
+    som = rules._som
+    lines = "".join(f"<tr><td>{_h(l.get('name'))}<br><small>{_h(rules.num(l.get('qty')))} {_h(l.get('unit'))} × {_h(som(l.get('price')))}</small></td>"
+                    f"<td>{_h(som(l.get('sum')))}</td></tr>" for l in p.get("lines") or [])
+    paid = f"<tr><td>Оплачено при покупке</td><td>{_h(som(debt.get('paid')))}</td></tr>" if debt.get("paid") else ""
+    schedule = "".join(f"<tr><td>до {_h(rules._when(x.get('date') + 'T00:00')[:10])}</td><td>{_h(som(x.get('sum')))}</td></tr>"
+                       for x in debt.get("schedule") or [])
+    if p.get("contractAcceptedAt"):
+        state = f'<div class="ok">Покупатель согласился с условиями {_h(rules._when(p["contractAcceptedAt"]))}.</div>'
+    elif op["status"] in ("cancelled", "cancelling"):
+        state = '<div class="err">Покупка отменена — договор не действует.</div>'
+    else:
+        state = '<button class="btn" id="agree">Согласен с условиями</button><div class="err" id="err"></div>'
+    values = {"KIND": "рассрочки" if debt.get("months") else "покупки в долг", "NUMBER": op["id"][:8].upper(),
+              "DATE": rules._when(op["createdAt"])[:10], "SHOP": _h(p.get("shop")), "SELLER": _h(SELLER),
+              "BUYER": _h(buyer.get("name")), "PHONE": "+" + _h(buyer.get("phone")), "LINES": lines, "TOTAL": _h(som(p.get("total"))),
+              "PAID": paid, "SCHEDULE": schedule, "STATE": state}
+    html = (HERE / "contract.html").read_text(encoding="utf-8")
+    for key, value in values.items():
+        html = html.replace("{{" + key + "}}", value)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex"})
+
+
+@app.post("/kassa/c/{token}/accept")
+def contract_accept(token: str, request: Request, conn: sqlite3.Connection = Depends(get_db)):
+    op = _contract_op(conn, token)
+    if op["status"] in ("cancelled", "cancelling"):
+        return JSONResponse({"ok": False, "error": "покупка отменена"}, status_code=409)
+    if not op["payload"].get("contractAcceptedAt"):
+        _patch(conn, op["id"], {"contractAcceptedAt": (utcnow() + BISHKEK).isoformat(timespec="seconds"),
+                                "contractIp": _client_ip(request), "contractDevice": str(request.headers.get("user-agent", ""))[:200]})
+    return {"ok": True}
+
+
+# ── сайт ↔ 1С: только наличие (владелец 22.10, вариант 2) ─────────────────────
+
+SITE_REFRESH_SEC = 6 * 3600          # каталог сайта перечитываем не чаще раза в 6 часов (и кнопкой)
+_SITE = {"busy": False, "last": None}
+
+
+def _site_shops(conn: sqlite3.Connection) -> list[str]:
+    """Магазины, чей остаток считается для сайта: KASSA_SITE_SHOPS через «;», по умолчанию — все."""
+    names = [s["name"] for s in _shops(conn)]
+    wanted = [x.strip() for x in os.environ.get("KASSA_SITE_SHOPS", "").split(";") if x.strip()]
+    return [n for n in names if n in wanted] if wanted else names
+
+
+def _site_items(conn: sqlite3.Connection) -> dict[str, dict]:
+    return {r["id"]: {"id": r["id"], "name": r["name"], "unit": r["unit"], "code": r["code"], "stock": db.loads(r["stock"], {})}
+            for r in conn.execute("SELECT id, code, name, unit, stock FROM items")}
+
+
+def _site_refresh(conn: sqlite3.Connection) -> int | None:
+    catalog = notify.site_catalog()
+    if catalog is None:
+        return None
+    now = _utc_iso()
+    with db.tx(conn):
+        conn.execute("DELETE FROM site_products")
+        conn.executemany("INSERT INTO site_products (id, name, brand, category, variants, fetched_at) VALUES (?, ?, ?, ?, ?, ?)",
+                         [(p["id"], str(p.get("name") or ""), str(p.get("brand") or ""), str(p.get("category") or ""),
+                           db.dumps(p.get("variants") or []), now) for p in catalog if p.get("id")])
+    return len(catalog)
+
+
+def _site_push(conn: sqlite3.Connection) -> dict:
+    """Пересчитать «в наличии» связанных товаров и отправить на сайт только изменения."""
+    last = conn.execute("SELECT MIN(fetched_at) FROM site_products").fetchone()[0]
+    if not last or (utcnow() - datetime.fromisoformat(last)).total_seconds() > SITE_REFRESH_SEC:
+        _site_refresh(conn)
+    products = {r["id"]: {"id": r["id"], "variants": db.loads(r["variants"], [])} for r in conn.execute("SELECT id, variants FROM site_products")}
+    links = {r["product_id"]: {"status": r["status"], "itemId": r["item_id"], "pkgItemId": r["pkg_item_id"]}
+             for r in conn.execute("SELECT * FROM site_links")}
+    todo = site.changes(products, links, _site_items(conn), _site_shops(conn), rules.reserved_by_ops(_new_ops(conn)))
+    result = {"ok": True, "products": 0, "variants": 0, "at": (utcnow() + BISHKEK).isoformat(timespec="seconds")}
+    if todo:
+        answer = notify.site_stock(todo)
+        if not answer.get("ok"):
+            result = {**result, "ok": False, "error": answer.get("error") or f"сайт ответил {answer.get('status')}"}
+        else:
+            result.update(products=answer.get("products", 0), variants=answer.get("variants", 0))
+            with db.tx(conn):    # копия каталога — как теперь на сайте, чтобы не слать то же самое снова
+                for change in todo:
+                    product = products[change["productId"]]
+                    wanted = {v["id"]: v["inStock"] for v in change["variants"]}
+                    for v in product["variants"]:
+                        if isinstance(v, dict) and v.get("id") in wanted:
+                            v["inStock"] = wanted[v["id"]]
+                    conn.execute("UPDATE site_products SET variants = ? WHERE id = ?", (db.dumps(product["variants"]), change["productId"]))
+    _SITE["last"] = result
+    return result
+
+
+async def site_push_background() -> None:
+    """После обмена с 1С — наличие на сайт (если есть связи и ключ сайта). Один раз за раз, ошибки только в журнал."""
+    if _SITE["busy"] or not notify.club_on():
+        return
+    _SITE["busy"] = True
+    try:
+        def work():
+            conn = db.connect()
+            try:
+                if conn.execute("SELECT COUNT(*) FROM site_links WHERE status = 'linked'").fetchone()[0]:
+                    return _site_push(conn)
+                return None
+            finally:
+                conn.close()
+        result = await asyncio.to_thread(work)
+        if result and not result.get("ok"):
+            logger.warning("наличие на сайт не ушло: %s", result.get("error"))
+    finally:
+        _SITE["busy"] = False
+
+
+@app.get("/kassa/api/site/links")
+def site_links(user: dict = Depends(owner_user), conn: sqlite3.Connection = Depends(get_db)):
+    """Экран «Сайт ↔ 1С»: товары сайта, их связь и подсказки (похожие товары 1С)."""
+    items = _site_items(conn)
+    item_list = list(items.values())
+    links = {r["product_id"]: r for r in conn.execute("SELECT * FROM site_links")}
+    shops, taken = _site_shops(conn), rules.reserved_by_ops(_new_ops(conn))
+    out = []
+    for r in conn.execute("SELECT * FROM site_products ORDER BY brand COLLATE NOCASE, name COLLATE NOCASE"):
+        product = {"id": r["id"], "name": r["name"], "brand": r["brand"], "category": r["category"], "variants": db.loads(r["variants"], [])}
+        link = links.get(r["id"])
+        row = {**product, "status": link["status"] if link else "", "itemId": link["item_id"] if link else "",
+               "pkgItemId": link["pkg_item_id"] if link else ""}
+        if link and link["item_id"] in items:
+            row["item"] = {"name": items[link["item_id"]]["name"], "unit": items[link["item_id"]]["unit"],
+                           "free": rules.num(site.free_total(items[link["item_id"]], shops, taken))}
+        if link and link["pkg_item_id"] in items:
+            row["pkgItem"] = {"name": items[link["pkg_item_id"]]["name"], "free": rules.num(site.free_total(items[link["pkg_item_id"]], shops, taken))}
+        if not link:
+            row["suggest"] = site.suggest(product, item_list, 3)
+        out.append(row)
+    fetched = conn.execute("SELECT MAX(fetched_at) FROM site_products").fetchone()[0]
+    return {"on": notify.club_on(), "products": out, "fetchedAt": local_iso(fetched), "shops": shops, "last": _SITE["last"],
+            "suggestMin": float(site.SUGGEST_MIN)}
+
+
+@app.post("/kassa/api/site/refresh")
+async def site_refresh(user: dict = Depends(owner_user), conn: sqlite3.Connection = Depends(get_db)):
+    count = await asyncio.to_thread(_site_refresh, conn)
+    if count is None:
+        return JSONResponse({"ok": False, "error": "сайт не ответил" if notify.club_on() else "адрес сайта не настроен (KASSA_CLUB_URL)"},
+                            status_code=502)
+    return {"ok": True, "products": count}
+
+
+@app.post("/kassa/api/site/links")
+async def site_link_save(request: Request, user: dict = Depends(owner_user), conn: sqlite3.Connection = Depends(get_db)):
+    """{productId, status: linked | none | '' (разорвать), itemId?, pkgItemId?} или {auto: true} — подтвердить все точные совпадения."""
+    data = _json(await request.body())
+    items = _site_items(conn)
+    now = _utc_iso()
+    if data.get("auto"):
+        linked = {r[0] for r in conn.execute("SELECT product_id FROM site_links")}
+        item_list, done = list(items.values()), 0
+        with db.tx(conn):
+            for r in conn.execute("SELECT id, name, brand FROM site_products").fetchall():
+                if r["id"] in linked:
+                    continue
+                best = site.suggest({"name": r["name"], "brand": r["brand"]}, item_list, 1)
+                if best and best[0]["score"] >= 0.99:
+                    conn.execute("INSERT INTO site_links (product_id, status, item_id, user_name, updated_at) VALUES (?, 'linked', ?, ?, ?)",
+                                 (r["id"], best[0]["id"], user["name"], now))
+                    done += 1
+        return {"ok": True, "linked": done}
+    product_id, status = str(data.get("productId") or ""), str(data.get("status") or "")
+    if not conn.execute("SELECT 1 FROM site_products WHERE id = ?", (product_id,)).fetchone():
+        return JSONResponse({"ok": False, "error": "товара сайта нет — обновите каталог"}, status_code=404)
+    item_id, pkg_id = str(data.get("itemId") or "").lower(), str(data.get("pkgItemId") or "").lower()
+    if status not in ("", "linked", "none"):
+        return JSONResponse({"ok": False, "error": "неизвестно"}, status_code=422)
+    if status == "linked" and item_id not in items:
+        return JSONResponse({"ok": False, "error": "выберите товар 1С"}, status_code=422)
+    if pkg_id and pkg_id not in items:
+        return JSONResponse({"ok": False, "error": "штучного товара нет в 1С"}, status_code=422)
+    with db.tx(conn):
+        if status == "":
+            conn.execute("DELETE FROM site_links WHERE product_id = ?", (product_id,))
+        else:
+            conn.execute("INSERT INTO site_links (product_id, status, item_id, pkg_item_id, user_name, updated_at) VALUES (?, ?, ?, ?, ?, ?) "
+                         "ON CONFLICT (product_id) DO UPDATE SET status = excluded.status, item_id = excluded.item_id, "
+                         "pkg_item_id = excluded.pkg_item_id, user_name = excluded.user_name, updated_at = excluded.updated_at",
+                         (product_id, status, item_id if status == "linked" else "", pkg_id if status == "linked" else "", user["name"], now))
+    return {"ok": True}
+
+
+@app.post("/kassa/api/site/push")
+async def site_push_now(user: dict = Depends(owner_user), conn: sqlite3.Connection = Depends(get_db)):
+    if not notify.club_on():
+        return JSONResponse({"ok": False, "error": "адрес сайта не настроен (KASSA_CLUB_URL, KASSA_CLUB_KEY)"}, status_code=502)
+    result = await asyncio.to_thread(_site_push, conn)
+    return result if result.get("ok") else JSONResponse(result, status_code=502)
