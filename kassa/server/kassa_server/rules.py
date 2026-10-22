@@ -6,20 +6,28 @@
 - количество с дробью: атир продают в мл (5, 2.5, 12.8); штучный товар — целым числом;
 - два магазина (склады 1С): остаток, цена и деньги — по магазину, продавец может быть привязан к своему магазину;
 - оплата: наличные или перевод (до двух частей: часть наличными, часть переводом).
+Этап 2: продажа в долг (до даты или рассрочкой по месяцам), оплата долга, расход по статье и перевод между кассами
+(владелец), деньги в кассах, прибыль и бонус продавца (процент от прибыли его продаж).
 """
 from __future__ import annotations
 
+import calendar
 import hashlib
 import hmac
 import re
 import secrets
 from collections import defaultdict
-from datetime import datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from datetime import date, datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_CEILING, ROUND_HALF_UP
 
 ROLES = ("owner", "staff")
-KINDS = ("sale",)                 # этап 1 — только продажа; долги, расходы, переводы — этап 2
-STAFF_KINDS = ("sale",)
+KINDS = ("sale", "payment", "expense", "transfer")
+STAFF_KINDS = ("sale", "payment")
+OWNER_KINDS = ("expense", "transfer")
+DEBT_MAX_DAYS = 365
+MONTHS_MAX = 12
+STAFF_BONUS_PCT = Decimal(10)     # бонус продавца — % от прибыли его продаж (как в Smart Centr), меняет владелец
+STAFF_BONUS_MAX = Decimal(50)
 METHODS = {"cash": "Наличные", "transfer": "Перевод"}
 MAX_PAYMENTS = 2
 
@@ -152,7 +160,7 @@ def sign(secret: str, body: bytes) -> str:
 
 def visible_to(role: str) -> dict:
     owner = role == "owner"
-    return {"tabs": ["sale", "today", "stock", "staff"] if owner else ["sale", "today", "stock"], "allOps": owner}
+    return {"tabs": ["sale", "payment", "today", "stock", "staff"] if owner else ["sale", "payment", "today", "stock"], "allOps": owner}
 
 
 def shop_for(user: dict, wanted: str, shops: list[str]) -> tuple[str | None, str]:
@@ -191,6 +199,11 @@ def clean_user(raw: dict, shops: list[str], new: bool = True) -> dict:
         out["shop"] = shop
     if "active" in raw:
         out["active"] = bool(raw.get("active"))
+    if raw.get("bonusPct") not in (None, ""):
+        pct = money(raw.get("bonusPct"))
+        if pct < 0 or pct > STAFF_BONUS_MAX:
+            return {"ok": False, "error": f"бонус — от 0 до {STAFF_BONUS_MAX:g} %"}
+        out["bonusPct"] = float(pct)
     return out
 
 
@@ -233,7 +246,8 @@ def build_payments(raw, total: Decimal) -> dict:
     return {"ok": True, "payments": [{"method": p["method"], "amount": float(p["amount"])} for p in parts]}
 
 
-def check_sale(op: dict, user: dict, items: dict[str, dict], shops: list[str], taken: dict[str, dict[str, Decimal]]) -> dict:
+def check_sale(op: dict, user: dict, items: dict[str, dict], shops: list[str], taken: dict[str, dict[str, Decimal]],
+               today: date | None = None) -> dict:
     """
     Продажа с телефона до записи. {'ok': True, 'payload': …} — нормализованная продажа; {'ok': False, 'error': …} — почему нет.
     items — {id: {id, code, name, unit, stock: {магазин: кол-во}, price: {магазин: цена}}} из 1С;
@@ -271,25 +285,308 @@ def check_sale(op: dict, user: dict, items: dict[str, dict], shops: list[str], t
         line_sum = money(price * qty)
         list_price = money((item.get("price") or {}).get(shop, 0))
         lines.append({"itemId": item["id"], "code": item.get("code") or "", "name": item["name"], "unit": unit,
-                      "qty": num(qty), "price": float(price), "sum": float(line_sum), "listPrice": float(list_price)})
+                      "qty": num(qty), "price": float(price), "sum": float(line_sum), "listPrice": float(list_price),
+                      # себестоимость за единицу на момент продажи: прибыль не поплывёт, когда 1С пересчитает
+                      "cost": float(money(item.get("cost") or 0))})
     short = shortages(lines, items, shop, taken)
     if short:
         return {"ok": False, "error": "Не хватает в магазине: " + "; ".join(short)}
     total = sum((money(l["sum"]) for l in lines), Decimal(0))
     if total <= 0 or total > MAX_SUM:
         return {"ok": False, "error": "сумма продажи не подходит"}
-    paid = build_payments(payload.get("payments"), total)
-    if not paid["ok"]:
-        return paid
     buyer_raw = payload.get("buyer") if isinstance(payload.get("buyer"), dict) else {}
     buyer = {"name": _text(buyer_raw.get("name"), 100), "phone": phone_digits(buyer_raw.get("phone"))}
     if str(buyer_raw.get("phone") or "").strip() and not buyer["phone"]:
         return {"ok": False, "error": "номер покупателя: 9 цифр, например 555 123 456"}
+    debt = None
+    if isinstance(payload.get("debt"), dict) and payload.get("debt"):
+        # В долг: покупатель с именем и телефоном обязателен — по нему 1С находит или заводит карточку, долг виден в «Оплате».
+        if not buyer["name"] or not buyer["phone"]:
+            return {"ok": False, "error": "в долг — напишите имя и телефон покупателя"}
+        built = build_debt(total, payload["debt"], today or date.today())
+        if not built["ok"]:
+            return built
+        debt = built["debt"]
+        paid = {"ok": True, "payments": [{"method": debt["method"], "amount": debt["paid"]}] if debt["paid"] > 0 else []}
+    else:
+        paid = build_payments(payload.get("payments"), total)
+        if not paid["ok"]:
+            return paid
     clean = {"shop": shop, "lines": lines, "total": float(total), "payments": paid["payments"],
              "note": _text(payload.get("note"), NOTE_MAX)}
+    if debt:
+        clean["debt"] = debt
     if buyer["name"] or buyer["phone"]:
         clean["buyer"] = buyer
     return {"ok": True, "payload": clean}
+
+
+# ── Долг ─────────────────────────────────────────────────────────────────────
+
+def add_months(start: date, months: int) -> date:
+    month = start.month - 1 + months
+    year, month = start.year + month // 12, month % 12 + 1
+    return date(year, month, min(start.day, calendar.monthrange(year, month)[1]))
+
+
+def _day(value) -> date | None:
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def build_debt(total: Decimal, raw: dict, today: date) -> dict:
+    """
+    {paid, method, dueDate} — остаток одним платежом до даты; {paid, method, months} — рассрочка: остаток поровну по месяцам
+    (вверх до 10 сом, последний платёж — сколько осталось), первый платёж через месяц. paid — заплатил сейчас (может быть 0).
+    Возвращает {'ok', 'debt': {paid, method, schedule: [{date, sum}], months?, dueDate?}}.
+    """
+    paid = money(raw.get("paid"))
+    method = str(raw.get("method") or "cash")
+    if method not in METHODS:
+        return {"ok": False, "error": "оплата сейчас — наличные или перевод"}
+    if paid < 0 or paid >= total:
+        return {"ok": False, "error": "сейчас заплатил — меньше суммы продажи (иначе это не долг)"}
+    left = total - paid
+    months = int(money(raw.get("months"))) if raw.get("months") not in (None, "", 0, "0") else 0
+    schedule = []
+    out = {"paid": float(paid), "method": method}
+    if months:
+        if months < 1 or months > MONTHS_MAX:
+            return {"ok": False, "error": f"рассрочка — от 1 до {MONTHS_MAX} месяцев"}
+        monthly = (left / months / 10).quantize(Decimal(1), rounding=ROUND_CEILING) * 10
+        rest = left
+        for n in range(1, months + 1):
+            part = min(monthly, rest) if n < months else rest
+            if part <= 0:
+                break
+            schedule.append({"date": add_months(today, n).isoformat(), "sum": float(part)})
+            rest -= part
+        out.update({"months": len(schedule), "monthly": float(monthly)})
+    else:
+        due = _day(raw.get("dueDate"))
+        if due is None or due < today or due > today + timedelta(days=DEBT_MAX_DAYS):
+            return {"ok": False, "error": "в долг — выберите дату, до какого числа (не позже чем через год)"}
+        schedule.append({"date": due.isoformat(), "sum": float(left)})
+        out["dueDate"] = due.isoformat()
+    out["schedule"] = schedule
+    out["left"] = float(left)
+    return {"ok": True, "debt": out}
+
+
+def paid_by_ops(ops: list[dict]) -> dict[str, Decimal]:
+    """{debtId: сумма} — платежи с телефона (new), 1С их ещё не провела."""
+    paid: dict[str, Decimal] = defaultdict(Decimal)
+    for op in ops:
+        if op.get("kind") == "payment":
+            payload = op.get("payload") or {}
+            paid[str(payload.get("debtId") or "")] += money(payload.get("amount"))
+    return dict(paid)
+
+
+def debt_left(left, paid=0) -> Decimal:
+    return max(money(left) - money(paid), Decimal(0))
+
+
+def unpaid_schedule(schedule: list[dict], left) -> list[dict]:
+    """Части графика, которые ещё не оплачены: оплата закрывает части по порядку, с самой ранней."""
+    total = sum((money(p.get("sum")) for p in schedule), Decimal(0))
+    covered = max(total - money(left), Decimal(0))
+    out = []
+    for part in sorted(schedule, key=lambda p: str(p.get("date"))):
+        amount = money(part.get("sum"))
+        if covered >= amount:
+            covered -= amount
+            continue
+        out.append({"date": str(part.get("date"))[:10], "sum": float(amount - covered)})
+        covered = Decimal(0)
+    return out
+
+
+def check_payment(op_id: str, payload: dict, user: dict, debts: dict[str, dict], paid: dict[str, Decimal], shops: list[str]) -> dict:
+    debt = debts.get(str(payload.get("debtId") or "").lower())
+    if debt is None:
+        return {"ok": False, "error": "долг не найден — обновите список"}
+    amount = money(payload.get("amount"))
+    left = debt_left(debt.get("left"), paid.get(debt["id"], 0))
+    if amount <= 0:
+        return {"ok": False, "error": "укажите сумму"}
+    if amount > left:
+        return {"ok": False, "error": f"по этому долгу осталось {_som(left)}"}
+    method = str(payload.get("method") or "")
+    if method not in METHODS:
+        return {"ok": False, "error": "оплата — наличные или перевод"}
+    shop, why = shop_for(user, str(payload.get("shop") or ""), shops)
+    if not shop:
+        return {"ok": False, "error": why}
+    return {"ok": True, "payload": {"debtId": debt["id"], "doc": debt.get("doc") or "", "clientName": debt.get("clientName") or "",
+                                    "amount": float(amount), "method": method, "shop": shop, "leftAfter": float(left - amount),
+                                    "note": _text(payload.get("note"), NOTE_MAX)}}
+
+
+# ── Касса владельца: расход и перевод ────────────────────────────────────────
+
+def check_expense(payload: dict, desks: list[str], articles: dict[str, dict]) -> dict:
+    desk = str(payload.get("desk") or "")
+    if desk not in desks:
+        return {"ok": False, "error": "выберите кассу"}
+    article = articles.get(str(payload.get("articleId") or "").lower())
+    if article is None:
+        return {"ok": False, "error": "выберите статью расхода"}
+    amount = money(payload.get("amount"))
+    if amount <= 0 or amount > MAX_SUM:
+        return {"ok": False, "error": "укажите сумму"}
+    return {"ok": True, "payload": {"desk": desk, "articleId": article["id"], "article": article["name"], "amount": float(amount),
+                                    "note": _text(payload.get("note"), NOTE_MAX)}}
+
+
+def check_transfer(payload: dict, desks: list[str]) -> dict:
+    src, dst = str(payload.get("fromDesk") or ""), str(payload.get("toDesk") or "")
+    if src not in desks or dst not in desks:
+        return {"ok": False, "error": "выберите обе кассы"}
+    if src == dst:
+        return {"ok": False, "error": "перевод в ту же кассу"}
+    amount = money(payload.get("amount"))
+    if amount <= 0 or amount > MAX_SUM:
+        return {"ok": False, "error": "укажите сумму"}
+    return {"ok": True, "payload": {"fromDesk": src, "toDesk": dst, "amount": float(amount), "note": _text(payload.get("note"), NOTE_MAX)}}
+
+
+def check_op(op: dict, user: dict, ctx: dict) -> dict:
+    """Любая операция с телефона. ctx: items, shops, taken, debts, paid, desks, articles, today."""
+    op_id = str(op.get("id") or "").lower()
+    kind = str(op.get("kind") or "")
+    if not UUID_RE.fullmatch(op_id):
+        return {"ok": False, "error": "нет идентификатора операции"}
+    if kind not in KINDS:
+        return {"ok": False, "error": "неизвестная операция"}
+    if user.get("role") != "owner" and kind not in STAFF_KINDS:
+        return {"ok": False, "error": "это может только владелец"}
+    payload = op.get("payload") if isinstance(op.get("payload"), dict) else {}
+    if kind == "sale":
+        return check_sale(op, user, ctx.get("items") or {}, ctx.get("shops") or [], ctx.get("taken") or {}, ctx.get("today"))
+    if kind == "payment":
+        return check_payment(op_id, payload, user, ctx.get("debts") or {}, ctx.get("paid") or {}, ctx.get("shops") or [])
+    if kind == "expense":
+        return check_expense(payload, ctx.get("desks") or [], ctx.get("articles") or {})
+    return check_transfer(payload, ctx.get("desks") or [])
+
+
+def op_desk_moves(op: dict, shops: dict[str, dict]) -> list[tuple[str, Decimal]]:
+    """Сколько операция добавила (+) или забрала (−) из каждой кассы 1С. shops — {магазин: {cashDesk, transferDesk}}."""
+    payload, kind = op.get("payload") or {}, op.get("kind")
+    shop = shops.get(str(payload.get("shop") or "")) or {}
+    desk_of = {"cash": shop.get("cashDesk") or "", "transfer": shop.get("transferDesk") or ""}
+    if kind == "sale":
+        return [(desk_of.get(p.get("method"), ""), money(p.get("amount"))) for p in payload.get("payments") or []]
+    if kind == "payment":
+        return [(desk_of.get(payload.get("method"), ""), money(payload.get("amount")))]
+    if kind == "expense":
+        return [(str(payload.get("desk") or ""), -money(payload.get("amount")))]
+    if kind == "transfer":
+        amount = money(payload.get("amount"))
+        return [(str(payload.get("fromDesk") or ""), -amount), (str(payload.get("toDesk") or ""), amount)]
+    return []
+
+
+def desk_balances(balances: list[dict], new_ops: list[dict], shops: dict[str, dict]) -> list[dict]:
+    """Деньги в кассах: остаток 1С + операции с телефона, которые 1С ещё не провела."""
+    out: dict[str, Decimal] = {b["name"]: money(b.get("amount")) for b in balances}
+    pending: dict[str, Decimal] = defaultdict(Decimal)
+    for op in new_ops:
+        for desk, amount in op_desk_moves(op, shops):
+            if desk:
+                pending[desk] += amount
+    for desk in pending:
+        out.setdefault(desk, Decimal(0))
+    rows = [{"desk": d, "amount": float(a + pending.get(d, 0)), "amount1c": float(a), "pending": float(pending.get(d, 0))}
+            for d, a in out.items()]
+    rows.sort(key=lambda r: -r["amount"])
+    return rows
+
+
+# ── Прибыль и бонус продавца ─────────────────────────────────────────────────
+
+PERIODS = (("today", 1), ("week", 7), ("month", 30))
+
+
+def sale_profit(payload: dict) -> dict:
+    """Выручка и прибыль продажи по себестоимости на момент продажи (строка cost); строки без себестоимости не считаем в прибыль."""
+    revenue = money(payload.get("total"))
+    cost, no_cost = Decimal(0), 0
+    for line in payload.get("lines") or []:
+        unit_cost = money(line.get("cost"))
+        if unit_cost <= 0:
+            no_cost += 1
+            revenue -= money(line.get("sum"))
+            continue
+        cost += money(unit_cost * quantity(line.get("qty")))
+    return {"revenue": money(payload.get("total")), "profit": revenue - cost, "noCost": no_cost}
+
+
+def _op_day(op: dict) -> date | None:
+    return _day(op.get("createdAt"))
+
+
+def gross_profit(ops: list[dict], today: date) -> dict:
+    """Владельцу: выручка и прибыль за сегодня / 7 / 30 дней (только продажи, кроме отменённых)."""
+    out = {}
+    for key, days in PERIODS:
+        start = today - timedelta(days=days - 1)
+        revenue, profit, sales, no_cost = Decimal(0), Decimal(0), 0, 0
+        for op in ops:
+            day = _op_day(op)
+            if op.get("kind") != "sale" or op.get("status") in ("cancelled", "cancelling") or day is None or day < start or day > today:
+                continue
+            p = sale_profit(op.get("payload") or {})
+            revenue += p["revenue"]
+            profit += p["profit"]
+            sales += 1
+            no_cost += p["noCost"]
+        out[key] = {"revenue": float(revenue), "profit": float(profit), "sales": sales, "noCost": no_cost}
+    return out
+
+
+def capital(items: list[dict], taken: dict[str, dict[str, Decimal]], desks: list[dict], debts_left) -> dict:
+    """«Общий капитал» владельца: товар по себестоимости (остаток 1С минус непроведённые продажи) + деньги в кассах + долги покупателей."""
+    goods, no_cost = Decimal(0), 0
+    for item in items:
+        qty = sum((free_stock(q, taken.get(shop, {}).get(item["id"], 0)) for shop, q in (item.get("stock") or {}).items()), Decimal(0))
+        if qty <= 0:
+            continue
+        if money(item.get("cost")) <= 0:
+            no_cost += 1
+            continue
+        goods += money(qty * money(item.get("cost")))
+    cash = sum((money(d.get("amount")) for d in desks), Decimal(0))
+    debts = money(debts_left)
+    return {"goods": float(goods), "cash": float(cash), "debts": float(debts), "total": float(goods + cash + debts), "noCost": no_cost}
+
+
+def staff_rating(ops: list[dict], users: list[dict], today: date) -> dict:
+    """Рейтинг продавцов: сегодня и с начала месяца — продажи, выручка, прибыль, бонус = процент от прибыли."""
+    ranges = {"today": (today, today), "month": (today.replace(day=1), today)}
+    out = {}
+    for key, (start, end) in ranges.items():
+        rows = {u["id"]: {"userId": u["id"], "name": u["name"], "pct": float(u.get("bonusPct") or 0), "sales": 0,
+                          "revenue": Decimal(0), "profit": Decimal(0)} for u in users if u.get("role") != "owner"}
+        for op in ops:
+            day = _op_day(op)
+            row = rows.get(op.get("userId"))
+            if row is None or op.get("kind") != "sale" or op.get("status") in ("cancelled", "cancelling") or day is None or not start <= day <= end:
+                continue
+            p = sale_profit(op.get("payload") or {})
+            row["sales"] += 1
+            row["revenue"] += p["revenue"]
+            row["profit"] += p["profit"]
+        result = []
+        for row in rows.values():
+            bonus = money(max(row["profit"], Decimal(0)) * Decimal(str(row["pct"])) / 100)
+            result.append({**row, "revenue": float(row["revenue"]), "profit": float(row["profit"]), "bonus": float(bonus)})
+        result.sort(key=lambda r: (-r["profit"], -r["revenue"]))
+        out[key] = result
+    return out
 
 
 # ── Сегодня ──────────────────────────────────────────────────────────────────
@@ -330,7 +627,37 @@ def clean_item(raw: dict, shops: list[str]) -> dict | None:
     return {"id": item_id, "code": _text(raw.get("code"), 20), "name": name, "article": _text(raw.get("article"), 100),
             "group": _text(raw.get("group"), 150), "unit": _text(raw.get("unit"), 20),
             "stock": by_shop(raw.get("stock")),
-            "price": {shop: float(money(prices.get(shop))) for shop in shops if money(prices.get(shop)) > 0}}
+            "price": {shop: float(money(prices.get(shop))) for shop in shops if money(prices.get(shop)) > 0},
+            "cost": float(max(money(raw.get("cost")), Decimal(0)))}
+
+
+def clean_debt(raw: dict) -> dict | None:
+    """Долг из 1С: реализация с неоплаченным остатком (КОплатеОстаток) и её покупатель."""
+    debt_id = str(raw.get("id") or "").lower()
+    left = money(raw.get("left"))
+    if not UUID_RE.fullmatch(debt_id) or left <= 0:
+        return None
+    schedule = [{"date": str(p.get("date"))[:10], "sum": float(money(p.get("sum")))}
+                for p in (raw.get("schedule") if isinstance(raw.get("schedule"), list) else []) if isinstance(p, dict) and _day(p.get("date"))]
+    return {"id": debt_id, "doc": _text(raw.get("doc"), 30), "date": str(raw.get("date") or "")[:10],
+            "clientId": str(raw.get("clientId") or "").lower()[:36], "clientName": _text(raw.get("clientName"), 150),
+            "phones": _text(raw.get("phones"), 200), "shop": _text(raw.get("shop"), 150),
+            "total": float(money(raw.get("total"))), "left": float(left), "schedule": schedule}
+
+
+def clean_entry(raw: dict) -> dict | None:
+    """Статья расходов из 1С: {id, name, uses} (uses — сколько раз за полгода: частые сверху)."""
+    entry_id = str(raw.get("id") or "").lower()
+    name = _text(raw.get("name"), 150)
+    if not UUID_RE.fullmatch(entry_id) or not name:
+        return None
+    return {"id": entry_id, "name": name, "uses": int(money(raw.get("uses")))}
+
+
+def clean_balance(raw: dict) -> dict | None:
+    """Деньги в кассе 1С: {name, amount} в сомах."""
+    name = _text(raw.get("name"), 150)
+    return {"name": name, "amount": float(money(raw.get("amount")))} if name else None
 
 
 def clean_shops(raw) -> list[dict]:
@@ -363,21 +690,48 @@ def _when(created_at: str | None) -> str:
 
 def receipt_text(op: dict, shop_title: str = "Kemal Usman Parfume") -> str:
     """Чек текстом: страница печати и (этап 3) WhatsApp. Без таблиц — WhatsApp не держит колонки."""
-    payload = op.get("payload") or {}
-    lines = [f"*{shop_title}* — чек", _when(op.get("createdAt")), f"Магазин: {payload.get('shop') or ''}", ""]
-    for line in payload.get("lines") or []:
-        lines.append(f"• {line.get('name')} — {num(line.get('qty'))} {line.get('unit') or ''} × {_som(line.get('price'))} = {_som(line.get('sum'))}"
-                     .replace("  ×", " ×"))
-    lines.append(f"*Итого: {_som(payload.get('total'))}*")
-    parts = payload.get("payments") or []
-    if len(parts) > 1:
-        lines.append("Оплата: " + "; ".join(f"{METHODS.get(p.get('method'), '')} — {_som(p.get('amount'))}" for p in parts))
-    elif parts:
-        lines.append("Оплата: " + METHODS.get(parts[0].get("method"), ""))
-    buyer = payload.get("buyer") or {}
-    if buyer.get("name") or buyer.get("phone"):
-        lines.append("Покупатель: " + " ".join(x for x in (buyer.get("name"), "+" + buyer["phone"] if buyer.get("phone") else "") if x))
-    lines += ["", f"Продавец: {op.get('user') or ''}".rstrip(), "Спасибо за покупку!"]
+    payload, kind = op.get("payload") or {}, op.get("kind") or "sale"
+    title = {"sale": "чек", "payment": "оплата долга", "expense": "расход", "transfer": "перевод между кассами"}.get(kind, "операция")
+    lines = [f"*{shop_title}* — {title}", _when(op.get("createdAt"))]
+    if payload.get("shop"):
+        lines.append(f"Магазин: {payload['shop']}")
+    lines.append("")
+    if kind == "sale":
+        for line in payload.get("lines") or []:
+            lines.append(f"• {line.get('name')} — {num(line.get('qty'))} {line.get('unit') or ''} × {_som(line.get('price'))} = {_som(line.get('sum'))}"
+                         .replace("  ×", " ×"))
+        lines.append(f"*Итого: {_som(payload.get('total'))}*")
+        parts = payload.get("payments") or []
+        debt = payload.get("debt") or {}
+        if debt:
+            if parts:
+                lines.append(f"Оплачено сейчас: {_som(debt.get('paid'))} ({METHODS.get(debt.get('method'), '')})")
+            if debt.get("months"):
+                lines.append(f"Рассрочка {debt['months']} мес.:")
+            else:
+                lines.append("В долг:")
+            lines += [f"  до {_when(p.get('date') + 'T00:00')[:10]} — {_som(p.get('sum'))}" for p in debt.get("schedule") or []]
+        elif len(parts) > 1:
+            lines.append("Оплата: " + "; ".join(f"{METHODS.get(p.get('method'), '')} — {_som(p.get('amount'))}" for p in parts))
+        elif parts:
+            lines.append("Оплата: " + METHODS.get(parts[0].get("method"), ""))
+        buyer = payload.get("buyer") or {}
+        if buyer.get("name") or buyer.get("phone"):
+            lines.append("Покупатель: " + " ".join(x for x in (buyer.get("name"), "+" + buyer["phone"] if buyer.get("phone") else "") if x))
+    elif kind == "payment":
+        lines.append(f"Оплата по продаже {payload.get('doc') or ''}: *{_som(payload.get('amount'))}* ({METHODS.get(payload.get('method'), '')})")
+        if payload.get("clientName"):
+            lines.append(f"Покупатель: {payload['clientName']}")
+        lines.append(f"Осталось по этой продаже: {_som(payload.get('leftAfter'))}")
+    elif kind == "expense":
+        lines += [f"Расход: *{_som(payload.get('amount'))}*", f"Статья: {payload.get('article') or ''}", f"Из кассы: {payload.get('desk') or ''}"]
+    elif kind == "transfer":
+        lines += [f"Перевод: *{_som(payload.get('amount'))}*", f"Из: {payload.get('fromDesk') or ''}", f"В: {payload.get('toDesk') or ''}"]
+    if payload.get("note") and kind != "sale":
+        lines.append(f"Заметка: {payload['note']}")
+    lines += ["", (f"Продавец: {op.get('user') or ''}" if kind in ("sale", "payment") else f"Записал: {op.get('user') or ''}").rstrip()]
+    if kind in ("sale", "payment"):
+        lines.append("Спасибо за покупку!")
     if op.get("status") == "cancelled":
         lines.append("ОТМЕНЕНО")
     return "\n".join(lines)

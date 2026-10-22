@@ -34,6 +34,7 @@ import sqlite3
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
@@ -193,17 +194,40 @@ async def sync_from_1c(request: Request, conn: sqlite3.Connection = Depends(get_
             row = (item["code"], item["name"], item["article"], item["group"], item["unit"],
                    db.dumps(item["stock"]), db.dumps(item["price"]))
             if before.pop(item["id"], None) == row:
+                if item["cost"] > 0:     # себестоимость телефону не видна — список ради неё заново не качаем
+                    conn.execute("UPDATE items SET cost = ? WHERE id = ?", (item["cost"], item["id"]))
                 continue      # не менялся — updated_at не трогаем: телефон не качает список заново
-            conn.execute("INSERT INTO items (id, code, name, article, grp, unit, stock, price, updated_at) VALUES (?,?,?,?,?,?,?,?,?) "
+            # Себестоимость 0 (товар кончился, в 1С нечего делить) — оставляем прежнюю.
+            conn.execute("INSERT INTO items (id, code, name, article, grp, unit, stock, price, cost, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?) "
                          "ON CONFLICT (id) DO UPDATE SET code = excluded.code, name = excluded.name, article = excluded.article, "
                          "grp = excluded.grp, unit = excluded.unit, stock = excluded.stock, price = excluded.price, "
-                         "updated_at = excluded.updated_at", (item["id"], *row, now))
+                         "cost = CASE WHEN excluded.cost > 0 THEN excluded.cost ELSE items.cost END, "
+                         "updated_at = excluded.updated_at", (item["id"], *row, item["cost"], now))
             changed += 1
         if data.get("full", True) and before:
             conn.executemany("DELETE FROM items WHERE id = ?", [(k,) for k in before])
+        accepted = {}
+        if isinstance(data.get("debts"), list):        # долги — всегда целиком: пустой список = долгов нет
+            debts = [d for d in (rules.clean_debt(x) if isinstance(x, dict) else None for x in data["debts"][:MAX_BATCH]) if d]
+            conn.execute("DELETE FROM debts")
+            for d in debts:
+                conn.execute("INSERT INTO debts (id, doc, date, client_id, client_name, phones, shop, total, left_sum, schedule, updated_at) "
+                             "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (d["id"], d["doc"], d["date"], d["clientId"], d["clientName"], d["phones"],
+                                                                d["shop"], d["total"], d["left"], db.dumps(d["schedule"]), now))
+            accepted["debts"] = len(debts)
+        articles = [a for a in (rules.clean_entry(x) if isinstance(x, dict) else None for x in (data.get("articles") or [])[:MAX_BATCH]) if a]
+        if articles:                                   # пустой список статей не затирает — скорее сбой в 1С
+            conn.execute("DELETE FROM articles")
+            conn.executemany("INSERT INTO articles (id, name, uses) VALUES (?, ?, ?)", [(a["id"], a["name"], a["uses"]) for a in articles])
+            accepted["articles"] = len(articles)
+        if isinstance(data.get("cash"), list):         # деньги в кассах — целиком
+            cash = [b for b in (rules.clean_balance(x) if isinstance(x, dict) else None for x in data["cash"]) if b]
+            conn.execute("DELETE FROM balances")
+            conn.executemany("INSERT OR REPLACE INTO balances (name, amount) VALUES (?, ?)", [(b["name"], b["amount"]) for b in cash])
+            accepted["cash"] = len(cash)
         _note_seen(conn, "sync", len(items))
     return {"ok": True, "items": len(items), "changed": changed, "removed": len(before) if data.get("full", True) else 0,
-            "rejected": len(raw_items) - len(items)}
+            "rejected": len(raw_items) - len(items), **accepted}
 
 
 @app.post("/api/1c/owner-pin")
@@ -416,12 +440,52 @@ def state(user: dict = Depends(current_user), conn: sqlite3.Connection = Depends
     mine = [o for o in rows if owner or o["userId"] == user["id"]]
     today = (utcnow() + BISHKEK).date().isoformat()
     today_ops = [o for o in mine if str(o["createdAt"] or "").startswith(today)]
+    extra = {}
+    month_ops = _sales_since(conn, 31)
+    users = _users(conn)
+    rating = rules.staff_rating(month_ops, users, (utcnow() + BISHKEK).date())
+    if owner:
+        # Касса владельца: деньги в кассах (1С + непроведённые операции), статьи расходов, прибыль, рейтинг продавцов.
+        shops = {s["name"]: s for s in _shops(conn)}
+        balances = [{"name": r["name"], "amount": r["amount"]} for r in conn.execute("SELECT name, amount FROM balances")]
+        extra = {"desks": rules.desk_balances(balances + [{"name": d, "amount": 0} for s in shops.values()
+                                                             for d in (s["cashDesk"], s["transferDesk"]) if d and d not in [b["name"] for b in balances]],
+                                              _new_ops(conn), shops),
+                 "articles": [{"id": r["id"], "name": r["name"]} for r in conn.execute("SELECT id, name FROM articles ORDER BY uses DESC, name")],
+                 "profit": rules.gross_profit(month_ops, (utcnow() + BISHKEK).date()), "rating": rating}
+        new_ops = _new_ops(conn)
+        paid = rules.paid_by_ops(new_ops)
+        debts_left = sum((rules.debt_left(r["left_sum"], paid.get(r["id"], 0)) for r in conn.execute("SELECT id, left_sum FROM debts")), Decimal(0))
+        goods = [{"id": r["id"], "cost": r["cost"], "stock": db.loads(r["stock"], {})} for r in conn.execute("SELECT id, cost, stock FROM items")]
+        extra["capital"] = rules.capital(goods, rules.reserved_by_ops(new_ops), extra["desks"], debts_left)
+    else:
+        extra = {"myRating": {k: next((r for r in rows_ if r["userId"] == user["id"]), None) for k, rows_ in rating.items()}}
     return {"user": {"name": user["name"], "role": user["role"], "shop": user["shop"]}, **rules.visible_to(user["role"]),
             "shops": [s["name"] for s in _shops(conn)], "sync": _sync_info(conn),
             "pending": conn.execute("SELECT COUNT(*) FROM ops WHERE status = 'new'").fetchone()[0],
             "items": conn.execute("SELECT COUNT(*) FROM items").fetchone()[0],
+            "debts": conn.execute("SELECT COUNT(*) FROM debts").fetchone()[0],
             "ops": [_public(o, user) for o in mine], "totals": rules.day_totals(today_ops),
-            "now": (utcnow() + BISHKEK).isoformat(timespec="seconds")}
+            "now": (utcnow() + BISHKEK).isoformat(timespec="seconds"), **extra}
+
+
+def _sales_since(conn: sqlite3.Connection, days: int) -> list[dict]:
+    """Продажи за N дней — для прибыли и рейтинга."""
+    since = _utc_iso(utcnow() + BISHKEK - timedelta(days=days) - BISHKEK)
+    return [_op_row(r) for r in conn.execute("SELECT * FROM ops WHERE kind = 'sale' AND created_at >= ?", (since,))]
+
+
+@app.get("/kassa/api/debts")
+def debts(user: dict = Depends(current_user), conn: sqlite3.Connection = Depends(get_db)):
+    """Долги покупателей из 1С минус оплаты с телефона, которые 1С ещё не провела."""
+    paid = rules.paid_by_ops(_new_ops(conn))
+    out = []
+    for r in conn.execute("SELECT * FROM debts ORDER BY client_name COLLATE NOCASE, date"):
+        left = rules.debt_left(r["left_sum"], paid.get(r["id"], 0))
+        out.append({"id": r["id"], "doc": r["doc"], "date": r["date"], "clientId": r["client_id"], "clientName": r["client_name"],
+                    "phones": r["phones"], "shop": r["shop"], "total": r["total"], "left": float(left), "left1c": r["left_sum"],
+                    "schedule": rules.unpaid_schedule(db.loads(r["schedule"], []), left)})
+    return {"debts": [d for d in out if d["left"] > 0], "sync": _sync_info(conn)}
 
 
 def _version(conn: sqlite3.Connection) -> str:
@@ -448,7 +512,7 @@ def _items_map(conn: sqlite3.Connection, ids: list[str]) -> dict[str, dict]:
     for item_id in ids[:rules.MAX_LINES]:
         r = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
         if r:
-            out[r["id"]] = {"id": r["id"], "code": r["code"], "name": r["name"], "unit": r["unit"],
+            out[r["id"]] = {"id": r["id"], "code": r["code"], "name": r["name"], "unit": r["unit"], "cost": r["cost"],
                             "stock": db.loads(r["stock"], {}), "price": db.loads(r["price"], {})}
     return out
 
@@ -463,14 +527,24 @@ async def create_op(request: Request, user: dict = Depends(current_user), conn: 
         return {"ok": True, "repeated": True, "op": _public(_op_row(existing), user)}
     payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
     ids = [str(l.get("itemId") or "").lower() for l in (payload.get("lines") or []) if isinstance(l, dict)]
-    with db.tx(conn):     # проверка остатка и запись — одной транзакцией: два телефона не продадут последний флакон дважды
-        verdict = rules.check_sale({"id": op_id, "kind": data.get("kind"), "payload": payload}, user, _items_map(conn, ids),
-                                   [s["name"] for s in _shops(conn)], rules.reserved_by_ops(_new_ops(conn)))
+    with db.tx(conn):     # проверка и запись — одной транзакцией: два телефона не продадут последний флакон дважды
+        new_ops = _new_ops(conn)
+        shops = _shops(conn)
+        ctx = {"items": _items_map(conn, ids), "shops": [s["name"] for s in shops], "taken": rules.reserved_by_ops(new_ops),
+               "paid": rules.paid_by_ops(new_ops), "today": (utcnow() + BISHKEK).date(),
+               "desks": sorted({r[0] for r in conn.execute("SELECT name FROM balances")}
+                               | {d for s in shops for d in (s["cashDesk"], s["transferDesk"]) if d}),
+               "articles": {r["id"]: {"id": r["id"], "name": r["name"]} for r in conn.execute("SELECT id, name FROM articles")}}
+        debt_id = str(payload.get("debtId") or "").lower()
+        row = conn.execute("SELECT id, doc, client_name, left_sum FROM debts WHERE id = ?", (debt_id,)).fetchone() if debt_id else None
+        ctx["debts"] = {row["id"]: {"id": row["id"], "doc": row["doc"], "clientName": row["client_name"], "left": row["left_sum"]}} if row else {}
+        kind = str(data.get("kind") or "")
+        verdict = rules.check_op({"id": op_id, "kind": kind, "payload": payload}, user, ctx)
         if not verdict["ok"]:
             return JSONResponse({"ok": False, "error": verdict["error"]}, status_code=409)
         clean = verdict["payload"]
-        conn.execute("INSERT INTO ops (id, kind, payload, user_id, user_name, shop, created_at) VALUES (?, 'sale', ?, ?, ?, ?, ?)",
-                     (op_id, db.dumps(clean), user["id"], user["name"], clean["shop"], _utc_iso()))
+        conn.execute("INSERT INTO ops (id, kind, payload, user_id, user_name, shop, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                     (op_id, kind, db.dumps(clean), user["id"], user["name"], clean.get("shop") or "", _utc_iso()))
         row = conn.execute("SELECT * FROM ops WHERE id = ?", (op_id,)).fetchone()
     return {"ok": True, "op": _public(_op_row(row), user)}
 
@@ -535,10 +609,10 @@ def receipt(op_id: str, user: dict = Depends(current_user), conn: sqlite3.Connec
 
 def _users(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
-        "SELECT u.id, u.name, u.role, u.active, u.shop, u.created_at, MAX(s.last_seen) AS seen FROM users u "
+        "SELECT u.id, u.name, u.role, u.active, u.shop, u.bonus_pct, u.created_at, MAX(s.last_seen) AS seen FROM users u "
         "LEFT JOIN sessions s ON s.user_id = u.id GROUP BY u.id ORDER BY u.role = 'owner' DESC, u.active DESC, u.name").fetchall()
     return [{"id": r["id"], "name": r["name"], "role": r["role"], "active": bool(r["active"]), "shop": r["shop"] or "",
-             "lastSeen": local_iso(r["seen"])} for r in rows]
+             "bonusPct": r["bonus_pct"], "lastSeen": local_iso(r["seen"])} for r in rows]
 
 
 @app.get("/kassa/api/users")
@@ -560,8 +634,9 @@ async def users_save(request: Request, user: dict = Depends(owner_user), conn: s
             if rules.pin_taken(form["pin"], others):
                 return JSONResponse({"ok": False, "error": "Такой PIN уже у другого — придумайте другой"}, status_code=409)
         if not user_id:
-            conn.execute("INSERT INTO users (name, role, pin_hash, shop, created_at) VALUES (?, 'staff', ?, ?, ?)",
-                         (form["name"], rules.hash_pin(form["pin"]), form.get("shop", ""), _utc_iso()))
+            conn.execute("INSERT INTO users (name, role, pin_hash, shop, bonus_pct, created_at) VALUES (?, 'staff', ?, ?, ?, ?)",
+                         (form["name"], rules.hash_pin(form["pin"]), form.get("shop", ""), form.get("bonusPct", float(rules.STAFF_BONUS_PCT)),
+                          _utc_iso()))
         else:
             row = conn.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
             if not row:
@@ -573,6 +648,8 @@ async def users_save(request: Request, user: dict = Depends(owner_user), conn: s
                 conn.execute("UPDATE users SET name = ? WHERE id = ?", (form["name"], user_id))
             if "shop" in form:
                 conn.execute("UPDATE users SET shop = ? WHERE id = ?", (form["shop"], user_id))
+            if "bonusPct" in form and row[0] != "owner":
+                conn.execute("UPDATE users SET bonus_pct = ? WHERE id = ?", (form["bonusPct"], user_id))
             if form["pin"]:
                 conn.execute("UPDATE users SET pin_hash = ? WHERE id = ?", (rules.hash_pin(form["pin"]), user_id))
                 conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))

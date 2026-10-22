@@ -197,5 +197,83 @@ class Flow(unittest.TestCase):
         self.assertEqual(self.signed(f"/api/1c/ops/{late}/done", {"docs": []}).status_code, 409)
 
 
+class Stage2Rules(unittest.TestCase):
+    def test_debt_until_date(self):
+        from datetime import date
+        v = rules.check_sale(sale([{"itemId": OIL, "qty": 10, "price": 160}], SHOP_B, buyer={"name": "Айбек", "phone": "555123456"},
+                                  debt={"paid": 600, "method": "cash", "dueDate": "2026-11-01"}), OWNER, ITEMS, [SHOP_A, SHOP_B], {}, date(2026, 10, 22))
+        self.assertTrue(v["ok"], v)
+        self.assertEqual(v["payload"]["payments"], [{"method": "cash", "amount": 600.0}])
+        self.assertEqual(v["payload"]["debt"]["schedule"], [{"date": "2026-11-01", "sum": 1000.0}])
+
+    def test_debt_needs_buyer(self):
+        v = rules.check_sale(sale([{"itemId": OIL, "qty": 1, "price": 160}], debt={"dueDate": "2026-11-01"}), OWNER, ITEMS, [SHOP_A, SHOP_B], {})
+        self.assertFalse(v["ok"])
+        self.assertIn("имя и телефон", v["error"])
+
+    def test_installment_months(self):
+        from datetime import date
+        built = rules.build_debt(Decimal("1000"), {"paid": 0, "months": 3}, date(2026, 1, 31))
+        self.assertTrue(built["ok"], built)
+        self.assertEqual([p["sum"] for p in built["debt"]["schedule"]], [340.0, 340.0, 320.0])
+        self.assertEqual([p["date"] for p in built["debt"]["schedule"]], ["2026-02-28", "2026-03-31", "2026-04-30"])
+
+    def test_unpaid_schedule(self):
+        parts = [{"date": "2026-11-01", "sum": 340}, {"date": "2026-12-01", "sum": 340}, {"date": "2027-01-01", "sum": 320}]
+        self.assertEqual(rules.unpaid_schedule(parts, 500), [{"date": "2026-12-01", "sum": 180.0}, {"date": "2027-01-01", "sum": 320.0}])
+
+    def test_desks_and_profit(self):
+        shops = {SHOP_A: {"cashDesk": "Касса A", "transferDesk": "Перевод A"}}
+        ops = [{"kind": "sale", "payload": {"shop": SHOP_A, "payments": [{"method": "transfer", "amount": 400}]}},
+               {"kind": "expense", "payload": {"desk": "Касса A", "amount": 50}},
+               {"kind": "transfer", "payload": {"fromDesk": "Касса A", "toDesk": "Перевод A", "amount": 30}}]
+        rows = {r["desk"]: r["amount"] for r in rules.desk_balances([{"name": "Касса A", "amount": 1000}], ops, shops)}
+        self.assertEqual(rows, {"Касса A": 920.0, "Перевод A": 430.0})
+        from datetime import date
+        sold = [{"kind": "sale", "status": "done", "userId": 2, "createdAt": "2026-10-22T12:00:00",
+                 "payload": {"total": 500, "lines": [{"qty": 5, "sum": 500, "cost": 40}]}}]
+        self.assertEqual(rules.gross_profit(sold, date(2026, 10, 22))["today"]["profit"], 300.0)
+        rating = rules.staff_rating(sold, [{"id": 2, "name": "Айгерим", "role": "staff", "bonusPct": 10}], date(2026, 10, 22))
+        self.assertEqual(rating["month"][0]["bonus"], 30.0)
+
+
+class Stage2Flow(Flow):
+    def test_flow(self):   # путь этапа 1 уже проверен в Flow — здесь только этап 2
+        pass
+
+    def test_stage2(self):
+        c = self.c
+        shops = [{"name": SHOP_A, "cashDesk": "Касса " + SHOP_A, "transferDesk": "Перевод " + SHOP_A}]
+        debt_id = "33333333-3333-3333-3333-333333333333"
+        art = "44444444-4444-4444-4444-444444444444"
+        r = self.signed("/api/1c/sync", {"shops": shops, "items": [
+            {"id": OIL, "name": "Chanel Chance Maslo", "unit": "мл", "stock": {SHOP_A: 50}, "price": {SHOP_A: 160}, "cost": 40}],
+            "debts": [{"id": debt_id, "doc": "ЦБ-9", "date": "2026-10-20", "clientName": "Айбек", "phones": "+996555123456",
+                       "total": 1000, "left": 900, "schedule": [{"date": "2026-11-20", "sum": 900}]}],
+            "articles": [{"id": art, "name": "04 Аренда", "uses": 3}], "cash": [{"name": "Касса " + SHOP_A, "amount": 5000}]})
+        self.assertEqual(r.json()["debts"], 1, r.text)
+        self.signed("/api/1c/owner-pin", {"pin": "8642"})
+        self.assertEqual(c.post("/kassa/login", json={"pin": "8642"}).status_code, 200)
+        self.assertEqual(c.get("/kassa/api/debts").json()["debts"][0]["left"], 900)
+        too = {"id": str(uuid.uuid4()), "kind": "payment", "payload": {"debtId": debt_id, "amount": 1000, "method": "cash", "shop": SHOP_A}}
+        self.assertEqual(c.post("/kassa/api/ops", json=too).status_code, 409)
+        pay = {"id": str(uuid.uuid4()), "kind": "payment", "payload": {"debtId": debt_id, "amount": 400, "method": "transfer", "shop": SHOP_A}}
+        self.assertEqual(c.post("/kassa/api/ops", json=pay).status_code, 200)
+        self.assertEqual(c.get("/kassa/api/debts").json()["debts"][0]["left"], 500)
+        exp = {"id": str(uuid.uuid4()), "kind": "expense", "payload": {"desk": "Касса " + SHOP_A, "articleId": art, "amount": 700}}
+        self.assertEqual(c.post("/kassa/api/ops", json=exp).status_code, 200)
+        tr = {"id": str(uuid.uuid4()), "kind": "transfer", "payload": {"fromDesk": "Касса " + SHOP_A, "toDesk": "Перевод " + SHOP_A, "amount": 300}}
+        self.assertEqual(c.post("/kassa/api/ops", json=tr).status_code, 200)
+        st = c.get("/kassa/api/state").json()
+        desks = {d["desk"]: d["amount"] for d in st["desks"]}
+        self.assertEqual(desks["Касса " + SHOP_A], 4000.0)          # 5000 − 700 − 300
+        self.assertEqual(desks["Перевод " + SHOP_A], 700.0)         # +400 оплата долга переводом +300 перевод
+        sold = sale([{"itemId": OIL, "qty": 5, "price": 160}], SHOP_A)
+        self.assertEqual(c.post("/kassa/api/ops", json=sold).status_code, 200)
+        self.assertEqual(c.get("/kassa/api/state").json()["profit"]["today"]["profit"], 600.0)   # 800 − 5 × 40
+        w = c.get("/api/1c/wait", params={"sec": 0}, headers={"X-Api-Key": "test-secret"}).json()
+        self.assertEqual({o["kind"] for o in w["ops"]} >= {"payment", "expense", "transfer", "sale"}, True)
+
+
 if __name__ == "__main__":
     unittest.main()

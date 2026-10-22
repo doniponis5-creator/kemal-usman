@@ -23,7 +23,7 @@ from datetime import datetime
 
 LABEL = "КАССА:"
 RETAIL_PARTNER = "Клиент розничная"
-DOC_TYPES = ("ПриходныйКассовыйОрдер", "РеализацияТоваровУслуг")    # отмена — в этом порядке: сначала деньги, потом товар
+DOC_TYPES = ("ПриходныйКассовыйОрдер", "РасходныйКассовыйОрдер", "РеализацияТоваровУслуг")   # отмена — сначала деньги, потом товар
 
 
 class OneCError(Exception):
@@ -104,7 +104,8 @@ def find_docs(s, op_id: str) -> list:
 
 
 def _doc_entry(doc_type: str, ref) -> dict:
-    return {"type": "Реализация" if doc_type == "РеализацияТоваровУслуг" else "ПКО", "number": str(ref.Номер).strip()}
+    names = {"РеализацияТоваровУслуг": "Реализация", "ПриходныйКассовыйОрдер": "ПКО", "РасходныйКассовыйОрдер": "РКО"}
+    return {"type": names.get(doc_type, doc_type), "number": str(ref.Номер).strip()}
 
 
 # ── 1С → телефон: товары ─────────────────────────────────────────────────────
@@ -124,8 +125,14 @@ def snapshot(s, shops: list[str]) -> list[dict]:
             ИЗ РегистрСведений.ЦеныНоменклатуры25.СрезПоследних(, ВидЦены = &Ц{i}) КАК Ц СГРУППИРОВАТЬ ПО Ц.Номенклатура) КАК Цен{i}
             ПО Цен{i}.Номенклатура = Н.Ссылка""")
         cols.append(f"ЕСТЬNULL(Ост{i}.Остаток, 0) КАК Остаток{i}, ЕСТЬNULL(Цен{i}.Цена, 0) КАК Цена{i}")
+    # Себестоимость за единицу — остаток регистра «Себестоимость товаров» (стоимость / количество, все склады).
+    joins.append("""ЛЕВОЕ СОЕДИНЕНИЕ (ВЫБРАТЬ С.АналитикаУчетаНоменклатуры.Номенклатура КАК Номенклатура,
+            СУММА(С.КоличествоОстаток) КАК Кол, СУММА(С.СтоимостьОстаток) КАК Стоим
+            ИЗ РегистрНакопления.СебестоимостьТоваров.Остатки КАК С СГРУППИРОВАТЬ ПО С.АналитикаУчетаНоменклатуры.Номенклатура) КАК Себ
+            ПО Себ.Номенклатура = Н.Ссылка""")
     text = ("ВЫБРАТЬ Н.Ссылка КАК Ссылка, Н.Код КАК Код, Н.Наименование КАК Имя, Н.Артикул КАК Артикул, "
             "ЕСТЬNULL(Н.Родитель.Наименование, \"\") КАК Группа, ЕСТЬNULL(Н.ЕдиницаИзмерения.Наименование, \"\") КАК Ед, "
+            "ЕСТЬNULL(Себ.Кол, 0) КАК СебКол, ЕСТЬNULL(Себ.Стоим, 0) КАК СебСтоим, "
             + ", ".join(cols) + " ИЗ Справочник.Номенклатура КАК Н " + " ".join(joins)
             + " ГДЕ НЕ Н.ЭтоГруппа И НЕ Н.ПометкаУдаления")
     sel = _query(s, text, **params).Выбрать()
@@ -137,7 +144,8 @@ def snapshot(s, shops: list[str]) -> list[dict]:
             continue
         items.append({"id": _uuid(s, sel.Ссылка), "code": str(sel.Код).strip(), "name": str(sel.Имя).strip(),
                       "article": str(sel.Артикул or "").strip(), "group": str(sel.Группа or "").strip(),
-                      "unit": str(sel.Ед or "").strip(), "stock": stock, "price": price})
+                      "unit": str(sel.Ед or "").strip(), "stock": stock, "price": price,
+                      "cost": round(float(sel.СебСтоим) / float(sel.СебКол), 2) if float(sel.СебКол) > 0 else 0})
     items.sort(key=lambda x: x["id"])
     return items
 
@@ -214,7 +222,13 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
     price_type = warehouse.РозничныйВидЦены
     org = agreement.Организация
     currency = agreement.Валюта if not agreement.Валюта.Пустая() else _by_name(s.Справочники.Валюты, "KGS", "валюта")
-    partner, contractor = _retail_partner(s)
+    debt = payload.get("debt") or None
+    if debt:
+        # В долг — на карточку покупателя (найти по телефону или имени, иначе завести); иначе «Клиент розничная».
+        from onec_kemal_stage2 import buyer_partner, debt_stages, debt_text
+        partner, contractor = buyer_partner(s, payload.get("buyer") or {})
+    else:
+        partner, contractor = _retail_partner(s)
     no_vat = _by_name(s.Справочники.СтавкиНДС, "Без НДС", "ставка НДС")
     lines = []
     for line in payload.get("lines") or []:
@@ -248,7 +262,7 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
         doc.ВалютаВзаиморасчетов = currency
         doc.ЦенаВключаетНДС = False
         doc.СпособДоставки = s.Перечисления.СпособыДоставки.Самовывоз
-        doc.ПорядокРасчетов = agreement.ПорядокРасчетов
+        doc.ПорядокРасчетов = s.Перечисления.ПорядокРасчетов.ПоНакладным if debt else agreement.ПорядокРасчетов
         doc.НалогообложениеНДС = s.Перечисления.ТипыНалогообложенияНДС.ПродажаНеОблагаетсяНДС
         manager = _manager(s, seller)
         if manager is not None:
@@ -267,6 +281,9 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
             row.СтавкаНДС = no_vat
             row.Склад = warehouse
         doc.СкидкиРассчитаны = True
+        if debt:
+            debt_stages(s, doc, debt, op.get("createdAt") or datetime.now().isoformat(), float(payload["total"]))
+            doc.Комментарий = doc.Комментарий + " | " + debt_text(debt)
         _write(s, doc, "реализация")
         docs.append(("РеализацияТоваровУслуг", doc.Ссылка))
         for index, part in enumerate(payments):
@@ -276,7 +293,7 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
             pko.Дата = when
             pko.Касса = desk
             amount = float(part["amount"])
-            if len(payments) > 1:
+            if len(payments) > 1 or debt:
                 pko.СуммаДокумента = amount
                 for i in range(pko.РасшифровкаПлатежа.Количество()):
                     row = pko.РасшифровкаПлатежа.Получить(i)
@@ -295,8 +312,19 @@ def post_sale(s, op: dict, shops: dict[str, dict]) -> list[dict]:
     return [_doc_entry(t, ref) for t, ref in docs]
 
 
-def _write(s, doc, what: str) -> None:
-    if not doc.ПроверитьЗаполнение():
+def post_op(s, op: dict, shops: dict[str, dict]) -> list[dict]:
+    """Любая операция с телефона → документы 1С."""
+    if op.get("kind") == "sale":
+        return post_sale(s, op, shops)
+    import onec_kemal_stage2 as stage2
+    poster = {"payment": stage2.post_payment, "expense": stage2.post_expense, "transfer": stage2.post_transfer}.get(op.get("kind"))
+    if poster is None:
+        raise OneCError(f"операция «{op.get('kind')}» в 1С не проводится")
+    return poster(s, op, shops)
+
+
+def _write(s, doc, what: str, check: bool = True) -> None:
+    if check and not doc.ПроверитьЗаполнение():
         raise OneCError(f"{what}: {_messages(s) or 'не заполнено'}")
     try:
         doc.Записать(s.РежимЗаписиДокумента.Проведение)

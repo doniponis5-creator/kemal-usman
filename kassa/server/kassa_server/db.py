@@ -82,7 +82,36 @@ CREATE TABLE IF NOT EXISTS settings (
     key         TEXT PRIMARY KEY,
     value       TEXT NOT NULL DEFAULT ''
 );
+-- Этап 2. Долги покупателей из 1С (реализации с неоплаченным остатком), статьи расходов, деньги в кассах 1С.
+CREATE TABLE IF NOT EXISTS debts (
+    id          TEXT PRIMARY KEY,               -- uuid реализации
+    doc         TEXT NOT NULL DEFAULT '',
+    date        TEXT NOT NULL DEFAULT '',
+    client_id   TEXT NOT NULL DEFAULT '',
+    client_name TEXT NOT NULL DEFAULT '',
+    phones      TEXT NOT NULL DEFAULT '',
+    shop        TEXT NOT NULL DEFAULT '',
+    total       REAL NOT NULL DEFAULT 0,
+    left_sum    REAL NOT NULL DEFAULT 0,
+    schedule    TEXT NOT NULL DEFAULT '[]',      -- только неоплаченные части [{date, sum}]
+    updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS articles (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    uses        INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS balances (
+    name        TEXT PRIMARY KEY,               -- касса 1С
+    amount      REAL NOT NULL DEFAULT 0
+);
 """
+
+# Колонки, которых не было в этапе 1: (таблица, колонка, описание). SQLite не умеет «ADD COLUMN IF NOT EXISTS».
+COLUMNS = (
+    ("items", "cost", "REAL NOT NULL DEFAULT 0"),              # себестоимость за единицу из 1С
+    ("users", "bonus_pct", "REAL NOT NULL DEFAULT 10"),        # бонус продавца, % от прибыли его продаж
+)
 
 
 def path() -> Path:
@@ -105,6 +134,9 @@ def init() -> None:
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        for table, column, spec in COLUMNS:
+            if column not in [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {spec}")
     finally:
         conn.close()
 

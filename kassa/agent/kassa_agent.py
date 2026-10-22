@@ -30,6 +30,7 @@ from pathlib import Path
 import httpx
 
 import onec_kemal as onec
+import onec_kemal_stage2 as stage2
 
 HERE = Path(__file__).resolve().parent
 SNAPSHOT_EVERY = 120        # секунд между проверками товаров в 1С
@@ -111,11 +112,12 @@ class Agent:
     # ── работа ──
     def send_items(self, force: bool = False) -> None:
         items = onec.snapshot(self.one_c(), [s["name"] for s in self.shops])
+        more = stage2.extras(self.one_c())      # долги, статьи расходов, деньги в кассах
         self.last_snapshot = time.monotonic()
-        print_ = onec.fingerprint(items)
+        print_ = onec.fingerprint(items + [more])
         if not force and print_ == self.sent_print and time.monotonic() - self.last_sent < RESEND_EVERY:
             return
-        r = self.post("/api/1c/sync", {"shops": self.shops, "items": items, "full": True})
+        r = self.post("/api/1c/sync", {"shops": self.shops, "items": items, "full": True, **more})
         r.raise_for_status()
         self.sent_print, self.last_sent = print_, time.monotonic()
         log.info("товары → сервер: %s", r.json())
@@ -131,10 +133,10 @@ class Agent:
         for op in answer.get("ops") or []:
             worked = True
             try:
-                docs = onec.post_sale(self.one_c(), op, shops)
+                docs = onec.post_op(self.one_c(), op, shops)
             except Exception as error:   # noqa: BLE001 — любую причину показать владельцу на телефоне
                 reason = str(error) if isinstance(error, onec.OneCError) else onec._com_text(error)
-                log.warning("продажа %s не провелась: %s", op["id"], reason)
+                log.warning("%s %s не провелась: %s", op.get("kind"), op["id"], reason)
                 self.post(f"/api/1c/ops/{op['id']}/failed", {"reason": reason[:900]})
                 continue
             r = self.post(f"/api/1c/ops/{op['id']}/done", {"docs": docs})
@@ -144,7 +146,7 @@ class Agent:
                 log.info("продажа %s отменена с телефона во время проведения — распровёл", op["id"])
             else:
                 r.raise_for_status()
-                log.info("продажа %s проведена: %s", op["id"], ", ".join(f"{d['type']} {d['number']}" for d in docs))
+                log.info("%s %s проведена: %s", op.get("kind"), op["id"], ", ".join(f"{d['type']} {d['number']}" for d in docs))
         return worked
 
     def cycle(self, wait: int = WAIT_SEC) -> bool:
