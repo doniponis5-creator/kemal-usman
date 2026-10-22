@@ -1,3 +1,5 @@
+/* global $app, $apis, $os, __hooks, require, module */
+/* eslint-disable no-unused-vars, no-empty -- catch (_) {} — так пишут все хуки PocketBase 0.22 (goja) в этом репозитории */
 // Бонусы клуба Kemal для кассы на телефоне (папка kassa/ этого репозитория).
 //
 // Касса — отдельный сервер; бонусы покупателя живут здесь, в clients.bonus_balance / bonus_history (как у сайта).
@@ -49,7 +51,7 @@ function settings() {
 }
 
 function history(client) {
-  var list = [];
+  var list;
   try {
     var raw = client.getString('bonus_history');
     list = raw ? JSON.parse(raw) : [];
@@ -113,8 +115,8 @@ function handle(c) {
         result = { status: 200, body: { ok: true, repeated: true, balance: balance } };
         return;
       }
-      var change = 0;
-      var label = '';
+      var change;
+      var label;
       if (action === 'spend') {
         var amount = Math.floor(Number(data.amount || 0));
         if (amount <= 0) { result = { status: 400, body: { ok: false, error: 'amount' } }; return; }
@@ -160,10 +162,10 @@ function handleStock(c) {
   var products = 0, variants = 0, missing = [];
   for (var u = 0; u < updates.length && u < 2000; u++) {
     var up = updates[u] || {};
-    var record = null;
+    var record;
     try { record = $app.dao().findRecordById('products', String(up.productId || '')); } catch (_) { record = null; }
     if (!record) { missing.push(String(up.productId || '')); continue; }
-    var list = [];
+    var list;
     try { list = JSON.parse(record.getString('variants') || '[]'); } catch (_) { list = []; }
     if (!Array.isArray(list)) continue;
     var wanted = {};
