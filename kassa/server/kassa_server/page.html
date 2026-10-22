@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Касса">
+<title>Касса Kemal Usman</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
+<!--
+  Касса Kemal Usman — страница для телефона. Один HTML без сборки.
+  Как «Касса Smarket» у Smart Centr: вход по PIN, вкладки внизу, поиск сверху, крупные цели под палец.
+  Вид — как сайт kemalusman.kg: чёрное на белом, Playfair для названия, Onest для текста. Значки — только SVG.
+  Вкладки: «Продажа» (магазин, товары в мл или шт, цена, наличные / перевод / две части), «Сегодня» (итоги по магазинам,
+  продажи, чек, отмена), «Остаток» (по магазинам), «Сотрудники» (владелец: имя, PIN, магазин, включить/выключить).
+-->
+<style>
+:root{
+  --ink:#111111;--ink-2:#2c2c2e;--muted:#6e6e73;--soft:#8e8e93;--line:#e5e5ea;--line-2:#c7c7cc;--cloud:#f5f5f7;--white:#fff;
+  --ok:#1f8a4c;--ok-soft:#e7f5ec;--warn:#b26a00;--warn-soft:#fff4e0;--bad:#c62828;--bad-soft:#fdecea;
+  --r:14px;--r-s:10px;--tabs-h:64px;--app-w:560px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--white);color:var(--ink);font:400 16px/1.5 Onest,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0}
+a{color:inherit}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--ink);outline-offset:0;border-color:transparent}
+button:focus-visible,a:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.hidden{display:none!important}
+svg.i{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+/* вход */
+#login{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:32px 16px;background:var(--cloud)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{width:46px;height:46px;border-radius:12px}
+.brand b{display:block;font:600 22px/1.1 "Playfair Display",Georgia,serif;letter-spacing:.01em}
+.brand span{display:block;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase}
+.dots{display:flex;gap:14px;height:20px}
+.dots i{width:15px;height:15px;border-radius:50%;border:2px solid var(--line-2)}
+.dots i.on{background:var(--ink);border-color:var(--ink)}
+.dots.err i{border-color:var(--bad);background:var(--bad-soft)}
+.keypad{display:grid;grid-template-columns:repeat(3,76px);gap:12px}
+.keypad button{height:64px;border-radius:var(--r);background:var(--white);border:1px solid var(--line);font-size:26px;font-weight:600}
+.keypad button:active{background:var(--cloud)}
+.keypad button.soft{background:transparent;border:0;font-size:15px;color:var(--muted)}
+.login-msg{min-height:22px;color:var(--bad);font-size:14px;font-weight:600;text-align:center;max-width:300px}
+/* каркас */
+#app{display:flex;flex-direction:column;min-height:100%;max-width:var(--app-w);margin:0 auto;padding-bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom))}
+@media (min-width:600px){html,body{background:var(--cloud)}#app{background:var(--white);border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+header{position:sticky;top:0;z-index:5;background:var(--white);border-bottom:1px solid var(--line);padding:12px 16px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.logo{display:flex;align-items:center;gap:8px;font:600 18px/1 "Playfair Display",Georgia,serif;white-space:nowrap}
+.logo img{width:28px;height:28px;border-radius:7px}
+.logo small{font:600 10px/1 Onest,sans-serif;letter-spacing:.1em;text-transform:uppercase;background:var(--ink);color:var(--white);border-radius:6px;padding:4px 6px}
+.who{display:flex;align-items:center;gap:8px;min-width:0;font-size:13px;color:var(--muted);font-weight:500}
+.who span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who button{color:var(--ink);font-weight:600;text-decoration:underline;text-underline-offset:3px;min-height:36px}
+.sub{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.sub h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.1}
+.status{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:999px;background:var(--cloud);color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap;min-width:0}
+.status span{overflow:hidden;text-overflow:ellipsis}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--soft);flex:0 0 auto}
+.status.ok{background:var(--ok-soft);color:var(--ok)}.status.ok i{background:var(--ok)}
+.status.warn{background:var(--warn-soft);color:var(--warn)}.status.warn i{background:var(--warn)}
+main{flex:1;padding:12px 16px 24px}
+nav#tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;height:calc(var(--tabs-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--white);border-top:1px solid var(--line);display:flex;justify-content:center}
+nav#tabs .wrap{display:flex;width:100%;max-width:var(--app-w)}
+nav#tabs button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11.5px;font-weight:600;color:var(--soft)}
+nav#tabs button.on{color:var(--ink)}
+nav#tabs button b{position:absolute;top:6px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px}
+/* элементы */
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.chip{min-height:44px;padding:0 15px;border-radius:999px;border:1px solid var(--line-2);background:var(--white);font-size:14px;font-weight:500;color:var(--ink-2);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--white)}
+.chip[disabled]{opacity:.45}
+.label{margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.card{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;background:var(--white)}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:54px;padding:0 12px;border-radius:var(--r);background:var(--ink);color:var(--white);font-size:17px;font-weight:600;text-decoration:none;text-align:center}
+.btn:disabled{background:var(--line-2)}
+.btn.line{background:var(--white);color:var(--ink);border:1px solid var(--line-2)}
+.btn.bad{background:var(--white);color:var(--bad);border:1px solid #f0b5b0}
+.btn + .btn{margin-top:10px}
+.add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;border:1.5px dashed var(--line-2);border-radius:var(--r);color:var(--ink);font-weight:600}
+.field{display:block;margin-bottom:12px}
+.field span{display:block;font-size:13px;color:var(--muted);font-weight:500;margin-bottom:5px}
+.field input,.field select{width:100%;height:50px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 14px;background:var(--white);font-size:16px}
+.row{display:flex;gap:10px}.row > *{flex:1;min-width:0}
+.muted{color:var(--muted)}.small{font-size:13px}
+.empty{padding:28px 8px;text-align:center;color:var(--muted)}
+.err{color:var(--bad);font-weight:600;font-size:14px;margin:8px 0}
+.err:empty{display:none}
+/* строки продажи */
+.line{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+.line .name{display:flex;justify-content:space-between;gap:10px;font-weight:600;line-height:1.3}
+.line .name button{color:var(--soft);flex:0 0 auto;width:40px;height:40px;margin:-10px -12px 0 0;display:grid;place-items:center}
+.line .meta{font-size:13px;color:var(--muted);margin:2px 0 10px}
+.line .meta.warn{color:var(--warn);font-weight:600}
+.qty{display:flex;align-items:center;gap:8px}
+.qty input{width:100%;min-width:0;height:46px;border:1px solid var(--line-2);border-radius:var(--r-s);text-align:center;font-size:18px;font-weight:600}
+.qty button{flex:0 0 46px;height:46px;border-radius:var(--r-s);border:1px solid var(--line-2);font-size:22px;font-weight:500}
+.qty .unit{flex:0 0 auto;font-size:14px;color:var(--muted);min-width:24px}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.presets button{height:36px;padding:0 12px;border-radius:999px;background:var(--cloud);font-size:13px;font-weight:600}
+.price{display:flex;align-items:flex-end;gap:10px;margin-top:10px}
+.price label{flex:1;font-size:13px;color:var(--muted)}
+.price input{display:block;width:100%;height:44px;margin-top:4px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 10px;font-size:16px;font-weight:600;color:var(--ink)}
+.price b{flex:0 0 auto;font-size:17px;line-height:44px}
+.total{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 12px;font-size:15px;color:var(--muted)}
+.total b{font-size:28px;color:var(--ink);letter-spacing:-.02em}
+details.more{margin:10px 0 4px}
+details.more summary{list-style:none;cursor:pointer;color:var(--ink);font-weight:600;font-size:14px;padding:10px 0;text-decoration:underline;text-underline-offset:3px}
+details.more summary::-webkit-details-marker{display:none}
+/* списки */
+.search{position:relative;margin-bottom:12px}
+.search input{width:100%;height:50px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 44px 0 14px;font-size:16px;background:var(--white)}
+.search button{position:absolute;right:3px;top:3px;width:44px;height:44px;display:grid;place-items:center;color:var(--soft)}
+input[type=search]::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+.item{display:flex;justify-content:space-between;gap:12px;width:100%;text-align:left;padding:12px 2px;border-bottom:1px solid var(--line)}
+.item .t{font-weight:600;line-height:1.3}
+.item .s{font-size:13px;color:var(--muted);margin-top:2px}
+.item .r{text-align:right;flex:0 0 auto;font-weight:600}
+.item .r small{display:block;font-weight:500;color:var(--muted);font-size:12px;margin-top:2px}
+.item.off .t,.item.off .r{color:var(--soft)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:var(--cloud);color:var(--muted);white-space:nowrap}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.bad{background:var(--bad-soft);color:var(--bad)}
+.sum{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;align-items:baseline}
+.sum > b{text-align:right}
+.big{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.shoprow{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+/* лист снизу */
+.sheet-back{position:fixed;inset:0;z-index:20;background:rgba(17,17,17,.38);display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:var(--app-w);max-height:90vh;overflow:auto;background:var(--white);border-radius:18px 18px 0 0;padding:8px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet.tall{height:88vh}
+.sheet .grab{width:40px;height:5px;border-radius:3px;background:var(--line-2);margin:4px auto 10px}
+.sheet h2{margin:0 0 12px;font-size:20px;font-weight:700}
+.sheet .head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.sheet .head button{width:44px;height:44px;display:grid;place-items:center;margin:-6px -10px 6px 0}
+#toast{position:fixed;left:50%;bottom:calc(var(--tabs-h) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;max-width:calc(100% - 32px);padding:12px 16px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px;font-weight:500;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+#toast.bad{background:var(--bad)}
+.switch{display:flex;align-items:center;justify-content:space-between;min-height:48px;font-weight:500;margin-bottom:8px}
+.switch input{width:22px;height:22px;accent-color:var(--ink)}
+</style>
+</head>
+<body>
+<section id="login" class="hidden">
+  <div class="brand"><img src="icon-180.png" alt=""><div><b>Kemal Usman</b><span>касса</span></div></div>
+  <div class="dots" id="dots"></div>
+  <div class="login-msg" id="loginMsg"></div>
+  <div class="keypad" id="keypad"></div>
+</section>
+<div id="app" class="hidden">
+  <header>
+    <div class="top">
+      <div class="logo"><img src="icon-180.png" alt="">Kemal Usman<small>касса</small></div>
+      <div class="who"><span id="whoName"></span><button id="logout">Выйти</button></div>
+    </div>
+    <div class="sub"><h1 id="title">Продажа</h1><span class="status" id="status"><i></i><span>…</span></span></div>
+  </header>
+  <main id="main"></main>
+</div>
+<nav id="tabs" class="hidden"><div class="wrap" id="tabsWrap"></div></nav>
+<div id="toast" class="hidden"></div>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const ICON = {
+  sale: '<path d="M6 7h12l-1 13H7L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+  today: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+  stock: '<path d="M4 8l8-4 8 4-8 4-8-4Z"/><path d="M4 8v8l8 4 8-4V8"/><path d="M12 12v8"/>',
+  staff: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
+};
+const icon = n => '<svg class="i" viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + '</svg>';
+const TABS = {sale: 'Продажа', today: 'Сегодня', stock: 'Остаток', staff: 'Сотрудники'};
+const METHOD = {cash: 'Наличные', transfer: 'Перевод'};
+const STATUS = {new: ['ждёт 1С', 'warn'], done: ['в 1С', 'ok'], failed: ['ошибка 1С', 'bad'], cancelling: ['отмена ждёт 1С', 'warn'], cancelled: ['отменено', '']};
+
+let state = null, tab = 'sale', items = [], itemsV = '', taken = {};
+let cart = newCart('');
+
+function newCart(shop){ return {id: uuid(), shop: shop || '', lines: [], pay: 'cash', cashPart: '', buyer: {name: '', phone: ''}, note: '', sending: false}; }
+function uuid(){ return crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }); }
+function num(x){ const n = Number(String(x == null ? '' : x).replace(',', '.').replace(/\s/g, '')); return isFinite(n) ? n : 0; }
+function round2(x){ return Math.round(x * 100) / 100; }
+function round3(x){ return Math.round(x * 1000) / 1000; }
+function fmt(x){ return round2(num(x)).toLocaleString('ru-RU', {maximumFractionDigits: 2}).replace(/ /g, ' '); }
+function som(x){ return fmt(x) + ' сом'; }
+function qtyText(q, unit){ return fmt(q) + (unit ? ' ' + unit : ''); }
+function shortShop(s){ const t = String(s || '').replace(/^Kemal Usman Parfume\s*/i, '').trim(); return t || 'Kemal Usman'; }
+function toast(msg, bad){ const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; clearTimeout(t._h); t._h = setTimeout(() => t.className = 'hidden', bad ? 5000 : 2500); }
+
+async function api(path, opts){
+  const o = opts || {};
+  const r = await fetch(path, {method: o.body ? 'POST' : 'GET', credentials: 'same-origin',
+    headers: o.body ? {'Content-Type': 'application/json'} : {}, body: o.body ? JSON.stringify(o.body) : undefined});
+  let data = {};
+  try { data = await r.json(); } catch (e) { data = {}; }
+  if (r.status === 401 && !o.login) { showLogin(); }
+  if (!r.ok) { const e = new Error(data.error || data.detail || ('ошибка ' + r.status)); e.status = r.status; throw e; }
+  return data;
+}
+
+/* ── вход ── */
+let pin = '';
+function showLogin(){ state = null; $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#tabs').classList.add('hidden'); pin = ''; drawDots(); }
+function drawDots(err){ $('#dots').innerHTML = Array.from({length: Math.max(4, pin.length)}, (_, i) => '<i class="' + (i < pin.length ? 'on' : '') + '"></i>').join(''); $('#dots').classList.toggle('err', !!err); }
+function keypad(){
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'ok'];
+  $('#keypad').innerHTML = keys.map(k => '<button class="' + (k.length > 1 ? 'soft' : '') + '" data-k="' + k + '">' + (k === 'del' ? 'Стереть' : k === 'ok' ? 'Войти' : k) + '</button>').join('');
+  $('#keypad').onclick = e => { const b = e.target.closest('button'); if (b) press(b.dataset.k); };
+  document.addEventListener('keydown', e => { if ($('#login').classList.contains('hidden')) return; if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('del'); else if (e.key === 'Enter') press('ok'); });
+}
+function press(k){
+  $('#loginMsg').textContent = '';
+  if (k === 'ok') return submitPin();
+  if (k === 'del') pin = pin.slice(0, -1); else if (pin.length < 6) pin += k;
+  drawDots();
+  if (pin.length === 6) submitPin();
+}
+async function submitPin(){
+  if (pin.length < 4) { $('#loginMsg').textContent = 'PIN — от 4 до 6 цифр'; return; }
+  try { await api('login', {body: {pin}, login: true}); pin = ''; await boot(); }
+  catch (e) { $('#loginMsg').textContent = e.message; pin = ''; drawDots(true); }
+}
+
+/* ── каркас ── */
+async function boot(){
+  try { state = await api('api/state'); }
+  catch (e) { showLogin(); if (e.status !== 401) $('#loginMsg').textContent = e.message; return; }
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#tabs').classList.remove('hidden');
+  $('#whoName').textContent = state.user.name + (state.user.shop ? ' · ' + shortShop(state.user.shop) : '');
+  if (!state.tabs.includes(tab)) tab = 'sale';
+  if (!canPickShop()) cart.shop = state.user.shop;
+  else if (!state.shops.includes(cart.shop)) { let saved = ''; try { saved = localStorage.getItem('kassa.shop') || ''; } catch (e) {} cart.shop = state.shops.length === 1 ? state.shops[0] : (state.shops.includes(saved) ? saved : ''); }
+  drawTabs(); syncLine(); await loadItems(); render();
+}
+function canPickShop(){ return state.user.role === 'owner' || !state.user.shop; }
+function drawTabs(){
+  const bad = (state.ops || []).filter(o => o.status === 'failed').length;
+  $('#tabsWrap').innerHTML = state.tabs.map(t => '<button data-t="' + t + '" class="' + (t === tab ? 'on' : '') + '">' + icon(t) + TABS[t] + (t === 'today' && bad ? '<b>' + bad + '</b>' : '') + '</button>').join('');
+  $('#tabsWrap').onclick = e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.t; drawTabs(); render(); window.scrollTo(0, 0); };
+}
+function syncLine(){
+  const s = (state && state.sync) || {}, el = $('#status'), age = s.seenAgeSec;
+  let text = '1С ещё не подключалась', cls = 'warn';
+  if (age != null) {
+    if (age < 120) { text = '1С на связи'; cls = 'ok'; }
+    else { const m = Math.round(age / 60); text = '1С была ' + (m < 60 ? m + ' мин' : Math.round(m / 60) + ' ч') + ' назад'; }
+  }
+  if (state && state.pending) text += ' · ждут ' + state.pending;
+  el.className = 'status ' + cls; el.querySelector('span').textContent = text;
+}
+async function refresh(){ try { state = await api('api/state'); syncLine(); drawTabs(); if (tab === 'today' && !document.querySelector('.sheet-back')) render(); } catch (e) {} }
+async function loadItems(){
+  try {
+    const r = await api('api/items' + (itemsV ? '?v=' + encodeURIComponent(itemsV) : ''));
+    if (!r.same) { items = r.items; itemsV = r.v; }
+    taken = r.taken || {};
+  } catch (e) { if (!items.length) toast('Товары не загрузились: ' + e.message, true); }
+}
+function free(i, shop){ return Math.max(round3(num((i.stock1c || {})[shop]) - num((taken[shop] || {})[i.id])), 0); }
+function render(){ $('#title').textContent = TABS[tab]; ({sale: renderSale, today: renderToday, stock: renderStock, staff: renderStaff})[tab](); }
+
+/* ── поиск: латиница и кириллица (продавец пишет «шанель», в 1С «Chanel») ── */
+const CYR = {'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': '', 'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'қ': 'k', 'ў': 'u', 'ғ': 'g', 'ҳ': 'h', 'ң': 'n', 'ү': 'u', 'ө': 'o'};
+function norm(s){ return String(s || '').toLowerCase().replace(/[а-яёқўғҳңүө]/g, c => CYR[c] || c).replace(/[^a-z0-9]+/g, ' ').replace(/(.)\1+/g, '$1').trim(); }
+function loose(s){ return s.replace(/sh|ch|[cszjx]/g, 's').replace(/[eiy]/g, 'i').replace(/[ou]/g, 'o').replace(/[ae]/g, 'a').replace(/[kq]/g, 'k').replace(/ /g, ''); }
+function matches(i, q){
+  const ws = norm(q).split(' ').filter(Boolean);
+  if (!ws.length) return true;
+  const hay = i._n || (i._n = norm([i.name, i.article, i.code, i.group].join(' '))), hayL = i._l || (i._l = loose(hay));
+  return ws.every(w => hay.includes(w) || hayL.includes(loose(w)));
+}
+
+/* ── лист снизу ── */
+function sheet(html, tall){
+  const back = document.createElement('div');
+  back.className = 'sheet-back';
+  back.innerHTML = '<div class="sheet' + (tall ? ' tall' : '') + '" role="dialog"><div class="grab"></div>' + html + '</div>';
+  document.body.appendChild(back);
+  const close = () => { back.remove(); document.body.style.overflow = ''; };
+  back.onclick = e => { if (e.target === back) close(); };
+  back.querySelectorAll('[data-close]').forEach(b => b.onclick = close);
+  document.body.style.overflow = 'hidden';
+  return {root: back.querySelector('.sheet'), close};
+}
+const sheetHead = t => '<div class="head"><h2>' + esc(t) + '</h2><button data-close aria-label="Закрыть">' + icon('x') + '</button></div>';
+
+/* ── Продажа ── */
+function itemById(id){ return items.find(i => i.id === id); }
+function cartTotal(){ return round2(cart.lines.reduce((s, l) => s + round2(num(l.qty) * num(l.price)), 0)); }
+function renderSale(){
+  const m = $('#main');
+  if (!state.shops.length) { m.innerHTML = '<div class="empty">1С ещё не прислала товары. Включите программу кассы на компьютере магазина.</div>'; return; }
+  let h = '<div class="label">Магазин</div><div class="chips" id="shops">' + state.shops.map(s =>
+    '<button class="chip' + (s === cart.shop ? ' on' : '') + '" data-s="' + esc(s) + '"' + (canPickShop() || s === cart.shop ? '' : ' disabled') + '>' + esc(shortShop(s)) + '</button>').join('') + '</div>';
+  if (!cart.shop) { m.innerHTML = h + '<div class="empty">Выберите магазин — остаток и цены у каждого свои.</div>'; bindShops(); return; }
+  h += '<div class="label">Товары</div><div id="lines"></div><button class="add" id="addItem">' + icon('plus') + 'Добавить товар</button>' +
+    '<div id="payBox"></div>' +
+    '<details class="more"' + (cart.buyer.name || cart.buyer.phone || cart.note ? ' open' : '') + '><summary>Покупатель и заметка</summary>' +
+    '<div class="row"><label class="field"><span>Имя</span><input id="bName" autocomplete="off" value="' + esc(cart.buyer.name) + '"></label>' +
+    '<label class="field"><span>Телефон</span><input id="bPhone" inputmode="tel" autocomplete="off" placeholder="555 123 456" value="' + esc(cart.buyer.phone) + '"></label></div>' +
+    '<label class="field"><span>Заметка</span><input id="note" autocomplete="off" value="' + esc(cart.note) + '"></label></details>' +
+    '<div class="total"><span>Итого</span><b id="total"></b></div><div class="err" id="saleErr"></div><button class="btn" id="sell"></button>';
+  m.innerHTML = h;
+  bindShops(); drawLines(); drawPay(); drawTotal();
+  $('#addItem').onclick = itemPicker;
+  $('#bName').oninput = e => { cart.buyer.name = e.target.value; };
+  $('#bPhone').oninput = e => { cart.buyer.phone = e.target.value; };
+  $('#note').oninput = e => { cart.note = e.target.value; };
+  $('#sell').onclick = sell;
+}
+function bindShops(){
+  $('#shops').onclick = e => {
+    const b = e.target.closest('.chip'); if (!b || b.disabled || b.dataset.s === cart.shop) return;
+    if (cart.lines.length && !confirm('Сменить магазин? Товары из продажи уберутся — у магазинов свой остаток.')) return;
+    cart.shop = b.dataset.s; cart.lines = [];
+    try { localStorage.setItem('kassa.shop', cart.shop); } catch (e) {}
+    renderSale();
+  };
+}
+function presetsFor(unit){ return unit === 'мл' ? [1, 3, 5, 10, 30, 50] : ['гр', 'г'].includes(unit) ? [5, 10, 50, 100] : []; }
+function drawLines(){
+  const box = $('#lines');
+  box.innerHTML = cart.lines.map((l, k) => {
+    const i = itemById(l.itemId) || {name: l.name, unit: l.unit, price: {}};
+    const list = num((i.price || {})[cart.shop]);
+    return '<div class="line" data-k="' + k + '"><div class="name"><span>' + esc(i.name) + '</span><button data-del aria-label="Убрать">' + icon('x') + '</button></div>' +
+      '<div class="meta">есть ' + esc(qtyText(free(i, cart.shop), i.unit)) + (list ? ' · цена ' + som(list) + (i.unit ? ' за 1 ' + esc(i.unit) : '') : ' · цены в 1С нет') + '</div>' +
+      '<div class="qty"><button data-minus aria-label="Меньше">−</button><input data-qty aria-label="Количество" inputmode="' + (i.fraction ? 'decimal' : 'numeric') + '" value="' + esc(String(l.qty).replace('.', ',')) + '"><span class="unit">' + esc(i.unit || '') + '</span><button data-plus aria-label="Больше">+</button></div>' +
+      (presetsFor(i.unit).length ? '<div class="presets">' + presetsFor(i.unit).map(p => '<button data-p="' + p + '">' + p + ' ' + esc(i.unit) + '</button>').join('') + '</div>' : '') +
+      '<div class="price"><label>Цена за 1 ' + esc(i.unit || 'шт') + '<input data-price inputmode="decimal" value="' + esc(String(l.price).replace('.', ',')) + '"></label><b data-sum></b></div></div>';
+  }).join('');
+  box.querySelectorAll('.line').forEach(row => {
+    const l = cart.lines[+row.dataset.k];
+    const q = row.querySelector('[data-qty]'), p = row.querySelector('[data-price]');
+    const setQty = v => { l.qty = Math.max(round3(v), 0); q.value = String(l.qty).replace('.', ','); drawLineSum(row, l); drawTotal(); };
+    row.querySelector('[data-del]').onclick = () => { cart.lines.splice(+row.dataset.k, 1); drawLines(); drawTotal(); };
+    row.querySelector('[data-minus]').onclick = () => setQty(Math.max(num(l.qty) - 1, 0));
+    row.querySelector('[data-plus]').onclick = () => setQty(num(l.qty) + 1);
+    row.querySelectorAll('[data-p]').forEach(b => b.onclick = () => setQty(num(b.dataset.p)));
+    [q, p].forEach(inp => inp.onfocus = () => setTimeout(() => inp.select(), 0));
+    q.oninput = () => { l.qty = q.value; drawLineSum(row, l); drawTotal(); };
+    p.oninput = () => { l.price = p.value; drawLineSum(row, l); drawTotal(); };
+    drawLineSum(row, l);
+  });
+}
+function drawLineSum(row, l){
+  const i = itemById(l.itemId) || {}, over = num(l.qty) > free(i, cart.shop) + 1e-9;
+  row.querySelector('[data-sum]').textContent = som(round2(num(l.qty) * num(l.price)));
+  row.querySelector('.meta').classList.toggle('warn', over);
+}
+function drawPay(){
+  let h = '<div class="label">Оплата</div><div class="chips" id="pay">' + [['cash', 'Наличные'], ['transfer', 'Перевод'], ['split', 'Две части']].map(([k, n]) =>
+    '<button class="chip' + (cart.pay === k ? ' on' : '') + '" data-p="' + k + '">' + n + '</button>').join('') + '</div>';
+  if (cart.pay === 'split') h += '<div class="row"><label class="field"><span>Наличными</span><input id="cashPart" inputmode="decimal" autocomplete="off" value="' + esc(cart.cashPart) + '"></label>' +
+    '<label class="field"><span>Переводом</span><input id="trPart" readonly tabindex="-1"></label></div>';
+  $('#payBox').innerHTML = h;
+  $('#pay').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; cart.pay = b.dataset.p; drawPay(); drawTotal(); };
+  const c = $('#cashPart');
+  if (c) { c.oninput = () => { cart.cashPart = c.value; drawTotal(); }; c.onfocus = () => setTimeout(() => c.select(), 0); }
+}
+function saleProblem(){
+  if (!cart.lines.length) return 'Добавьте товар';
+  for (const l of cart.lines) {
+    const i = itemById(l.itemId) || {name: l.name}, q = num(l.qty);
+    if (q <= 0) return 'Укажите количество';
+    if (!i.fraction && q !== Math.round(q)) return 'Только целыми: ' + i.name;
+    if (q > free(i, cart.shop) + 1e-9) return 'Не хватает: есть ' + qtyText(free(i, cart.shop), i.unit);
+    if (num(l.price) <= 0) return 'Укажите цену';
+  }
+  if (cart.pay === 'split') { const c = num(cart.cashPart); if (c <= 0 || c >= cartTotal()) return 'Наличными — меньше суммы'; }
+  return '';
+}
+function drawTotal(){
+  const el = $('#total'); if (!el) return;
+  const t = cartTotal();
+  el.textContent = som(t);
+  const tr = $('#trPart'); if (tr) tr.value = num(cart.cashPart) > 0 ? fmt(Math.max(t - num(cart.cashPart), 0)) : '';
+  const why = saleProblem(), b = $('#sell');
+  b.disabled = !!why || cart.sending;
+  b.textContent = cart.sending ? 'Отправляю…' : why || 'Продать · ' + som(t);
+}
+function itemPicker(){
+  const sh = sheet(sheetHead('Товар') + '<div class="search"><input type="search" id="q" placeholder="Название, артикул, код" autocomplete="off" enterkeyhint="search"><button id="qx" aria-label="Очистить">' + icon('x') + '</button></div><div id="res"></div>', true);
+  const q = sh.root.querySelector('#q'), res = sh.root.querySelector('#res');
+  const draw = () => {
+    const list = items.filter(i => matches(i, q.value)).sort((a, b) => (free(b, cart.shop) > 0) - (free(a, cart.shop) > 0)).slice(0, 80);
+    res.innerHTML = list.length ? list.map(i => {
+      const f = free(i, cart.shop), p = num((i.price || {})[cart.shop]);
+      return '<button class="item' + (f > 0 ? '' : ' off') + '" data-id="' + i.id + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + esc([i.code, i.group].filter(Boolean).join(' · ')) + '</div></div>' +
+        '<div class="r">' + (f > 0 ? esc(qtyText(f, i.unit)) : 'нет') + '<small>' + (p ? som(p) + (i.unit ? ' / ' + esc(i.unit) : '') : 'без цены') + '</small></div></button>';
+    }).join('') : '<div class="empty">Ничего не нашлось</div>';
+  };
+  let timer = 0; q.oninput = () => { clearTimeout(timer); timer = setTimeout(draw, 60); };
+  q.onkeydown = e => { if (e.key === 'Enter') q.blur(); };
+  sh.root.querySelector('#qx').onclick = () => { q.value = ''; draw(); q.focus(); };
+  res.onclick = e => {
+    const b = e.target.closest('.item'); if (!b) return;
+    const i = itemById(b.dataset.id), f = free(i, cart.shop);
+    if (f <= 0) { toast('Нет в магазине «' + shortShop(cart.shop) + '»', true); return; }
+    const had = cart.lines.find(l => l.itemId === i.id);
+    if (had) had.qty = round3(num(had.qty) + 1);
+    else cart.lines.push({itemId: i.id, name: i.name, unit: i.unit, qty: i.unit === 'мл' ? Math.min(5, f) : 1, price: num((i.price || {})[cart.shop]) || ''});
+    sh.close(); drawLines(); drawTotal();
+  };
+  draw(); setTimeout(() => q.focus(), 60);
+}
+function payments(){
+  const t = cartTotal();
+  if (cart.pay === 'split') { const c = round2(num(cart.cashPart)); return [{method: 'cash', amount: c}, {method: 'transfer', amount: round2(t - c)}]; }
+  return [{method: cart.pay, amount: t}];
+}
+async function sell(){
+  if (saleProblem() || cart.sending) return;
+  cart.sending = true; drawTotal(); $('#saleErr').textContent = '';
+  const body = {id: cart.id, kind: 'sale', payload: {shop: cart.shop, payments: payments(), note: cart.note, buyer: cart.buyer,
+    lines: cart.lines.map(l => ({itemId: l.itemId, qty: num(l.qty), price: num(l.price)}))}};
+  try {
+    const r = await api('api/ops', {body});
+    cart = newCart(body.payload.shop);
+    state.ops.unshift(r.op); await loadItems(); refresh(); renderSale(); opSheet(r.op, false);
+  } catch (e) {
+    cart.sending = false;
+    // Сеть моргнула — id продажи тот же: повторное нажатие не создаст дубль.
+    $('#saleErr').textContent = e.status ? e.message : 'Нет связи с сервером — нажмите ещё раз';
+    if (e.status === 409) { await loadItems(); drawLines(); }
+    drawTotal();
+  }
+}
+
+/* ── продажа: чек, отмена, повтор ── */
+function payText(p){ const parts = p.payments || []; return parts.length > 1 ? parts.map(x => METHOD[x.method] + ' ' + som(x.amount)).join(' + ') : (METHOD[(parts[0] || {}).method] || ''); }
+function badge(op){ const [t, c] = STATUS[op.status] || [op.status, '']; return '<span class="badge ' + c + '">' + t + '</span>'; }
+function opSheet(op, fromList){
+  const p = op.payload || {}, owner = state.user.role === 'owner';
+  const docs = (op.docs || []).map(d => d.type + ' ' + d.number).join(', ');
+  const lines = (p.lines || []).map(l => '<div class="sum"><span>' + esc(l.name) + '<br><span class="muted small">' + esc(qtyText(l.qty, l.unit)) + ' × ' + som(l.price) + '</span></span><b>' + som(l.sum) + '</b></div>').join('<div style="height:8px"></div>');
+  let h = sheetHead(fromList ? 'Продажа' : 'Продано') +
+    '<div class="card"><div class="sum"><span class="muted">' + esc(shortShop(p.shop)) + ' · ' + esc((op.createdAt || '').slice(11, 16)) + ' · ' + esc(op.user) + '</span>' + badge(op) + '</div>' +
+    '<div style="height:12px"></div>' + lines + '<div style="height:12px"></div>' +
+    '<div class="sum"><span>Итого</span><b class="big">' + som(p.total) + '</b><span class="muted">Оплата</span><b>' + esc(payText(p)) + '</b></div>' +
+    (p.buyer && (p.buyer.name || p.buyer.phone) ? '<div class="small muted" style="margin-top:8px">Покупатель: ' + esc([p.buyer.name, p.buyer.phone ? '+' + p.buyer.phone : ''].filter(Boolean).join(' ')) + '</div>' : '') +
+    (p.note ? '<div class="small muted">Заметка: ' + esc(p.note) + '</div>' : '') +
+    (docs ? '<div class="small muted" style="margin-top:8px">1С: ' + esc(docs) + '</div>' : '') +
+    (op.error && op.status === 'failed' ? '<div class="err">' + esc(op.error) + '</div>' : '') + '</div>' +
+    '<a class="btn line" href="api/receipt/' + op.id + '" target="_blank" rel="noopener">Чек — печать</a>';
+  if (owner && op.status === 'failed') h += '<button class="btn" data-a="retry">Провести в 1С ещё раз</button>';
+  if (['new', 'done', 'failed'].includes(op.status) && (owner || op.mine)) h += '<button class="btn bad" data-a="cancel">Отменить продажу</button>';
+  if (!fromList) h += '<button class="btn" data-close>Новая продажа</button>';
+  const sh = sheet(h);
+  sh.root.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+    const a = b.dataset.a;
+    if (a === 'cancel' && !confirm('Отменить продажу на ' + som(p.total) + '?' + (op.status === 'new' ? '' : ' Документы в 1С распроведутся.'))) return;
+    b.disabled = true;
+    try {
+      const r = await api('api/ops/' + op.id + '/' + a, {body: {}});
+      toast(a === 'retry' ? 'Отправлено в 1С ещё раз' : r.status === 'cancelling' ? 'Отменено — 1С распроведёт документы' : 'Продажа отменена');
+      sh.close(); await refresh(); await loadItems(); render();
+    } catch (e) { b.disabled = false; toast(e.message, true); }
+  });
+}
+
+/* ── Сегодня ── */
+function renderToday(){
+  const t = state.totals || {shops: [], total: 0, sales: 0}, ops = state.ops || [];
+  let h = '<div class="card"><div class="sum"><span class="muted">Сегодня продано' + (state.allOps ? '' : ' вами') + '</span><b class="big">' + som(t.total) + '</b><span class="muted">Продаж</span><b>' + t.sales + '</b></div>';
+  t.shops.forEach(s => {
+    h += '<div class="sum shoprow"><b style="text-align:left">' + esc(shortShop(s.shop)) + '</b><b>' + som(s.total) + '</b>' +
+      '<span class="muted small">наличные</span><span class="small" style="text-align:right">' + som(s.cash) + '</span>' +
+      '<span class="muted small">перевод</span><span class="small" style="text-align:right">' + som(s.transfer) + '</span></div>';
+  });
+  h += '</div>';
+  const failed = ops.filter(o => o.status === 'failed').length;
+  if (failed) h += '<div class="err">Не провелось в 1С: ' + failed + '. Нажмите на продажу — там причина.</div>';
+  h += '<div class="label">Продажи</div>' + (ops.length ? ops.map(o => {
+    const p = o.payload || {}, first = (p.lines || [])[0] || {}, n = (p.lines || []).length;
+    return '<button class="item" data-id="' + o.id + '"><div><div class="t">' + esc(first.name || 'Продажа') + (n > 1 ? ' и ещё ' + (n - 1) : '') + '</div>' +
+      '<div class="s">' + esc((o.createdAt || '').slice(11, 16)) + ' · ' + esc(shortShop(p.shop)) + (state.allOps ? ' · ' + esc(o.user) : '') + ' · ' + esc(payText(p)) + '</div></div>' +
+      '<div class="r"><span' + (o.status === 'cancelled' ? ' style="color:var(--soft);text-decoration:line-through"' : '') + '>' + som(p.total) + '</span><small>' + badge(o) + '</small></div></button>';
+  }).join('') : '<div class="empty">Сегодня продаж пока нет</div>');
+  $('#main').innerHTML = h;
+  $('#main').querySelectorAll('.item').forEach(b => b.onclick = () => opSheet(ops.find(o => o.id === b.dataset.id), true));
+}
+
+/* ── Остаток ── */
+let stockShop = 'all', stockQ = '';
+function renderStock(){
+  const shops = state.shops;
+  $('#main').innerHTML = '<div class="search"><input type="search" id="sq" placeholder="Поиск товара" autocomplete="off" enterkeyhint="search" value="' + esc(stockQ) + '"><button id="sqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
+    '<div class="chips" id="ss">' + [['all', 'Все']].concat(shops.map(s => [s, shortShop(s)])).concat([['none', 'Нет в наличии']]).map(([k, n]) =>
+      '<button class="chip' + (stockShop === k ? ' on' : '') + '" data-k="' + esc(k) + '">' + esc(n) + '</button>').join('') + '</div><div id="slist"></div>';
+  const draw = () => {
+    const one = shops.includes(stockShop);
+    const list = items.filter(i => matches(i, stockQ)).filter(i => {
+      const total = shops.reduce((s, sh) => s + free(i, sh), 0);
+      return stockShop === 'none' ? total <= 0 : one ? free(i, stockShop) > 0 : true;
+    });
+    $('#slist').innerHTML = (list.length ? '<div class="muted small">' + list.length + ' товаров</div>' : '<div class="empty">Ничего не нашлось</div>') + list.slice(0, 200).map(i => {
+      const total = shops.reduce((s, sh) => s + free(i, sh), 0);
+      const parts = (one ? [stockShop] : shops).map(sh => shortShop(sh) + ': ' + qtyText(free(i, sh), i.unit) + (num((i.price || {})[sh]) ? ' · ' + som((i.price || {})[sh]) : ''));
+      return '<div class="item' + (total > 0 ? '' : ' off') + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + parts.map(esc).join('<br>') + '</div></div>' +
+        '<div class="r">' + esc(qtyText(one ? free(i, stockShop) : total, i.unit)) + '<small>' + esc(i.code) + '</small></div></div>';
+    }).join('') + (list.length > 200 ? '<div class="empty">Показаны первые 200 — уточните поиск</div>' : '');
+  };
+  let timer = 0; $('#sq').oninput = e => { stockQ = e.target.value; clearTimeout(timer); timer = setTimeout(draw, 60); };
+  $('#sq').onkeydown = e => { if (e.key === 'Enter') e.target.blur(); };
+  $('#sqx').onclick = () => { stockQ = ''; $('#sq').value = ''; draw(); };
+  $('#ss').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; stockShop = b.dataset.k; renderStock(); };
+  draw();
+}
+
+/* ── Сотрудники (владелец) ── */
+async function renderStaff(){
+  $('#main').innerHTML = '<div class="empty">Загружаю…</div>';
+  let r;
+  try { r = await api('api/users'); } catch (e) { $('#main').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; return; }
+  const seen = u => u.lastSeen ? 'заходил ' + u.lastSeen.slice(8, 10) + '.' + u.lastSeen.slice(5, 7) + ' ' + u.lastSeen.slice(11, 16) : 'ещё не заходил';
+  $('#main').innerHTML = '<button class="add" id="newUser">' + icon('plus') + 'Новый сотрудник</button><div style="height:8px"></div>' + r.users.map(u =>
+    '<button class="item' + (u.active ? '' : ' off') + '" data-id="' + u.id + '"><div><div class="t">' + esc(u.name) + (u.role === 'owner' && u.name !== 'Владелец' ? ' · владелец' : '') + '</div>' +
+    '<div class="s">' + esc(u.role === 'owner' ? 'все магазины' : u.shop ? 'магазин ' + shortShop(u.shop) : 'любой магазин') + ' · ' + esc(seen(u)) + '</div></div>' +
+    '<div class="r">' + (u.active ? '' : '<span class="badge">выключен</span>') + '</div></button>').join('') +
+    '<p class="muted small" style="margin-top:14px">Вход — только по PIN, у каждого свой. PIN владельца меняется на компьютере магазина.</p>';
+  $('#newUser').onclick = () => userForm(null, r.shops);
+  $('#main').querySelectorAll('.item').forEach(b => b.onclick = () => userForm(r.users.find(u => u.id === +b.dataset.id), r.shops));
+}
+function userForm(u, shops){
+  const owner = u && u.role === 'owner';
+  const sh = sheet(sheetHead(u ? u.name : 'Новый сотрудник') +
+    '<label class="field"><span>Имя</span><input id="uName" autocomplete="off" value="' + esc(u ? u.name : '') + '"></label>' +
+    (owner ? '' : '<label class="field"><span>' + (u ? 'Новый PIN (пусто — не менять)' : 'PIN — от 4 до 6 цифр') + '</span><input id="uPin" inputmode="numeric" maxlength="6" autocomplete="off"></label>' +
+      '<label class="field"><span>Магазин</span><select id="uShop"><option value="">Любой магазин</option>' + shops.map(s => '<option value="' + esc(s) + '"' + (u && u.shop === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></label>' +
+      (u ? '<label class="switch">Может входить<input type="checkbox" id="uActive"' + (u.active ? ' checked' : '') + '></label>' : '')) +
+    '<div class="err" id="uErr"></div><button class="btn" id="uSave">Сохранить</button>');
+  sh.root.querySelector('#uSave').onclick = async () => {
+    const body = {name: sh.root.querySelector('#uName').value.trim()};
+    if (u) body.id = u.id;
+    if (!owner) {
+      body.pin = sh.root.querySelector('#uPin').value.trim();
+      body.shop = sh.root.querySelector('#uShop').value;
+      if (u) body.active = sh.root.querySelector('#uActive').checked;
+    }
+    try { await api('api/users', {body}); sh.close(); toast('Сохранено'); renderStaff(); }
+    catch (e) { sh.root.querySelector('#uErr').textContent = e.message; }
+  };
+}
+
+/* ── старт ── */
+$('#logout').onclick = async () => { if (!confirm('Выйти из кассы?')) return; try { await api('logout', {body: {}}); } catch (e) {} showLogin(); };
+keypad(); drawDots(); boot();
+setInterval(() => { if (state && !document.hidden) { refresh(); loadItems(); } }, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && state) { refresh(); loadItems(); } });
+</script>
+</body>
+</html>
