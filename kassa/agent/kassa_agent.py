@@ -184,11 +184,13 @@ def setup_logging() -> None:
     logs.mkdir(exist_ok=True)
     handler = RotatingFileHandler(logs / "kassa_agent.log", maxBytes=2_000_000, backupCount=5, encoding="utf-8")
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-    logging.basicConfig(level=logging.INFO, handlers=[handler, logging.StreamHandler(sys.stdout)])
+    # В задаче Windows программа идёт через pythonw: окна нет, sys.stdout = None — пишем только в журнал.
+    logging.basicConfig(level=logging.INFO, handlers=[handler] + ([logging.StreamHandler(sys.stdout)] if sys.stdout else []))
 
 
 def main() -> None:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if sys.stdout:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     setup_logging()
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     cfg = load_env()
