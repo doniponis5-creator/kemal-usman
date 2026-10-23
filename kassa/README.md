@@ -38,7 +38,8 @@
 
 Всё — из папки `kemal-usman` после `git pull` (касса должна быть в `main`):
 
-1. Cloudflare → DNS → запись **A** `kassa` → `145.223.100.16`, облако **оранжевое** (как у `api.kemalusman.kg`: HTTPS делает Cloudflare, на сервер он ходит по порту 80).
+1. Cloudflare → DNS: запись `kassa` → туннель `parfum` (CNAME на `<id туннеля>.cfargotunnel.com`, облако оранжевое) — сделано 23.10.
+   Домены Kemal идут через Cloudflare Tunnel, настроенный файлом на сервере: скрипт сам добавит `kassa` → `localhost:8095` в его настройки.
 2. `bash kassa/deploy/deploy-kassa.sh check` — только посмотреть сервер (можно пропустить).
 3. `bash kassa/deploy/deploy-kassa.sh` — касса на сервер: служба `kemal-kassa` (127.0.0.1:8095, не Docker), секреты в
    `/root/kemal-kassa/.env`, ключ клуба в `pb_data/kassa_credentials.json`, адрес в nginx (или Caddy, если стоит он), секрет 1С → `kassa/agent/agent.env`.

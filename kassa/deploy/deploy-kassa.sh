@@ -138,6 +138,44 @@ EOF
 else
   echo "   ВНИМАНИЕ: ни Caddy, ни nginx на сервере не работают — адрес https://$DOMAIN не настроен. Пришлите вывод «check» в чат."
 fi
+# Домены Kemal идут через Cloudflare Tunnel «parfum» (проверено 23.10: туннель настроен файлом на сервере, «locally managed»).
+# Запись DNS kassa → parfum уже есть в Cloudflare; здесь — строка в ingress туннеля: kassa → localhost:8095.
+CF_UNIT=$(systemctl list-units --type=service --all 2>/dev/null | grep -o 'cloudflared[^ ]*\.service' | head -1)
+CF_CFG=$(ps -eo args | grep '[c]loudflared' | grep -o -- '--config[ =][^ ]*' | head -1 | sed 's/--config[ =]//')
+for f in "$CF_CFG" /etc/cloudflared/config.yml /etc/cloudflared/config.yaml /root/.cloudflared/config.yml /root/.cloudflared/config.yaml; do
+  [ -n "$f" ] && [ -f "$f" ] && { CF_CFG="$f"; break; }
+done
+if [ -n "$CF_UNIT" ] && [ -f "$CF_CFG" ]; then
+  if grep -q "hostname: *$DOMAIN" "$CF_CFG"; then
+    echo "   туннель: $DOMAIN уже есть в $CF_CFG"
+  else
+    BAK="$CF_CFG.bak_kassa_$(date +%Y%m%d_%H%M%S)"
+    cp "$CF_CFG" "$BAK"
+    DOMAIN="$DOMAIN" CF_CFG="$CF_CFG" python3 - <<'PY'
+import os, re
+path, domain = os.environ["CF_CFG"], os.environ["DOMAIN"]
+lines = open(path, encoding="utf-8").read().splitlines(keepends=True)
+# Вставляем перед последним правилом без hostname (обычно «- service: http_status:404») — с тем же отступом, что у других правил.
+idx = next((i for i in range(len(lines) - 1, -1, -1) if re.match(r"^\s*-\s*service:", lines[i])), None)
+host = next((l for l in lines if re.match(r"^\s*-\s*hostname:", l)), None)
+indent = re.match(r"^(\s*)-", host or (lines[idx] if idx is not None else "  -")).group(1)
+block = [f"{indent}- hostname: {domain}\n", f"{indent}  service: http://localhost:8095\n"]
+if idx is None:
+    raise SystemExit("в настройках туннеля нет последнего правила «- service: …»")
+lines[idx:idx] = block
+open(path, "w", encoding="utf-8").write("".join(lines))
+PY
+    if cloudflared tunnel --config "$CF_CFG" ingress validate >/dev/null 2>&1; then
+      systemctl restart "$CF_UNIT" && sleep 3 && echo "   туннель: $DOMAIN → localhost:8095 добавлен, $CF_UNIT перезапущен (копия старых настроек: $BAK)"
+    else
+      cp "$BAK" "$CF_CFG"
+      cloudflared tunnel --config "$CF_CFG" ingress validate 2>&1 | tail -3
+      echo "   туннель не принял новую строку — вернул старые настройки, сайт не тронут. Пришлите этот вывод в чат."; exit 1
+    fi
+  fi
+else
+  echo "   ВНИМАНИЕ: не нашёл службу cloudflared или её файл настроек — пришлите вывод «check» в чат."
+fi
 REMOTE
 
 echo "3) Секрет 1С → kassa/agent/agent.env на этом ПК..."
