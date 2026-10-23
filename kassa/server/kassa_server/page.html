@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#eaf500">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -31,7 +31,7 @@
   --r:16px;--r-s:12px;--tabs-h:64px;--app-w:560px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;background:var(--white);color:var(--ink);font:450 16px/1.5 Manrope,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums;touch-action:pan-x pan-y}
+html,body{margin:0;height:100%;background:var(--white);color:var(--ink);font:450 16px/1.5 Manrope,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums;touch-action:manipulation}
 ::selection{background:var(--lemon);color:var(--ink)}
 button,input,select,textarea{font:inherit;color:inherit}
 input{caret-color:var(--cobalt)}
@@ -66,7 +66,7 @@ header{position:sticky;top:0;z-index:5;background:var(--white);border-bottom:1px
 .logo small{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:var(--lemon);border-radius:6px;padding:4px 6px 3px;line-height:1}
 .who{display:inline-flex;align-items:center;gap:8px;min-width:0;font-size:13px;color:var(--ink-2);font-weight:650;white-space:nowrap}
 .who span{overflow:hidden;text-overflow:ellipsis}
-.who button{color:var(--cobalt);font-weight:650;min-height:36px}
+.who button{color:var(--cobalt);font-weight:650;min-height:44px;padding:0 4px}
 .sub{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px}
 .sub h1{margin:0;font-size:24px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
 .status{display:inline-flex;align-items:center;gap:6px;min-width:0;height:28px;padding:0 10px 0 9px;border-radius:999px;background:var(--cloud);color:var(--muted);font-size:12px;font-weight:700;white-space:nowrap}
@@ -74,10 +74,11 @@ header{position:sticky;top:0;z-index:5;background:var(--white);border-bottom:1px
 .status i{width:7px;height:7px;border-radius:50%;background:var(--line-2);flex:0 0 auto;box-shadow:0 0 0 3px rgba(93,109,126,.14)}
 .status.ok{background:var(--ok-soft);color:var(--ok-ink)}.status.ok i{background:var(--ok);box-shadow:0 0 0 3px rgba(30,158,90,.18)}
 .status.warn{background:var(--bad-soft);color:#a3271c}.status.warn i{background:var(--bad);box-shadow:0 0 0 3px rgba(211,59,46,.16)}
+.status.late{background:var(--lemon-soft);color:var(--warn)}.status.late i{background:#a8ad00;box-shadow:0 0 0 3px rgba(168,173,0,.18)}
 main{flex:1;padding:12px 16px 24px}
 nav#tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;height:calc(var(--tabs-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:var(--white);border-top:1px solid var(--line);display:flex;justify-content:center}
 nav#tabs .wrap{display:flex;width:100%;max-width:var(--app-w)}
-nav#tabs button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:650;color:var(--muted)}
+nav#tabs button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:650;color:var(--muted)}
 nav#tabs button.on{color:var(--ink)}
 nav#tabs button.on svg{background:var(--lemon);border-radius:10px;padding:2px 4px;width:34px;height:26px}
 nav#tabs button b{position:absolute;top:4px;left:calc(50% + 10px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;line-height:18px}
@@ -91,15 +92,23 @@ nav#tabs button b{position:absolute;top:4px;left:calc(50% + 10px);min-width:18px
 .card{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:10px;background:var(--white)}
 .btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;padding:0 16px;border-radius:var(--r-s);background:var(--lemon);color:var(--ink);font-size:15px;font-weight:650;text-decoration:none;text-align:center}
 .btn:active{background:var(--lemon-hover)}
-.btn:disabled{opacity:.5;pointer-events:none}
+.btn:disabled{background:var(--cloud);color:var(--muted);border:1px solid var(--line);pointer-events:none}
 .btn.line{background:var(--white);color:var(--ink);border:1px solid var(--line-2)}
 .btn.line:active{background:var(--cloud)}
 .btn.bad{background:var(--white);color:var(--bad);border:1px solid var(--line-2)}
 .btn + .btn{margin-top:10px}
+.row > .btn + .btn{margin-top:0}
+.btn.gap{margin-top:24px}
 .add{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:50px;border:1.5px dashed var(--line-2);border-radius:var(--r-s);color:var(--cobalt);font-weight:650}
 .field{display:block;margin-bottom:12px}
 .field span{display:block;font-size:12px;color:var(--muted);font-weight:650;margin:0 0 4px 2px}
 .field input,.field select{width:100%;height:46px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 14px;background:var(--white);font-size:16px;font-weight:650}
+.field input[readonly]{background:var(--cloud);border-style:dashed;color:var(--ink-2)}
+.field .req{color:var(--bad-ink);font-weight:700;font-style:normal}
+.field .tel{display:flex;align-items:center;height:46px;margin:0;border:1px solid var(--line-2);border-radius:var(--r-s);background:var(--white);font-size:16px;color:var(--ink)}
+.field .tel:focus-within{outline:2px solid var(--cobalt);border-color:transparent}
+.field .tel b{padding:0 0 0 12px;font-weight:650;color:var(--muted)}
+.field .tel input{border:0;height:44px;padding:0 10px 0 6px;outline:0;background:transparent}
 .row{display:flex;gap:10px}.row > *{flex:1;min-width:0}
 .muted{color:var(--muted)}.small{font-size:13px}
 .empty{padding:40px 16px;text-align:center;color:var(--muted);font-weight:650}
@@ -113,17 +122,25 @@ nav#tabs button b{position:absolute;top:4px;left:calc(50% + 10px);min-width:18px
 .line .meta.warn{color:var(--bad-ink)}
 .qty{display:flex;align-items:center;gap:8px}
 .qty input{width:100%;min-width:0;height:46px;border:1px solid var(--line-2);border-radius:var(--r-s);text-align:center;font-size:18px;font-weight:800}
+.qty input.bad{border-color:var(--bad);background:var(--bad-soft)}
 .qty button{flex:0 0 46px;height:46px;border-radius:var(--r-s);border:1px solid var(--line-2);font-size:22px;font-weight:650;color:var(--ink-2)}
 .qty .unit{flex:0 0 auto;font-size:13px;color:var(--muted);font-weight:650;min-width:24px}
-.presets{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.presets button{height:36px;padding:0 12px;border-radius:999px;background:var(--cloud);border:1px solid var(--line);font-size:13px;font-weight:650;color:var(--ink-2)}
+.presets{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.presets button{height:44px;padding:0 12px;border-radius:999px;background:var(--cloud);border:1px solid var(--line);font-size:13px;font-weight:650;color:var(--ink-2)}
 .presets button:active{background:var(--lemon-soft)}
+.presets button:disabled{opacity:.4}
+.disc{margin-top:6px;font-size:13px;font-weight:700;color:var(--bad-ink)}
+.disc:empty{display:none}
 .price{display:flex;align-items:flex-end;gap:10px;margin-top:10px}
 .price label{flex:1;font-size:12px;color:var(--muted);font-weight:650}
 .price input{display:block;width:100%;height:46px;margin-top:4px;border:1px solid var(--line-2);border-radius:var(--r-s);padding:0 12px;font-size:16px;font-weight:700;color:var(--ink)}
 .price b{flex:0 0 auto;font-size:15px;font-weight:800;line-height:46px}
-.total{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0;font-size:14px;font-weight:650;color:var(--muted)}
-.total b{font-size:28px;font-weight:800;color:var(--ink);letter-spacing:-.03em}
+/* итог и кнопка продажи — всегда внизу экрана, над вкладками */
+.paybar{position:sticky;bottom:calc(var(--tabs-h) + env(safe-area-inset-bottom));z-index:4;margin:16px -16px -24px;padding:10px 16px 12px;background:var(--white);border-top:1px solid var(--line);box-shadow:0 -6px 16px rgba(38,50,68,.06)}
+.why{margin:0 0 8px;font-size:14px;font-weight:700;color:var(--bad-ink);line-height:1.35}
+.why:empty{display:none}
+.total{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px;font-size:14px;font-weight:650;color:var(--muted)}
+.total b{font-size:26px;font-weight:800;color:var(--ink);letter-spacing:-.03em}
 details.more{margin:10px 0 4px}
 details.more summary{list-style:none;cursor:pointer;color:var(--cobalt);font-weight:650;font-size:14px;padding:10px 0}
 details.more summary::-webkit-details-marker{display:none}
@@ -156,7 +173,12 @@ input::placeholder{color:var(--muted);opacity:1;font-weight:450}
 #toast{position:fixed;left:50%;bottom:calc(var(--tabs-h) + 16px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:30;max-width:calc(100% - 32px);padding:12px 16px;border-radius:12px;background:var(--ink);color:#fff;font-size:14px;font-weight:650;box-shadow:0 6px 24px rgba(38,50,68,.2)}
 #toast.bad{background:var(--bad)}
 .switch{display:flex;align-items:center;justify-content:space-between;min-height:48px;font-weight:650;margin-bottom:8px}
-.switch input{width:22px;height:22px;accent-color:var(--cobalt)}
+.switch input{width:26px;height:26px;accent-color:var(--cobalt)}
+.alert{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;margin:0 0 10px;padding:10px 14px;border-radius:var(--r-s);background:var(--bad-soft);color:var(--bad-ink);font-size:14px;font-weight:700;text-align:left}
+.review{display:grid;grid-template-columns:1fr auto;gap:6px 12px;font-size:15px;font-weight:650;margin:0 0 16px}
+.review > b{text-align:right;font-weight:800}
+.review .hr{grid-column:1/-1;height:1px;background:var(--line);margin:4px 0}
+.hint{font-size:13px;color:var(--ink-2);font-weight:650;margin:0 0 10px}
 </style>
 </head>
 <body>
@@ -209,8 +231,12 @@ function round2(x){ return Math.round(x * 100) / 100; }
 function round3(x){ return Math.round(x * 1000) / 1000; }
 function fmt(x){ return round2(num(x)).toLocaleString('ru-RU', {maximumFractionDigits: 2}).replace(/ /g, ' '); }
 function som(x){ return fmt(x) + ' сом'; }
+function somR(x){ return Math.round(num(x)).toLocaleString('ru-RU').replace(/ /g, ' ') + ' сом'; }   // итоги без тыйынов
 function qtyText(q, unit){ return fmt(q) + (unit ? ' ' + unit : ''); }
 function shortShop(s){ const t = String(s || '').replace(/^Kemal Usman Parfume\s*/i, '').trim(); return t || 'Kemal Usman'; }
+// «Касса Kemal Usman Parfume Osh» → «Касса Osh»
+function shortDesk(d){ const m = String(d || '').match(/^(\S+)\s+(.*)$/); return m && /Kemal Usman/i.test(m[2]) ? m[1] + ' ' + shortShop(m[2]) : String(d || ''); }
+function daysSince(iso){ return Math.round((new Date(isoDate(new Date()) + 'T00:00:00') - new Date(String(iso).slice(0, 10) + 'T00:00:00')) / 864e5); }
 function toast(msg, bad){ const t = $('#toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; clearTimeout(t._h); t._h = setTimeout(() => t.className = 'hidden', bad ? 5000 : 2500); }
 
 async function api(path, opts){
@@ -220,19 +246,19 @@ async function api(path, opts){
   let data = {};
   try { data = await r.json(); } catch (e) { data = {}; }
   if (r.status === 401 && !o.login) { showLogin(); }
-  if (!r.ok) { const e = new Error(data.error || data.detail || ('ошибка ' + r.status)); e.status = r.status; throw e; }
+  if (!r.ok) { const m = String(data.error || data.detail || ('ошибка ' + r.status)); const e = new Error(m.charAt(0).toUpperCase() + m.slice(1)); e.status = r.status; throw e; }
   return data;
 }
 
 /* ── вход ── */
 let pin = '';
-function showLogin(){ state = null; $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#tabs').classList.add('hidden'); pin = ''; drawDots(); }
+function showLogin(){ state = null; tab = 'sale'; cart = newCart(''); $('#login').classList.remove('hidden'); $('#app').classList.add('hidden'); $('#tabs').classList.add('hidden'); pin = ''; drawDots(); }
 function drawDots(err){ $('#dots').innerHTML = Array.from({length: Math.max(4, pin.length)}, (_, i) => '<i class="' + (i < pin.length ? 'on' : '') + '"></i>').join(''); $('#dots').classList.toggle('err', !!err); }
 function keypad(){
   const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'del', '0', 'ok'];
   $('#keypad').innerHTML = keys.map(k => '<button class="' + (k.length > 1 ? 'soft' : '') + '" data-k="' + k + '">' + (k === 'del' ? 'Стереть' : k === 'ok' ? 'Войти' : k) + '</button>').join('');
   $('#keypad').onclick = e => { const b = e.target.closest('button'); if (b) press(b.dataset.k); };
-  document.addEventListener('keydown', e => { if ($('#login').classList.contains('hidden')) return; if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('del'); else if (e.key === 'Enter') press('ok'); });
+  document.addEventListener('keydown', e => { if ($('#login').classList.contains('hidden')) return; if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('del'); else if (e.key === 'Enter') { e.preventDefault(); press('ok'); } });
 }
 function press(k){
   $('#loginMsg').textContent = '';
@@ -252,7 +278,7 @@ async function boot(){
   try { state = await api('api/state'); }
   catch (e) { showLogin(); if (e.status !== 401) $('#loginMsg').textContent = e.message; return; }
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden'); $('#tabs').classList.remove('hidden');
-  $('#whoName').textContent = state.user.name + (state.user.shop ? ' · ' + shortShop(state.user.shop) : '');
+  $('#whoName').textContent = state.user.name;
   if (!state.tabs.includes(tab)) tab = 'sale';
   if (!canPickShop()) cart.shop = state.user.shop;
   else if (!state.shops.includes(cart.shop)) { let saved = ''; try { saved = localStorage.getItem('kassa.shop') || ''; } catch (e) {} cart.shop = state.shops.length === 1 ? state.shops[0] : (state.shops.includes(saved) ? saved : ''); }
@@ -268,8 +294,9 @@ function syncLine(){
   const s = (state && state.sync) || {}, el = $('#status'), age = s.seenAgeSec;
   let text = '1С ещё не подключалась', cls = 'warn';
   if (age != null) {
+    // Программа 1С на ПК спрашивает сервер каждые 20 с; пара минут тишины — не беда, красный — только после получаса.
     if (age < 120) { text = '1С на связи'; cls = 'ok'; }
-    else { const m = Math.round(age / 60); text = '1С была ' + (m < 60 ? m + ' мин' : Math.round(m / 60) + ' ч') + ' назад'; }
+    else { const m = Math.round(age / 60); text = '1С была ' + (m < 60 ? m + ' мин' : Math.round(m / 60) + ' ч') + ' назад'; cls = age < 600 ? '' : age < 1800 ? 'late' : 'warn'; }
   }
   if (state && state.pending) text += ' · ждут ' + state.pending;
   el.className = 'status ' + cls; el.querySelector('span').textContent = text;
@@ -293,26 +320,29 @@ function matches(i, q){
   const ws = norm(q).split(' ').filter(Boolean);
   if (!ws.length) return true;
   const hay = i._n || (i._n = norm([i.name, i.article, i.code, i.group].join(' '))), hayL = i._l || (i._l = loose(hay));
-  return ws.every(w => hay.includes(w) || hayL.includes(loose(w)));
+  return ws.every(w => hay.includes(w) || (w.length >= 3 && hayL.includes(loose(w))));
 }
 
 /* ── лист снизу ── */
 function sheet(html, tall, onClose){
   const back = document.createElement('div');
   back.className = 'sheet-back';
-  back.innerHTML = '<div class="sheet' + (tall ? ' tall' : '') + '" role="dialog"><div class="grab"></div>' + html + '</div>';
+  back.innerHTML = '<div class="sheet' + (tall ? ' tall' : '') + '" role="dialog" aria-modal="true"><div class="grab"></div>' + html + '</div>';
   document.body.appendChild(back);
+  const h2 = back.querySelector('h2'); if (h2) back.firstChild.setAttribute('aria-label', h2.textContent);
   const close = () => { back.remove(); if (!document.querySelector('.sheet-back')) document.body.style.overflow = ''; if (onClose) onClose(); };
+  back._close = close;
   back.onclick = e => { if (e.target === back) close(); };
   back.querySelectorAll('[data-close]').forEach(b => b.onclick = close);
   document.body.style.overflow = 'hidden';
   return {root: back.querySelector('.sheet'), close};
 }
 // Вопрос «да/нет» на самой странице: системный confirm() встроенные браузеры молча гасят (возвращают «нет»).
-function ask(text, yes){
+// body — сводка под вопросом (html); primary — «да» лимонной кнопкой (подтверждение, а не отмена).
+function ask(text, yes, body, primary){
   return new Promise(done => {
     let answer = false;
-    const sh = sheet('<h2>' + esc(text) + '</h2><button class="btn bad" data-yes>' + esc(yes) + '</button><button class="btn line" data-close>Нет</button>',
+    const sh = sheet('<h2>' + esc(text) + '</h2>' + (body || '') + '<button class="btn' + (primary ? '' : ' bad') + '" data-yes>' + esc(yes) + '</button><button class="btn line" data-close>Нет</button>',
       false, () => done(answer));
     sh.root.querySelector('[data-yes]').onclick = () => { answer = true; sh.close(); };
   });
@@ -327,21 +357,21 @@ function payable(){ return round2(cartTotal() - bonusNow()); }
 function renderSale(){
   const m = $('#main');
   if (!state.shops.length) { m.innerHTML = '<div class="empty">1С ещё не прислала товары. Включите программу кассы на компьютере магазина.</div>'; return; }
-  let h = '<div class="label">Магазин</div><div class="chips" id="shops">' + state.shops.map(s =>
-    '<button class="chip' + (s === cart.shop ? ' on' : '') + '" data-s="' + esc(s) + '"' + (canPickShop() || s === cart.shop ? '' : ' disabled') + '>' + esc(shortShop(s)) + '</button>').join('') + '</div>';
+  let h = '<div class="label">Магазин</div><div class="chips" id="shops">' + state.shops.filter(s => canPickShop() || s === cart.shop).map(s =>
+    '<button class="chip' + (s === cart.shop ? ' on' : '') + '" data-s="' + esc(s) + '">' + esc(shortShop(s)) + '</button>').join('') + '</div>';
   if (!cart.shop) { m.innerHTML = h + '<div class="empty">Выберите магазин — остаток и цены у каждого свои.</div>'; bindShops(); return; }
   h += '<div class="label">Товары</div><div id="lines"></div><button class="add" id="addItem">' + icon('plus') + 'Добавить товар</button>' +
     '<div id="payBox"></div><div id="bonusBox"></div>' +
     '<details class="more"' + (cart.buyer.name || cart.buyer.phone || cart.note ? ' open' : '') + '><summary>Покупатель и заметка</summary>' +
-    '<div class="row"><label class="field"><span>Имя</span><input id="bName" autocomplete="off" value="' + esc(cart.buyer.name) + '"></label>' +
-    '<label class="field"><span>Телефон</span><input id="bPhone" inputmode="tel" autocomplete="off" placeholder="555 123 456" value="' + esc(cart.buyer.phone) + '"></label></div>' +
+    '<div class="row"><label class="field"><span>Имя <i class="req" data-req></i></span><input id="bName" autocomplete="off" value="' + esc(cart.buyer.name) + '"></label>' +
+    '<label class="field"><span>Телефон <i class="req" data-req></i></span><span class="tel"><b>+996</b><input id="bPhone" inputmode="tel" autocomplete="off" placeholder="555 123 456" value="' + esc(cart.buyer.phone) + '"></span></label></div>' +
     '<label class="field"><span>Заметка</span><input id="note" autocomplete="off" value="' + esc(cart.note) + '"></label></details>' +
-    '<div class="total"><span>Итого</span><b id="total"></b></div><div class="err" id="saleErr"></div><button class="btn" id="sell"></button>';
+    '<div class="paybar"><div class="why" id="why"></div><div class="total"><span>Итого</span><b id="total"></b></div><div class="err" id="saleErr"></div><button class="btn" id="sell"></button></div>';
   m.innerHTML = h;
   bindShops(); drawLines(); drawPay(); drawTotal();
   $('#addItem').onclick = itemPicker;
-  $('#bName').oninput = e => { cart.buyer.name = e.target.value; };
-  $('#bPhone').oninput = e => { cart.buyer.phone = e.target.value; lookupBonus(); };
+  $('#bName').oninput = e => { cart.buyer.name = e.target.value; drawTotal(); };
+  $('#bPhone').oninput = e => { cart.buyer.phone = e.target.value; lookupBonus(); drawTotal(); };
   drawBonus();
   $('#note').oninput = e => { cart.note = e.target.value; };
   $('#sell').onclick = sell;
@@ -364,8 +394,8 @@ function drawLines(){
     return '<div class="line" data-k="' + k + '"><div class="name"><span>' + esc(i.name) + '</span><button data-del aria-label="Убрать">' + icon('x') + '</button></div>' +
       '<div class="meta">есть ' + esc(qtyText(free(i, cart.shop), i.unit)) + (list ? ' · цена ' + som(list) + (i.unit ? ' за 1 ' + esc(i.unit) : '') : ' · цены в 1С нет') + '</div>' +
       '<div class="qty"><button data-minus aria-label="Меньше">−</button><input data-qty aria-label="Количество" inputmode="' + (i.fraction ? 'decimal' : 'numeric') + '" value="' + esc(String(l.qty).replace('.', ',')) + '"><span class="unit">' + esc(i.unit || '') + '</span><button data-plus aria-label="Больше">+</button></div>' +
-      (presetsFor(i.unit).length ? '<div class="presets">' + presetsFor(i.unit).map(p => '<button data-p="' + p + '">' + p + ' ' + esc(i.unit) + '</button>').join('') + '</div>' : '') +
-      '<div class="price"><label>Цена за 1 ' + esc(i.unit || 'шт') + '<input data-price inputmode="decimal" value="' + esc(String(l.price).replace('.', ',')) + '"></label><b data-sum></b></div></div>';
+      (presetsFor(i.unit).length ? '<div class="presets">' + presetsFor(i.unit).map(p => '<button data-p="' + p + '"' + (p > free(i, cart.shop) + 1e-9 ? ' disabled' : '') + '>' + p + ' ' + esc(i.unit) + '</button>').join('') + '</div>' : '') +
+      '<div class="price"><label>Цена за 1 ' + esc(i.unit || 'шт') + '<input data-price inputmode="decimal" value="' + esc(String(l.price).replace('.', ',')) + '"></label><b data-sum></b></div><div class="disc" data-disc></div></div>';
   }).join('');
   box.querySelectorAll('.line').forEach(row => {
     const l = cart.lines[+row.dataset.k];
@@ -381,10 +411,14 @@ function drawLines(){
     drawLineSum(row, l);
   });
 }
+// Скидка от цены 1С: на сколько процентов ниже прайса (0 — как в 1С или выше, или цены в 1С нет).
+function discountPct(l){ const list = num(((itemById(l.itemId) || {}).price || {})[cart.shop]), p = num(l.price); return list > 0 && p > 0 && p < list ? Math.round((1 - p / list) * 100) : 0; }
 function drawLineSum(row, l){
-  const i = itemById(l.itemId) || {}, over = num(l.qty) > free(i, cart.shop) + 1e-9;
+  const i = itemById(l.itemId) || {}, over = num(l.qty) > free(i, cart.shop) + 1e-9, d = discountPct(l);
   row.querySelector('[data-sum]').textContent = som(round2(num(l.qty) * num(l.price)));
   row.querySelector('.meta').classList.toggle('warn', over);
+  row.querySelector('[data-qty]').classList.toggle('bad', over);
+  row.querySelector('[data-disc]').textContent = d ? 'Ниже цены 1С на ' + d + ' % (в 1С ' + som(num((i.price || {})[cart.shop])) + ')' : '';
 }
 function isoDate(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function chips(id, list, current){ return '<div class="chips" id="' + id + '">' + list.map(([k, n]) => '<button class="chip' + (String(current) === String(k) ? ' on' : '') + '" data-k="' + esc(k) + '">' + esc(n) + '</button>').join('') + '</div>'; }
@@ -393,12 +427,12 @@ function drawPay(){
   const d = cart.debt;
   let h = '<div class="label">Оплата</div>' + chips('pay', [['cash', 'Наличные'], ['transfer', 'Перевод'], ['split', 'Две части'], ['debt', 'В долг']], cart.pay);
   if (cart.pay === 'split') h += '<div class="row"><label class="field"><span>Наличными</span><input id="cashPart" inputmode="decimal" autocomplete="off" value="' + esc(cart.cashPart) + '"></label>' +
-    '<label class="field"><span>Переводом</span><input id="trPart" readonly tabindex="-1"></label></div>';
+    '<label class="field"><span>Переводом (считается сам)</span><input id="trPart" readonly tabindex="-1"></label></div>';
   if (cart.pay === 'debt') {
     // В долг (как в Smart Centr): сколько заплатил сейчас, остаток — до даты или рассрочкой по месяцам; покупатель обязателен.
     if (!d.date) { const x = new Date(); x.setDate(x.getDate() + 14); d.date = isoDate(x); }
     h += '<div class="card"><div class="row"><label class="field"><span>Сейчас заплатил</span><input id="dPaid" inputmode="decimal" autocomplete="off" placeholder="0" value="' + esc(d.paid) + '"></label>' +
-      '<div class="field"><span>Чем</span>' + chips('dMethod', [['cash', 'Нал'], ['transfer', 'Перевод']], d.method) + '</div></div>' +
+      '<div class="field' + (num(d.paid) > 0 ? '' : ' hidden') + '" id="dMethodBox"><span>Чем</span>' + chips('dMethod', [['cash', 'Нал'], ['transfer', 'Перевод']], d.method) + '</div></div>' +
       '<div class="field"><span>Остаток</span>' + chips('dPlan', [['date', 'До даты'], ['months', 'Рассрочка']], d.plan) + '</div>' +
       (d.plan === 'date' ? '<label class="field"><span>До какого числа</span><input id="dDate" type="date" value="' + esc(d.date) + '"></label>'
         : '<div class="field"><span>На сколько месяцев</span>' + chips('dMonths', [[2, '2'], [3, '3'], [4, '4'], [6, '6'], [10, '10'], [12, '12']], d.months) + '</div><div class="small muted" id="dPlanText"></div>') +
@@ -409,7 +443,7 @@ function drawPay(){
   const c = $('#cashPart');
   if (c) { c.oninput = () => { cart.cashPart = c.value; drawTotal(); }; c.onfocus = () => setTimeout(() => c.select(), 0); }
   if (cart.pay === 'debt') {
-    $('#dPaid').oninput = e => { d.paid = e.target.value; drawTotal(); };
+    $('#dPaid').oninput = e => { d.paid = e.target.value; $('#dMethodBox').classList.toggle('hidden', !(num(d.paid) > 0)); drawTotal(); };
     onChip('dMethod', k => { d.method = k; drawPay(); drawTotal(); });
     onChip('dPlan', k => { d.plan = k; drawPay(); drawTotal(); });
     onChip('dMonths', k => { d.months = +k; drawPay(); drawTotal(); });
@@ -428,13 +462,14 @@ function saleProblem(){
     const i = itemById(l.itemId) || {name: l.name}, q = num(l.qty);
     if (q <= 0) return 'Укажите количество';
     if (!i.fraction && q !== Math.round(q)) return 'Только целыми: ' + i.name;
-    if (q > free(i, cart.shop) + 1e-9) return 'Не хватает: есть ' + qtyText(free(i, cart.shop), i.unit);
-    if (num(l.price) <= 0) return 'Укажите цену';
+    if (q > free(i, cart.shop) + 1e-9) return 'Не хватает «' + i.name + '»: есть ' + qtyText(free(i, cart.shop), i.unit);
+    if (num(l.price) <= 0) return 'Укажите цену: ' + i.name;
   }
   if (cart.pay === 'split') { const c = num(cart.cashPart); if (c <= 0 || c >= payable()) return 'Наличными — меньше суммы'; }
   if (bonusNow() > bonusLimit()) return 'Бонусами — не больше ' + som(bonusLimit());
   if (cart.pay === 'debt') {
-    if (!cart.buyer.name.trim() || String(cart.buyer.phone).replace(/\D/g, '').length < 9) return 'В долг: имя и телефон покупателя';
+    if (!cart.buyer.name.trim()) return 'В долг: впишите имя покупателя';
+    if (String(cart.buyer.phone).replace(/\D/g, '').length < 9) return 'В долг: впишите телефон покупателя (9 цифр)';
     if (num(cart.debt.paid) < 0 || num(cart.debt.paid) >= cartTotal()) return 'Сейчас — меньше суммы продажи';
     if (cart.debt.plan === 'date' && (!cart.debt.date || cart.debt.date < isoDate(new Date()))) return 'Выберите дату долга';
   }
@@ -449,10 +484,13 @@ function drawTotal(){
   const pt = $('#dPlanText'); if (pt) pt.textContent = planText();
   const why = saleProblem(), b = $('#sell');
   b.disabled = !!why || cart.sending;
-  b.textContent = cart.sending ? 'Отправляю…' : why || (cart.pay === 'debt' ? 'Продать в долг · ' : 'Продать · ') + som(t);
+  b.textContent = cart.sending ? 'Отправляю…' : !cart.lines.length ? 'Добавьте товар' : (cart.pay === 'debt' ? 'Продать в долг · ' : 'Продать · ') + som(t);
+  // Почему продать нельзя — крупно над кнопкой, а не бледно на кнопке. Пустую продажу красным не пугаем.
+  $('#why').textContent = why && cart.lines.length ? why : '';
+  document.querySelectorAll('[data-req]').forEach(r => r.textContent = cart.pay === 'debt' ? '— обязательно' : '');
 }
 function itemPicker(){
-  const sh = sheet(sheetHead('Товар') + '<div class="search"><input type="search" id="q" placeholder="Название, артикул, код" autocomplete="off" enterkeyhint="search"><button id="qx" aria-label="Очистить">' + icon('x') + '</button></div><div id="res"></div>', true);
+  const sh = sheet(sheetHead('Товар') + '<div class="search"><input type="search" id="q" placeholder="Название, артикул, код" aria-label="Поиск товара" autocomplete="off" enterkeyhint="search"><button id="qx" aria-label="Очистить">' + icon('x') + '</button></div><div id="res"></div>', true);
   const q = sh.root.querySelector('#q'), res = sh.root.querySelector('#res');
   const draw = () => {
     const list = items.filter(i => matches(i, q.value)).sort((a, b) => (free(b, cart.shop) > 0) - (free(a, cart.shop) > 0)).slice(0, 80);
@@ -474,7 +512,7 @@ function itemPicker(){
     else cart.lines.push({itemId: i.id, name: i.name, unit: i.unit, qty: i.unit === 'мл' ? Math.min(5, f) : 1, price: num((i.price || {})[cart.shop]) || ''});
     sh.close(); drawLines(); drawTotal();
   };
-  draw(); setTimeout(() => q.focus(), 60);
+  draw(); q.focus();
 }
 function payments(){
   const t = payable();
@@ -482,7 +520,24 @@ function payments(){
   if (cart.pay === 'split') { const c = round2(num(cart.cashPart)); return [{method: 'cash', amount: c}, {method: 'transfer', amount: round2(t - c)}]; }
   return [{method: cart.pay, amount: t}];
 }
+// Перед записью: в долг — сводка «кто, сколько должен, когда»; цена ниже 1С — какие строки и на сколько.
+function saleReview(){
+  const d = cart.debt, t = payable(), cuts = cart.lines.filter(l => discountPct(l) > 0);
+  const cutRows = cuts.map(l => '<span>' + esc((itemById(l.itemId) || l).name) + '</span><b style="color:var(--bad-ink)">−' + discountPct(l) + ' %</b>').join('');
+  if (cart.pay !== 'debt') return cuts.length ? {title: 'Цена ниже, чем в 1С. Продать так?', yes: 'Да, продать · ' + som(t), body: '<div class="review">' + cutRows + '</div>'} : null;
+  const paid = num(d.paid), left = round2(cartTotal() - paid), phone = String(cart.buyer.phone).replace(/\D/g, '').slice(-9);
+  const when = d.plan === 'date' ? 'вернуть до ' + dmy(d.date) : planText();
+  return {title: 'Продать в долг?', yes: 'Да, в долг · ' + som(left),
+    body: '<div class="review"><span class="muted">Покупатель</span><b>' + esc(cart.buyer.name.trim()) + '<br><span class="small muted">+996 ' + esc(phone) + '</span></b>' +
+      '<span class="muted">Сумма продажи</span><b>' + som(cartTotal()) + '</b>' +
+      '<span class="muted">Заплатил сейчас</span><b>' + (paid > 0 ? som(paid) + ' · ' + (d.method === 'cash' ? 'нал' : 'перевод') : '0 сом') + '</b><div class="hr"></div>' +
+      '<span>Должен</span><b class="big">' + som(left) + '</b><span class="muted" style="grid-column:1/-1">' + esc(when) + '</span>' +
+      (cutRows ? '<div class="hr"></div><span class="muted" style="grid-column:1/-1">Цена ниже, чем в 1С:</span>' + cutRows : '') + '</div>'};
+}
 async function sell(){
+  if (saleProblem() || cart.sending) return;
+  const rv = saleReview();
+  if (rv && !await ask(rv.title, rv.yes, rv.body, true)) return;
   if (saleProblem() || cart.sending) return;
   cart.sending = true; drawTotal(); $('#saleErr').textContent = '';
   const d = cart.debt;
@@ -545,10 +600,10 @@ function opSheet(op, fromList){
     (docs ? '<div class="small muted" style="margin-top:8px">1С: ' + esc(docs) + '</div>' : '') +
     (op.error && op.status === 'failed' ? '<div class="err">' + esc(op.error) + '</div>' : '') + '</div>' +
     extrasHtml(op) + '<div class="row"><a class="btn line" href="api/receipt/' + op.id + '" target="_blank" rel="noopener">Чек — печать</a>' +
-    (op.kind === 'sale' || op.kind === 'payment' ? '<button class="btn line" data-wa>Чек в WhatsApp</button>' : '') + '</div>';
-  if (owner && op.status === 'failed') h += '<button class="btn" data-a="retry">Провести в 1С ещё раз</button>';
-  if (['new', 'done', 'failed'].includes(op.status) && (owner || op.mine)) h += '<button class="btn bad" data-a="cancel">Отменить</button>';
-  if (!fromList) h += '<button class="btn" data-close>Готово</button>';
+    (op.kind === 'sale' || op.kind === 'payment' ? '<button class="btn line" data-wa>' + (p.waSentAt ? 'WhatsApp ещё раз' : 'Чек в WhatsApp') + '</button>' : '') + '</div>';
+  if (!fromList) h += '<button class="btn" data-close style="margin-top:10px">Готово</button>';
+  if (owner && op.status === 'failed') h += '<p class="hint" style="margin-top:14px">Сначала уберите причину в 1С (например, оприходуйте товар), потом нажмите:</p><button class="btn" data-a="retry">Провести в 1С ещё раз</button>';
+  if (['new', 'done', 'failed'].includes(op.status) && (owner || op.mine)) h += '<button class="btn bad gap" data-a="cancel">Отменить ' + (KIND[op.kind] || '').toLowerCase() + '</button>';
   const sh = sheet(h);
   const wa = sh.root.querySelector('[data-wa]'); if (wa) wa.onclick = () => sendWa(op, wa);
   sh.root.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
@@ -619,7 +674,7 @@ async function sendWa(op, btn, phone){
 /* ── Сегодня ── */
 function profitCard(){
   const pr = state.profit || {};
-  const cell = (k, n) => { const x = pr[k] || {}; return '<div class="card" style="margin:0;padding:10px 12px"><div class="small muted">' + n + '</div><b style="font-size:18px">' + som(x.profit || 0) + '</b><div class="small muted">выручка ' + som(x.revenue || 0) + '</div></div>'; };
+  const cell = (k, n) => { const x = pr[k] || {}; return '<div class="card" style="margin:0;padding:10px 12px"><div class="small muted">' + n + '</div><b style="font-size:18px;white-space:nowrap">' + somR(x.profit || 0) + '</b><div class="small muted">выручка ' + somR(x.revenue || 0) + '</div></div>'; };
   const nc = (pr.month || {}).noCost || 0;
   return '<div class="label">Прибыль</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">' + cell('today', 'Сегодня') + cell('week', '7 дней') + cell('month', '30 дней') + '</div>' +
     (nc ? '<div class="small muted" style="margin-top:6px">Строк без себестоимости в 1С: ' + nc + ' — их выручка в прибыль не вошла.</div>' : '');
@@ -627,17 +682,17 @@ function profitCard(){
 function desksCard(){
   const desks = (state.desks || []).filter(d => Math.abs(d.amount) > 0.004 || state.shops.some(s => d.desk.endsWith(s)));
   const total = desks.reduce((s, d) => s + d.amount, 0);
-  return '<div class="label">Деньги в кассах</div><div class="card">' + desks.map(d => '<div class="sum" style="padding:4px 0"><span>' + esc(d.desk) + (d.pending ? '<br><span class="small muted">ещё не в 1С: ' + (d.pending > 0 ? '+' : '') + som(d.pending) + '</span>' : '') + '</span><b>' + som(d.amount) + '</b></div>').join('') +
+  return '<div class="label">Деньги в кассах</div><div class="card">' + desks.map(d => '<div class="sum" style="padding:4px 0"><span>' + esc(shortDesk(d.desk)) + (d.pending ? '<br><span class="small muted">ещё не в 1С: ' + (d.pending > 0 ? '+' : '') + som(d.pending) + '</span>' : '') + '</span><b>' + som(d.amount) + '</b></div>').join('') +
     '<div class="sum shoprow"><span class="muted">Всего</span><b class="big">' + som(total) + '</b></div></div>' +
     '<div class="row" style="margin-bottom:6px"><button class="btn line" id="doExpense">' + icon('out') + 'Расход</button><button class="btn line" id="doTransfer">' + icon('swap') + 'Перевод</button></div>';
 }
 function capitalCard(){
   const c = state.capital;
   if (!c) return '';
-  return '<div class="label">Общий капитал</div><div class="card"><div class="sum"><span class="muted">Всего</span><b class="big">' + som(c.total) + '</b>' +
-    '<span class="muted small">товар по себестоимости</span><span class="small" style="text-align:right">' + som(c.goods) + '</span>' +
-    '<span class="muted small">деньги в кассах</span><span class="small" style="text-align:right">' + som(c.cash) + '</span>' +
-    '<span class="muted small">долги покупателей</span><span class="small" style="text-align:right">' + som(c.debts) + '</span></div>' +
+  return '<div class="label">Общий капитал</div><div class="card"><div class="sum"><span class="muted">Всего</span><b class="big">' + somR(c.total) + '</b>' +
+    '<span class="muted small">товар по себестоимости</span><span class="small" style="text-align:right">' + somR(c.goods) + '</span>' +
+    '<span class="muted small">деньги в кассах</span><span class="small" style="text-align:right">' + somR(c.cash) + '</span>' +
+    '<span class="muted small">долги покупателей</span><span class="small" style="text-align:right">' + somR(c.debts) + '</span></div>' +
     (c.noCost ? '<div class="small muted" style="margin-top:6px">Товаров без себестоимости в 1С: ' + c.noCost + ' — в капитал не вошли.</div>' : '') + '</div>';
 }
 function myBonusCard(){
@@ -649,32 +704,35 @@ function myBonusCard(){
 }
 function renderToday(){
   const t = state.totals || {shops: [], total: 0, sales: 0}, ops = state.ops || [], owner = state.user.role === 'owner';
-  let h = '<div class="card"><div class="sum"><span class="muted">Сегодня продано' + (state.allOps ? '' : ' вами') + '</span><b class="big">' + som(t.total) + '</b><span class="muted">Продаж</span><b>' + t.sales + '</b></div>';
+  const failedOps = ops.filter(o => o.status === 'failed');
+  let h = failedOps.length ? '<button class="alert" id="failedBtn"><span>Не провелось в 1С: ' + failedOps.length + '</span><span>Открыть</span></button>' : '';
+  h += '<div class="card"><div class="sum"><span class="muted">Сегодня продано' + (state.allOps ? '' : ' вами') + '</span><b class="big">' + som(t.total) + '</b><span class="muted">Продаж</span><b>' + t.sales + '</b></div>';
   t.shops.forEach(s => {
     h += '<div class="sum shoprow"><b style="text-align:left">' + esc(shortShop(s.shop)) + '</b><b>' + som(s.total) + '</b>' +
       '<span class="muted small">наличные</span><span class="small" style="text-align:right">' + som(s.cash) + '</span>' +
-      '<span class="muted small">перевод</span><span class="small" style="text-align:right">' + som(s.transfer) + '</span></div>';
+      '<span class="muted small">перевод</span><span class="small" style="text-align:right">' + som(s.transfer) + '</span>' +
+      (num(s.total) - num(s.cash) - num(s.transfer) > 0.005 ? '<span class="muted small">в долг и бонусами</span><span class="small" style="text-align:right">' + som(num(s.total) - num(s.cash) - num(s.transfer)) + '</span>' : '') + '</div>';
   });
   h += '</div>';
   h += owner ? desksCard() + profitCard() + capitalCard() : myBonusCard();
-  const failed = ops.filter(o => o.status === 'failed').length;
-  if (failed) h += '<div class="err">Не провелось в 1С: ' + failed + '. Нажмите на операцию — там причина.</div>';
   h += '<div class="label">Операции</div>' + (ops.length ? ops.map(o =>
     '<button class="item" data-id="' + o.id + '"><div><div class="t">' + esc(opTitle(o)) + '</div><div class="s">' + esc(opSub(o)) + '</div></div>' +
-    '<div class="r"><span' + (o.status === 'cancelled' ? ' style="color:var(--soft);text-decoration:line-through"' : '') + '>' + (o.kind === 'expense' ? '−' : '') + som(opAmount(o)) + '</span><small>' + badge(o) + '</small></div></button>').join('')
+    '<div class="r"><span' + (o.status === 'cancelled' ? ' style="color:var(--muted);text-decoration:line-through"' : '') + '>' + (o.kind === 'expense' ? '−' : '') + som(opAmount(o)) + '</span><small>' + badge(o) + '</small></div></button>').join('')
     : '<div class="empty">Сегодня операций пока нет</div>');
   $('#main').innerHTML = h;
   $('#main').querySelectorAll('.item').forEach(b => b.onclick = () => opSheet(ops.find(o => o.id === b.dataset.id), true));
   if (owner) { $('#doExpense').onclick = () => cashForm('expense'); $('#doTransfer').onclick = () => cashForm('transfer'); }
+  const fb = $('#failedBtn'); if (fb) fb.onclick = () => opSheet(failedOps[0], true);
 }
-function deskNames(){ return (state.desks || []).map(d => d.desk); }
+function deskNames(){ return (state.desks || []).map(d => d.desk).sort((a, b) => a.localeCompare(b, 'ru')); }   // порядок не скачет
+function deskAmount(name){ const d = (state.desks || []).find(x => x.desk === name); return d ? num(d.amount) : 0; }
 function cashForm(kind){
   const f = {id: uuid(), desk: '', to: '', article: null, amount: '', note: ''};
   const desks = deskNames();
   const sh = sheet(sheetHead(kind === 'expense' ? 'Расход' : 'Перевод между кассами') + '<div id="cf"></div>');
   const draw = () => {
-    let h = '<div class="field"><span>' + (kind === 'expense' ? 'Из кассы' : 'Откуда') + '</span>' + chips('cfFrom', desks.map(d => [d, d]), f.desk) + '</div>';
-    if (kind === 'transfer') h += '<div class="field"><span>Куда</span>' + chips('cfTo', desks.filter(d => d !== f.desk).map(d => [d, d]), f.to) + '</div>';
+    let h = '<div class="field"><span>' + (kind === 'expense' ? 'Из кассы' : 'Откуда') + '</span>' + chips('cfFrom', desks.map(d => [d, shortDesk(d) + ' · ' + somR(deskAmount(d))]), f.desk) + '</div>';
+    if (kind === 'transfer') h += '<div class="field"><span>Куда</span>' + chips('cfTo', desks.filter(d => d !== f.desk).map(d => [d, shortDesk(d)]), f.to) + '</div>';
     else h += '<div class="field"><span>Статья</span><button class="btn line" id="cfArt" style="justify-content:flex-start">' + esc(f.article ? f.article.name : 'Выбрать статью') + '</button></div>';
     h += '<label class="field"><span>Сумма</span><input id="cfSum" inputmode="decimal" autocomplete="off" value="' + esc(f.amount) + '"></label>' +
       '<label class="field"><span>Заметка</span><input id="cfNote" autocomplete="off" value="' + esc(f.note) + '"></label><div class="err" id="cfErr"></div><button class="btn" id="cfGo">Записать</button>';
@@ -682,20 +740,32 @@ function cashForm(kind){
     onChip('cfFrom', k => { f.desk = k; if (f.to === k) f.to = ''; draw(); });
     onChip('cfTo', k => { f.to = k; draw(); });
     const art = sh.root.querySelector('#cfArt'); if (art) art.onclick = () => articlePicker(a => { f.article = a; draw(); });
-    sh.root.querySelector('#cfSum').oninput = e => { f.amount = e.target.value; };
+    const go = sh.root.querySelector('#cfGo'), err = sh.root.querySelector('#cfErr');
+    const problem = () => !f.desk ? 'Выберите кассу' : kind === 'transfer' && !f.to ? 'Выберите, куда' : kind === 'expense' && !f.article ? 'Выберите статью' : num(f.amount) <= 0 ? 'Впишите сумму' : '';
+    const check = () => { const why = problem(); go.disabled = !!why; go.textContent = why || 'Записать · ' + som(num(f.amount)); };
+    sh.root.querySelector('#cfSum').oninput = e => { f.amount = e.target.value; check(); };
     sh.root.querySelector('#cfNote').oninput = e => { f.note = e.target.value; };
-    sh.root.querySelector('#cfGo').onclick = async e => {
+    check();
+    go.onclick = async e => {
+      if (problem()) return;
+      // Сумма больше, чем в кассе, — не запрещаем (1С может отставать), но говорим прямо и кнопку делаем красной.
+      const amount = num(f.amount), inDesk = deskAmount(f.desk), more = amount > inDesk + 0.004;
+      const body = '<div class="review"><span class="muted">' + (kind === 'expense' ? 'Из кассы' : 'Откуда') + '</span><b>' + esc(shortDesk(f.desk)) + '</b>' +
+        (kind === 'transfer' ? '<span class="muted">Куда</span><b>' + esc(shortDesk(f.to)) + '</b>' : '<span class="muted">Статья</span><b>' + esc(f.article.name) + '</b>') +
+        '<span class="muted">Сейчас в кассе</span><b>' + som(inDesk) + '</b></div>' +
+        (more ? '<p class="err" style="margin:-6px 0 14px">Это больше, чем в кассе: касса уйдёт в минус на ' + som(amount - inDesk) + '.</p>' : '');
+      if (!await ask((kind === 'expense' ? 'Расход ' : 'Перевод ') + som(amount) + '?', 'Да, записать', body, !more)) return;
       e.target.disabled = true;
       const payload = kind === 'expense' ? {desk: f.desk, articleId: f.article ? f.article.id : '', amount: num(f.amount), note: f.note}
         : {fromDesk: f.desk, toDesk: f.to, amount: num(f.amount), note: f.note};
       try { const op = await sendOp(kind, payload, f.id); sh.close(); toast(KIND[kind] + ' записан: ' + som(op.payload.amount)); render(); }
-      catch (er) { e.target.disabled = false; sh.root.querySelector('#cfErr').textContent = er.status ? er.message : 'Нет связи — нажмите ещё раз'; }
+      catch (er) { e.target.disabled = false; err.textContent = er.status ? er.message : 'Нет связи — нажмите ещё раз'; }
     };
   };
   draw();
 }
 function articlePicker(onPick){
-  const sh = sheet(sheetHead('Статья расхода') + '<div class="search"><input type="search" id="aq" placeholder="Поиск статьи" autocomplete="off"></div><div id="ares"></div>', true);
+  const sh = sheet(sheetHead('Статья расхода') + '<div class="search"><input type="search" id="aq" placeholder="Поиск статьи" aria-label="Поиск статьи" autocomplete="off"></div><div id="ares"></div>', true);
   const q = sh.root.querySelector('#aq');
   const draw = () => {
     const list = (state.articles || []).filter(a => matches({name: a.name, article: '', code: '', group: ''}, q.value));
@@ -724,12 +794,12 @@ async function renderPayment(){
     .sort((a, b) => ((a.next || {}).date || '9') < ((b.next || {}).date || '9') ? -1 : 1);
   const total = all.reduce((s, c) => s + c.left, 0);
   $('#main').innerHTML = '<div class="card"><div class="sum"><span class="muted">Долги покупателей</span><b class="big">' + som(total) + '</b><span class="muted">Покупателей</span><b>' + all.length + '</b></div></div>' +
-    '<div class="search"><input type="search" id="dq" placeholder="Имя, телефон, номер продажи" autocomplete="off" value="' + esc(debtQ) + '"><button id="dqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
+    '<div class="search"><input type="search" id="dq" placeholder="Имя, телефон, номер продажи" aria-label="Поиск долга" autocomplete="off" value="' + esc(debtQ) + '"><button id="dqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
     chips('df', [['due', 'Сегодня и просрочено'], ['all', 'Все']], debtFilter) +
     (list.length ? list.map(c => {
       const over = c.next && c.next.date < today, due = c.next && c.next.date === today;
       return '<button class="item" data-id="' + esc(c.id) + '"><div><div class="t">' + esc(c.name) + '</div><div class="s"' + (over ? ' style="color:var(--bad-ink)"' : '') + '>' +
-        esc(c.next ? (over ? 'просрочено с ' : due ? 'сегодня ' : 'до ') + dmy(c.next.date) + ' — ' + som(c.next.sum) : '') + (c.phones ? ' · ' + esc(c.phones) : '') + '</div></div><div class="r">' + som(c.left) + '<small>' + c.debts.length + ' прод.</small></div></button>';
+        esc(c.next ? (over ? 'просрочено ' + daysSince(c.next.date) + ' дн.' : due ? 'сегодня' : 'до ' + dmy(c.next.date)) + ' · ' + som(c.next.sum) : '') + (c.phones ? '</div><div class="s">' + esc(c.phones) : '') + '</div></div><div class="r">' + som(c.left) + '<small>' + c.debts.length + ' прод.</small></div></button>';
     }).join('') : '<div class="empty">' + (debtQ || debtFilter === 'all' ? 'Долгов нет' : 'Сегодня оплат по графику нет. «Все» — весь список.') + '</div>');
   let timer = 0; $('#dq').oninput = e => { debtQ = e.target.value; clearTimeout(timer); timer = setTimeout(renderPayment, 250); };
   $('#dqx').onclick = () => { debtQ = ''; renderPayment(); };
@@ -756,8 +826,11 @@ function payForm(c){
     onChip('pfShop', k => { f.shop = k; draw(); });
     const inp = sh.root.querySelector('#pfSum');
     inp.onfocus = () => setTimeout(() => inp.select(), 0);
-    inp.oninput = e => { f.amount = e.target.value; sh.root.querySelector('#pfGo').textContent = 'Принять ' + som(f.amount); };
-    sh.root.querySelector('#pfGo').onclick = async e => {
+    const go = sh.root.querySelector('#pfGo');
+    const check = () => { const a = num(f.amount), why = a <= 0 ? 'Впишите сумму' : a > d.left + 0.004 ? 'Больше долга: осталось ' + som(d.left) : ''; go.disabled = !!why; go.textContent = why || 'Принять ' + som(a); };
+    inp.oninput = e => { f.amount = e.target.value; check(); };
+    check();
+    go.onclick = async e => {
       e.target.disabled = true;
       try {
         const op = await sendOp('payment', {debtId: f.debt.id, amount: num(f.amount), method: f.method, shop: f.shop}, f.id);
@@ -773,7 +846,7 @@ let stockShop = 'all', stockQ = '';
 function renderStock(){
   const shops = state.shops;
   $('#main').innerHTML = (state.user.role === 'owner' ? '<button class="btn line" id="siteBtn" style="margin-bottom:10px">Сайт ↔ 1С: наличие на kemalusman.kg</button>' : '') +
-    '<div class="search"><input type="search" id="sq" placeholder="Поиск товара" autocomplete="off" enterkeyhint="search" value="' + esc(stockQ) + '"><button id="sqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
+    '<div class="search"><input type="search" id="sq" placeholder="Поиск товара" aria-label="Поиск товара" autocomplete="off" enterkeyhint="search" value="' + esc(stockQ) + '"><button id="sqx" aria-label="Очистить">' + icon('x') + '</button></div>' +
     '<div class="chips" id="ss">' + [['all', 'Все']].concat(shops.map(s => [s, shortShop(s)])).concat([['none', 'Нет в наличии']]).map(([k, n]) =>
       '<button class="chip' + (stockShop === k ? ' on' : '') + '" data-k="' + esc(k) + '">' + esc(n) + '</button>').join('') + '</div><div id="slist"></div>';
   const draw = () => {
@@ -817,13 +890,13 @@ async function siteSheet(){
       .sort((a, b) => siteFilter === 'todo' ? (((b.suggest || [])[0] || {}).score || 0) - (((a.suggest || [])[0] || {}).score || 0) : 0);
     let h = '<div class="small muted" style="margin-bottom:8px">Касса ставит на сайте галочку «в наличии» по остатку 1С (' + esc(d.shops.map(shortShop).join(' + ')) +
       '). Цены и описания на сайте не меняются. Вариант «10 мл» — в наличии, если в 1С есть 10 мл и больше.</div>';
-    if (!d.on) h += '<div class="err">Адрес сайта не настроен на сервере кассы — это делается при выкладке (этап 4).</div>';
+    if (!d.on) h += '<div class="err">Адрес сайта не настроен на сервере кассы — отправить наличие пока нельзя.</div>';
     h += '<div class="card"><div class="sum"><span class="muted">Товаров на сайте</span><b>' + list.length + '</b><span class="muted">Связано с 1С</span><b>' + linked + '</b>' +
       '<span class="muted">Нет в 1С</span><b>' + none + '</b><span class="muted">Не разобрано</span><b>' + todo + '</b></div>' +
       (d.last ? '<div class="small muted" style="margin-top:6px">Последняя отправка ' + esc((d.last.at || '').slice(11, 16)) + ': ' + (d.last.ok ? 'изменено товаров ' + d.last.products : 'ошибка — ' + esc(d.last.error)) + '</div>' : '') + '</div>' +
-      '<div class="row" style="margin-bottom:8px"><button class="btn line" id="swRefresh">Обновить каталог</button><button class="btn" id="swPush">Отправить наличие</button></div>' +
+      '<div class="row" style="margin-bottom:8px"><button class="btn line" id="swRefresh">Обновить каталог</button><button class="btn" id="swPush"' + (d.on && list.length ? '' : ' disabled') + '>Отправить наличие</button></div>' +
       (exact ? '<button class="btn line" id="swAuto" style="margin-bottom:8px">Связать точные совпадения (' + exact + ')</button>' : '') +
-      '<div class="search"><input type="search" id="swq" placeholder="Поиск товара сайта" autocomplete="off" value="' + esc(siteQ) + '"></div>' +
+      '<div class="search"><input type="search" id="swq" placeholder="Поиск товара сайта" aria-label="Поиск товара сайта" autocomplete="off" value="' + esc(siteQ) + '"></div>' +
       chips('swf', [['todo', 'Не разобрано ' + todo], ['linked', 'Связано ' + linked], ['none', 'Нет в 1С ' + none]], siteFilter) +
       (shown.length ? shown.slice(0, 150).map(p => {
         const vars = (p.variants || []).map(v => (v.inStock ? '' : '<s>') + esc(v.label) + (v.inStock ? '' : '</s>')).join(', ');
@@ -851,7 +924,7 @@ function siteLinkForm(p, done){
     const cur = pick(f.itemId), pkg = pick(f.pkgItemId);
     let h = '<div class="small muted">Варианты на сайте: ' + esc((p.variants || []).map(v => v.label).join(', ')) + '</div>' +
       '<div class="label">Товар 1С (в мл)</div>' + (cur ? '<div class="card"><b>' + esc(cur.name) + '</b><div class="small muted">' + esc(state.shops.map(s => shortShop(s) + ': ' + qtyText(free(cur, s), cur.unit)).join(' · ')) + '</div></div>' : '<div class="small muted">не выбран</div>') +
-      '<div class="search"><input type="search" id="slq" placeholder="Найти товар 1С" autocomplete="off" value="' + esc(f.q) + '"></div>' +
+      '<div class="search"><input type="search" id="slq" placeholder="Найти товар 1С" aria-label="Найти товар 1С" autocomplete="off" value="' + esc(f.q) + '"></div>' +
       found.map(i => '<button class="item" data-id="' + i.id + '"><div><div class="t">' + esc(i.name) + '</div><div class="s">' + esc(i.code + ' · ' + (i.unit || '')) + '</div></div><div class="r">' + (i.id === f.itemId ? 'выбран' : '') + '</div></button>').join('') +
       '<div class="label">Упаковка (необязательно)</div><div class="small muted">Если «Упаковка 50 мл» — это отдельный флакон в 1С (шт), выберите его: галочка упаковки будет по его остатку.</div>' +
       (pkg ? '<div class="card"><b>' + esc(pkg.name) + '</b> <button class="chip" id="slPkgX" style="min-height:32px">убрать</button></div>' : '') +
@@ -900,7 +973,7 @@ function userForm(u, shops){
   const sh = sheet(sheetHead(u ? u.name : 'Новый сотрудник') +
     '<label class="field"><span>Имя</span><input id="uName" autocomplete="off" value="' + esc(u ? u.name : '') + '"></label>' +
     (owner ? '' : '<label class="field"><span>' + (u ? 'Новый PIN (пусто — не менять)' : 'PIN — от 4 до 6 цифр') + '</span><input id="uPin" inputmode="numeric" maxlength="6" autocomplete="off"></label>' +
-      '<label class="field"><span>Магазин</span><select id="uShop"><option value="">Любой магазин</option>' + shops.map(s => '<option value="' + esc(s) + '"' + (u && u.shop === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('') + '</select></label>' +
+      '<label class="field"><span>Магазин</span><select id="uShop"><option value="">Любой магазин</option>' + shops.map(s => '<option value="' + esc(s) + '"' + (u && u.shop === s ? ' selected' : '') + '>' + esc(shortShop(s)) + '</option>').join('') + '</select></label>' +
       '<label class="field"><span>Бонус, % от прибыли его продаж</span><input id="uBonus" inputmode="decimal" autocomplete="off" value="' + esc(u ? u.bonusPct : 10) + '"></label>' +
       (u ? '<label class="switch">Может входить<input type="checkbox" id="uActive"' + (u.active ? ' checked' : '') + '></label>' : '')) +
     '<div class="err" id="uErr"></div><button class="btn" id="uSave">Сохранить</button>');
@@ -920,6 +993,7 @@ function userForm(u, shops){
 
 /* ── старт ── */
 $('#logout').onclick = async () => { if (!await ask('Выйти из кассы?', 'Да, выйти')) return; try { await api('logout', {body: {}}); } catch (e) {} showLogin(); };
+document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; const all = document.querySelectorAll('.sheet-back'); if (all.length) all[all.length - 1]._close(); });
 keypad(); drawDots(); boot();
 setInterval(() => { if (state && !document.hidden) { refresh(); loadItems(); } }, 20000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state) { refresh(); loadItems(); } });
