@@ -297,16 +297,25 @@ function matches(i, q){
 }
 
 /* ── лист снизу ── */
-function sheet(html, tall){
+function sheet(html, tall, onClose){
   const back = document.createElement('div');
   back.className = 'sheet-back';
   back.innerHTML = '<div class="sheet' + (tall ? ' tall' : '') + '" role="dialog"><div class="grab"></div>' + html + '</div>';
   document.body.appendChild(back);
-  const close = () => { back.remove(); document.body.style.overflow = ''; };
+  const close = () => { back.remove(); if (!document.querySelector('.sheet-back')) document.body.style.overflow = ''; if (onClose) onClose(); };
   back.onclick = e => { if (e.target === back) close(); };
   back.querySelectorAll('[data-close]').forEach(b => b.onclick = close);
   document.body.style.overflow = 'hidden';
   return {root: back.querySelector('.sheet'), close};
+}
+// Вопрос «да/нет» на самой странице: системный confirm() встроенные браузеры молча гасят (возвращают «нет»).
+function ask(text, yes){
+  return new Promise(done => {
+    let answer = false;
+    const sh = sheet('<h2>' + esc(text) + '</h2><button class="btn bad" data-yes>' + esc(yes) + '</button><button class="btn line" data-close>Нет</button>',
+      false, () => done(answer));
+    sh.root.querySelector('[data-yes]').onclick = () => { answer = true; sh.close(); };
+  });
 }
 const sheetHead = t => '<div class="head"><h2>' + esc(t) + '</h2><button data-close aria-label="Закрыть">' + icon('x') + '</button></div>';
 
@@ -338,9 +347,9 @@ function renderSale(){
   $('#sell').onclick = sell;
 }
 function bindShops(){
-  $('#shops').onclick = e => {
+  $('#shops').onclick = async e => {
     const b = e.target.closest('.chip'); if (!b || b.disabled || b.dataset.s === cart.shop) return;
-    if (cart.lines.length && !confirm('Сменить магазин? Товары из продажи уберутся — у магазинов свой остаток.')) return;
+    if (cart.lines.length && !await ask('Сменить магазин? Товары из продажи уберутся — у магазинов свой остаток.', 'Да, сменить')) return;
     cart.shop = b.dataset.s; cart.lines = [];
     try { localStorage.setItem('kassa.shop', cart.shop); } catch (e) {}
     renderSale();
@@ -544,7 +553,7 @@ function opSheet(op, fromList){
   const wa = sh.root.querySelector('[data-wa]'); if (wa) wa.onclick = () => sendWa(op, wa);
   sh.root.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
     const a = b.dataset.a;
-    if (a === 'cancel' && !confirm('Отменить: ' + KIND[op.kind].toLowerCase() + ' на ' + som(opAmount(op)) + '?' + (op.status === 'new' ? '' : ' Документы в 1С распроведутся.'))) return;
+    if (a === 'cancel' && !await ask('Отменить: ' + KIND[op.kind].toLowerCase() + ' на ' + som(opAmount(op)) + '?' + (op.status === 'new' ? '' : ' Документы в 1С распроведутся.'), 'Да, отменить')) return;
     b.disabled = true;
     try {
       const r = await api('api/ops/' + op.id + '/' + a, {body: {}});
@@ -910,7 +919,7 @@ function userForm(u, shops){
 }
 
 /* ── старт ── */
-$('#logout').onclick = async () => { if (!confirm('Выйти из кассы?')) return; try { await api('logout', {body: {}}); } catch (e) {} showLogin(); };
+$('#logout').onclick = async () => { if (!await ask('Выйти из кассы?', 'Да, выйти')) return; try { await api('logout', {body: {}}); } catch (e) {} showLogin(); };
 keypad(); drawDots(); boot();
 setInterval(() => { if (state && !document.hidden) { refresh(); loadItems(); } }, 20000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && state) { refresh(); loadItems(); } });
