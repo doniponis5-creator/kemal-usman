@@ -9,7 +9,8 @@
 #      /etc/pocketbase/env (тот же номер WhatsApp, что у сайта); в чат и на экран секреты не выводятся;
 #   3. ключ клуба → /root/parfum-backend/pb_data/kassa_credentials.json (его читает pb_hooks/kassa.pb.js);
 #   4. служба systemd «kemal-kassa» на 127.0.0.1:8095 (не Docker: Docker на сервере — у Smart Centr, не трогаем);
-#   5. https://kassa.kemalusman.kg — блок в Caddy (если сайт отдаёт Caddy); иначе скрипт остановится и скажет, что делать;
+#   5. https://kassa.kemalusman.kg — блок в nginx на порту 80 (HTTPS у Cloudflare, облако оранжевое, как у api.kemalusman.kg)
+#      или в Caddy, если сайт отдаёт он; nginx не принял блок — блок убирается, остальные сайты не трогаются;
 #   6. секрет 1С → kassa/agent/agent.env на этом ПК (для программы кассы), в git он не попадает.
 # Обработчики PocketBase (бонусы, наличие на сайте) выкладывает обычный ./deploy-odengi.sh — после этого скрипта.
 set -e
@@ -106,8 +107,36 @@ if systemctl is-active -q caddy && [ -f /etc/caddy/Caddyfile ]; then
   else
     echo "   Caddy: $DOMAIN уже есть"
   fi
+elif systemctl is-active -q nginx && [ -d /etc/nginx/sites-enabled ]; then
+  # Как у api.kemalusman.kg (проверено 23.10): HTTPS делает Cloudflare (оранжевое облако), на сервер он ходит по порту 80 в nginx.
+  CONF=/etc/nginx/sites-available/$DOMAIN
+  cat > "$CONF.new" <<EOF
+# Касса Kemal Usman (kassa/deploy/deploy-kassa.sh). HTTPS — у Cloudflare, сюда приходит HTTP на 80.
+server {
+    listen 80;
+    server_name $DOMAIN;
+    client_max_body_size 6m;
+    location / {
+        proxy_pass http://127.0.0.1:8095;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-Proto \$http_x_forwarded_proto;
+        proxy_read_timeout 90s;
+    }
+}
+EOF
+  [ -f "$CONF" ] && cp "$CONF" "$CONF.bak_$(date +%Y%m%d_%H%M%S)"
+  mv "$CONF.new" "$CONF"
+  ln -sf "$CONF" /etc/nginx/sites-enabled/$DOMAIN
+  if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx && echo "   nginx: $DOMAIN добавлен (порт 80, HTTPS — через Cloudflare, облако оранжевое)"
+  else
+    rm -f /etc/nginx/sites-enabled/$DOMAIN
+    nginx -t 2>&1 | tail -5
+    echo "   nginx не принял блок кассы — убрал его, остальные сайты не тронуты. Пришлите этот вывод в чат."; exit 1
+  fi
 else
-  echo "   ВНИМАНИЕ: Caddy на сервере не работает — адрес https://$DOMAIN не настроен. Пришлите вывод «check» в чат."
+  echo "   ВНИМАНИЕ: ни Caddy, ни nginx на сервере не работают — адрес https://$DOMAIN не настроен. Пришлите вывод «check» в чат."
 fi
 REMOTE
 
@@ -126,6 +155,6 @@ echo "   готово: $ENVF (в нём ещё нужно вписать ONEC_US
 
 echo "4) Проверка снаружи..."
 CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/health" || echo "000")
-if [ "$CODE" = "200" ]; then echo "   ✅ https://$DOMAIN/kassa/ открывается"; else echo "   ⏳ https://$DOMAIN пока не открывается (HTTP $CODE) — проверьте DNS и подождите 5–10 минут"; fi
+if [ "$CODE" = "200" ]; then echo "   ✅ https://$DOMAIN/kassa/ открывается"; else echo "   ⏳ https://$DOMAIN пока не открывается (HTTP $CODE) — в Cloudflare нужна запись A «kassa» → $VPS с ОРАНЖЕВЫМ облаком; подождите 5 минут"; fi
 echo ""
 echo "=== Готово. Дальше: ./deploy-odengi.sh (обработчики бонусов и наличия на сайте) ==="
