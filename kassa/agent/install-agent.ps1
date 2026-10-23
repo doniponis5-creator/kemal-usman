@@ -1,4 +1,4 @@
-# Программа кассы Kemal Usman на ПК магазина: задача Windows «Kemal касса» — запускается при входе в Windows,
+﻿# Программа кассы Kemal Usman на ПК магазина: задача Windows «Kemal касса» — запускается при входе в Windows,
 # работает в фоне, после сбоя перезапускается. Повторный запуск скрипта безопасен (задача пересоздаётся).
 #   powershell -ExecutionPolicy Bypass -File install-agent.ps1
 $ErrorActionPreference = 'Stop'
